@@ -128,11 +128,6 @@ quadrantChart
     x-axis Local --> Remote
     y-axis Specialized --> General
 
-    quadrant-1 Remote General (Phase 1-2)
-    quadrant-2 Local General (Phase 4-5)
-    quadrant-3 Local Specialized (Phase 4)
-    quadrant-4 Remote Specialized (Phase 2-3)
-
     OpenRouter: [0.9, 0.85]
     Hugging Face Chat: [0.85, 0.7]
     Ollama: [0.15, 0.75]
@@ -141,6 +136,12 @@ quadrantChart
     ONNX Embed: [0.1, 0.2]
     ONNX NLI: [0.1, 0.15]
 ```
+
+**Quadrants:**
+- **Q1 (top-right)**: Remote General (Phase 1-2) - OpenRouter, HF Chat
+- **Q2 (top-left)**: Local General (Phase 4-5) - Ollama, future local LLMs
+- **Q3 (bottom-left)**: Local Specialized (Phase 4) - ONNX models
+- **Q4 (bottom-right)**: Remote Specialized (Phase 2-3) - HF API for specific tasks
 
 ## Trait Evolution
 

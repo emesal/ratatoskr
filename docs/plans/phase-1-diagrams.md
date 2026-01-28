@@ -216,15 +216,15 @@ stateDiagram-v2
     ReadingLine --> ProcessingEvent: Line complete
     ReadingLine --> ReadingLine: More bytes
 
-    ProcessingEvent --> ReadingLine: Empty line (skip)
-    ProcessingEvent --> ParseData: "data: " prefix
-    ProcessingEvent --> ReadingLine: Other prefix (skip)
+    ProcessingEvent --> ReadingLine: Empty line
+    ProcessingEvent --> ParseData: data prefix
+    ProcessingEvent --> ReadingLine: Other prefix
 
     ParseData --> EmitContent: Has delta.content
-    ParseData --> EmitToolStart: Has delta.tool_calls[].id
-    ParseData --> EmitToolDelta: Has delta.tool_calls[].arguments
-    ParseData --> EmitUsage: Has usage object
-    ParseData --> StreamDone: "[DONE]" sentinel
+    ParseData --> EmitToolStart: Has tool_calls.id
+    ParseData --> EmitToolDelta: Has tool_calls.args
+    ParseData --> EmitUsage: Has usage
+    ParseData --> StreamDone: DONE sentinel
 
     EmitContent --> ReadingLine
     EmitToolStart --> ReadingLine
