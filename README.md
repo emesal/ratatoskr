@@ -1,1 +1,3 @@
 # ratatoskr
+
+see (docs/plans/)
