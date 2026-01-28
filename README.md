@@ -1,3 +1,3 @@
 # ratatoskr
 
-see (docs/plans/)
+see [docs/plans/](docs/plans/)
