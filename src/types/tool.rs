@@ -1,0 +1,91 @@
+//! Tool types for function calling
+
+use crate::RatatoskrError;
+use serde::{Deserialize, Serialize};
+
+/// Tool definition for function calling
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolDefinition {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+}
+
+impl ToolDefinition {
+    pub fn new(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        parameters: serde_json::Value,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            parameters,
+        }
+    }
+}
+
+/// Convert from OpenAI-format JSON
+impl TryFrom<&serde_json::Value> for ToolDefinition {
+    type Error = RatatoskrError;
+
+    fn try_from(value: &serde_json::Value) -> std::result::Result<Self, Self::Error> {
+        let function = value
+            .get("function")
+            .ok_or_else(|| RatatoskrError::InvalidInput("missing 'function' field".into()))?;
+
+        Ok(Self {
+            name: function["name"]
+                .as_str()
+                .ok_or_else(|| RatatoskrError::InvalidInput("missing function name".into()))?
+                .to_string(),
+            description: function["description"].as_str().unwrap_or("").to_string(),
+            parameters: function
+                .get("parameters")
+                .cloned()
+                .unwrap_or(serde_json::json!({})),
+        })
+    }
+}
+
+/// A tool call made by the model
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: String, // JSON string
+}
+
+impl ToolCall {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        arguments: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            arguments: arguments.into(),
+        }
+    }
+
+    /// Parse the arguments as JSON
+    pub fn parse_arguments<T: serde::de::DeserializeOwned>(
+        &self,
+    ) -> std::result::Result<T, serde_json::Error> {
+        serde_json::from_str(&self.arguments)
+    }
+}
+
+/// Tool choice configuration
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolChoice {
+    #[default]
+    Auto,
+    None,
+    Required,
+    Function {
+        name: String,
+    },
+}
