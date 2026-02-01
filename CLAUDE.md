@@ -9,6 +9,7 @@ Ratatoskr is a unified LLM gateway abstraction layer. The core idea: consumers (
 - Establish patterns now that scale well, refactor liberally when beneficial.
 - Backwards compatibility not a priority, legacy code unwanted. (Pre-alpha.)
 - Self-documenting code; keep symbols, comments, and docs consistent.
+- Missing or incorrent documentation including code comments are critical bugs.
 - Comprehensive tests including edge cases.
 - Remind user about `just pre-push` before pushing and `just merge-to-dev` when merging feature branches.
 
