@@ -1,9 +1,9 @@
 [package]
 name = "ratatoskr"
-version = "0.1.0"
+version = "0.1.0-dev"
 edition = "2024"
 description = "Unified model gateway for LLM APIs"
-license = "MIT OR Apache-2.0"
+license = "ISC"
 repository = "https://github.com/emesal/ratatoskr"
 keywords = ["llm", "ai", "openrouter", "api", "gateway"]
 categories = ["api-bindings", "asynchronous"]
