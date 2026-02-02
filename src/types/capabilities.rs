@@ -34,4 +34,26 @@ impl Capabilities {
             token_counting: true,
         }
     }
+
+    /// HuggingFace-only capabilities (embeddings, NLI, classification)
+    pub fn huggingface_only() -> Self {
+        Self {
+            embeddings: true,
+            nli: true,
+            classification: true,
+            ..Default::default()
+        }
+    }
+
+    /// Merge capabilities using OR logic (combines two capability sets).
+    pub fn merge(&self, other: &Self) -> Self {
+        Self {
+            chat: self.chat || other.chat,
+            chat_streaming: self.chat_streaming || other.chat_streaming,
+            embeddings: self.embeddings || other.embeddings,
+            nli: self.nli || other.nli,
+            classification: self.classification || other.classification,
+            token_counting: self.token_counting || other.token_counting,
+        }
+    }
 }

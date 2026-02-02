@@ -1,6 +1,7 @@
 # Rust build artifacts
 /target/
 Cargo.lock
+/.serena/
 
 # IDE
 .idea/

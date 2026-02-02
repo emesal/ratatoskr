@@ -2,7 +2,7 @@
 
 Ratatoskr is a unified LLM gateway abstraction layer. The core idea: consumers (chibi, orlog) interact only with the `ModelGateway` trait while the `llm` crate is an internal implementation detail.
 
-**Current Status**: Phase 1 (OpenRouter Chat Gateway) is designed but not yet implemented. See `docs/plans/2026-02-01-phase1-implementation.md` for the 13-task TDD implementation plan.
+**Current Status**: Phase 2 (HuggingFace Provider) complete. See `docs/plans/2026-02-02-phase2-implementation.md` for details.
 
 ## Principles
 
@@ -44,7 +44,7 @@ ratatoskr::ModelGateway  ← stable public trait
 EmbeddedGateway (phase 1) → wraps llm crate internally
 ```
 
-### Planned Project Structure
+### Project Structure
 
 ```
 src/
@@ -54,7 +54,10 @@ src/
 ├── types/              # Message, Tool, ChatOptions, ChatEvent, etc.
 ├── gateway/
 │   ├── embedded.rs     # EmbeddedGateway wrapping llm crate
-│   └── builder.rs      # Ratatoskr::builder()
+│   ├── builder.rs      # Ratatoskr::builder()
+│   └── routing.rs      # CapabilityRouter for provider selection
+├── providers/          # External provider clients (feature-gated)
+│   └── huggingface.rs  # HuggingFace Inference API client
 └── convert/            # ratatoskr ↔ llm type conversions (internal)
 ```
 
@@ -73,10 +76,21 @@ Ratatoskr::builder()
     .openrouter(api_key)
     .anthropic(anthropic_key)
     .ollama("http://localhost:11434")
+    .huggingface(hf_key)  // requires `huggingface` feature
     .build()?
 ```
 
 Model string determines routing: `"anthropic/claude-sonnet-4"` → openrouter, `"claude-sonnet-4"` → direct anthropic.
+
+### HuggingFace Capabilities (Phase 2)
+
+With the `huggingface` feature enabled, the gateway supports:
+- `embed(text, model)` — single text embeddings
+- `embed_batch(texts, model)` — batch embeddings
+- `infer_nli(premise, hypothesis, model)` — natural language inference
+- `classify_zero_shot(text, labels, model)` — zero-shot classification
+
+Models are HuggingFace model IDs, e.g., `sentence-transformers/all-MiniLM-L6-v2`, `facebook/bart-large-mnli`.
 
 ## Testing Strategy
 
@@ -86,11 +100,17 @@ Model string determines routing: `"anthropic/claude-sonnet-4"` → openrouter, `
 
 Full test coverage required.
 
+### HuggingFace Live Tests
+
+```bash
+HF_API_KEY=hf_xxx cargo test --test huggingface_live_test --features huggingface -- --ignored
+```
+
 ## Phase Roadmap
 
-- Phase 1: OpenRouter Chat (current)
-- Phase 2: Additional providers (HuggingFace, Ollama, Anthropic direct)
-- Phase 3: Embeddings & NLI
+- Phase 1: OpenRouter Chat ✓
+- Phase 2: HuggingFace provider (embeddings, NLI, classification) ✓
+- Phase 3: Ollama, Anthropic direct
 - Phase 4: ONNX local inference
 - Phase 5: Service mode (gRPC/socket)
-- Phase 6: Caching, metrics, routing
+- Phase 6: Caching, metrics, advanced routing
