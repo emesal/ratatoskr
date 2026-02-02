@@ -186,12 +186,13 @@ impl ModelGateway for EmbeddedGateway {
                         llm::chat::StreamChunk::ToolUseStart { index, id, name } => {
                             ChatEvent::ToolCallStart { index, id, name }
                         }
-                        llm::chat::StreamChunk::ToolUseInputDelta { index, partial_json } => {
-                            ChatEvent::ToolCallDelta {
-                                index,
-                                arguments: partial_json,
-                            }
-                        }
+                        llm::chat::StreamChunk::ToolUseInputDelta {
+                            index,
+                            partial_json,
+                        } => ChatEvent::ToolCallDelta {
+                            index,
+                            arguments: partial_json,
+                        },
                         llm::chat::StreamChunk::ToolUseComplete { .. } => {
                             // We don't have a direct equivalent; the caller accumulates from deltas
                             // Emit Done to signal completion (caller should have accumulated tool calls)
