@@ -606,3 +606,87 @@ ratatoskr/
 4. **Caching semantics**: Cache embeddings? Cache chat responses? What invalidation strategy?
 
 5. **Metrics/observability**: Prometheus metrics? Structured logging? Tracing?
+
+---
+
+## Appendix A: Phase 3-4 Design Decisions (2026-02-02)
+
+This appendix documents design decisions made during Phase 3-4 planning.
+
+### A.1 Hybrid Local Inference Approach
+
+Rather than using a single ONNX abstraction for everything, we use a hybrid approach:
+
+- **fastembed-rs** for embeddings — batteries-included, handles model downloading, 25+ models
+- **ort (raw)** for NLI — allows custom cross-encoder models not supported by fastembed
+
+This matches ratatoskr's philosophy of "width" — abstracting over many backends rather than forcing everything through one.
+
+### A.2 Token Counting Architecture
+
+Token counting uses an extensible provider pattern:
+
+```rust
+pub trait TokenizerProvider: Send + Sync {
+    fn count_tokens(&self, text: &str) -> Result<usize>;
+    fn tokenize(&self, text: &str) -> Result<Vec<u32>>;
+}
+```
+
+Current implementation uses HuggingFace `tokenizers` crate. Future implementations could include:
+- `TiktokenTokenizer` for precise OpenAI token counts
+- `AnthropicTokenizer` if Anthropic releases Claude 3+ tokenizer
+
+A `TokenizerRegistry` maps model name patterns to tokenizer sources with lazy loading.
+
+### A.3 Device Selection
+
+Local inference supports CPU and CUDA:
+
+```rust
+pub enum Device {
+    Cpu,
+    Cuda { device_id: u32 },
+}
+```
+
+Cloud GPU inference is modeled as a separate provider (`RemoteOnnxProvider`) rather than a device variant, since it's conceptually a different backend (HTTP calls vs local execution).
+
+### A.4 Model Management
+
+Models use lazy loading by default with explicit preload option:
+
+```
+Available → Loading → Ready
+     ↑                   │
+     └───── unload() ────┘
+```
+
+Phase 5 (service mode) will add:
+- Memory budget tracking
+- LRU eviction under memory pressure
+- Idle timeout → unload
+
+The data structures are designed to support these future additions without breaking changes.
+
+### A.5 New Trait Methods
+
+Added to `ModelGateway`:
+
+| Method | Purpose |
+|--------|---------|
+| `infer_nli_batch()` | Efficient batch NLI for Urðr's filtering |
+| `generate()` | Non-chat text generation (Weaver analysis) |
+| `generate_stream()` | Streaming variant |
+
+`count_tokens()` was already stubbed; Phase 3-4 implements it.
+
+### A.6 Feature Flags
+
+```toml
+[features]
+local-inference = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:hf-hub"]
+cuda = ["ort/cuda"]
+```
+
+All local inference is behind `local-inference` to keep the crate lightweight for API-only users. CUDA is a separate flag due to its native dependencies.
