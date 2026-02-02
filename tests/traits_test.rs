@@ -45,3 +45,28 @@ async fn test_default_embed_not_implemented() {
     let result = gateway.embed("test", "model").await;
     assert!(matches!(result, Err(RatatoskrError::NotImplemented(_))));
 }
+
+#[tokio::test]
+async fn test_default_infer_nli_batch_fallback() {
+    let gateway = MockGateway;
+    let pairs = [("premise1", "hypothesis1"), ("premise2", "hypothesis2")];
+    let result = gateway.infer_nli_batch(&pairs, "model").await;
+    // Should fail because the single infer_nli is not implemented
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_default_generate_not_implemented() {
+    let gateway = MockGateway;
+    let options = ratatoskr::GenerateOptions::new("model");
+    let result = gateway.generate("test prompt", &options).await;
+    assert!(matches!(result, Err(RatatoskrError::NotImplemented(_))));
+}
+
+#[tokio::test]
+async fn test_default_generate_stream_not_implemented() {
+    let gateway = MockGateway;
+    let options = ratatoskr::GenerateOptions::new("model");
+    let result = gateway.generate_stream("test prompt", &options).await;
+    assert!(matches!(result, Err(RatatoskrError::NotImplemented(_))));
+}

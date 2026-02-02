@@ -1,0 +1,96 @@
+//! Types for text generation (non-chat) operations.
+
+use crate::types::{FinishReason, Usage};
+use serde::{Deserialize, Serialize};
+
+/// Options for text generation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenerateOptions {
+    /// Model to use for generation.
+    pub model: String,
+
+    /// Maximum number of tokens to generate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<usize>,
+
+    /// Sampling temperature (0.0 to 2.0).
+    /// Higher values make output more random.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+
+    /// Nucleus sampling threshold.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+
+    /// Sequences where generation should stop.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stop_sequences: Vec<String>,
+}
+
+impl GenerateOptions {
+    /// Create options with the specified model.
+    pub fn new(model: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            stop_sequences: Vec::new(),
+        }
+    }
+
+    /// Set max tokens.
+    pub fn max_tokens(mut self, max_tokens: usize) -> Self {
+        self.max_tokens = Some(max_tokens);
+        self
+    }
+
+    /// Set temperature.
+    pub fn temperature(mut self, temperature: f32) -> Self {
+        self.temperature = Some(temperature);
+        self
+    }
+
+    /// Set top_p.
+    pub fn top_p(mut self, top_p: f32) -> Self {
+        self.top_p = Some(top_p);
+        self
+    }
+
+    /// Set stop sequences.
+    pub fn stop_sequences(mut self, sequences: Vec<String>) -> Self {
+        self.stop_sequences = sequences;
+        self
+    }
+}
+
+/// Response from text generation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenerateResponse {
+    /// Generated text.
+    pub text: String,
+
+    /// Token usage information.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+
+    /// Model used for generation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+
+    /// Reason generation stopped.
+    pub finish_reason: FinishReason,
+}
+
+/// Events emitted during streaming generation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum GenerateEvent {
+    /// Text chunk generated.
+    #[serde(rename = "text")]
+    Text(String),
+
+    /// Generation complete.
+    #[serde(rename = "done")]
+    Done,
+}

@@ -36,11 +36,18 @@ pub enum RatatoskrError {
     #[error("no provider configured")]
     NoProvider,
 
+    #[error("configuration error: {0}")]
+    Configuration(String),
+
     #[error("operation not implemented: {0}")]
     NotImplemented(&'static str),
 
     #[error("provider does not support this operation")]
     Unsupported,
+
+    // Data processing errors
+    #[error("data error: {0}")]
+    DataError(String),
 
     // Soft errors
     #[error("empty response from model")]

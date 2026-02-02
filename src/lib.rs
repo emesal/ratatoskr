@@ -53,8 +53,12 @@
 mod convert;
 pub mod error;
 pub mod gateway;
+#[cfg(feature = "local-inference")]
+pub mod model;
 #[cfg(feature = "huggingface")]
 pub mod providers;
+#[cfg(feature = "local-inference")]
+pub mod tokenizer;
 pub mod traits;
 pub mod types;
 
@@ -63,9 +67,18 @@ pub use error::{RatatoskrError, Result};
 pub use gateway::{EmbeddedGateway, Ratatoskr, RatatoskrBuilder};
 pub use traits::ModelGateway;
 
+// Re-export tokenizer types when feature is enabled
+#[cfg(feature = "local-inference")]
+pub use tokenizer::{HfTokenizer, TokenizerProvider, TokenizerRegistry, TokenizerSource};
+
+// Re-export model types when feature is enabled
+#[cfg(feature = "local-inference")]
+pub use model::{Device, LoadedModels, ModelManager, ModelManagerConfig, ModelSource};
+
 // Re-export all types
 pub use types::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason,
-    Message, MessageContent, NliLabel, NliResult, ReasoningConfig, ReasoningEffort, ResponseFormat,
-    Role, ToolCall, ToolChoice, ToolDefinition, Usage,
+    GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent, NliLabel, NliResult,
+    ReasoningConfig, ReasoningEffort, ResponseFormat, Role, ToolCall, ToolChoice, ToolDefinition,
+    Usage,
 };

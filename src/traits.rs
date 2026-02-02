@@ -5,8 +5,9 @@ use futures_util::Stream;
 use std::pin::Pin;
 
 use crate::{
-    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, Message,
-    NliResult, RatatoskrError, Result, ToolDefinition,
+    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding,
+    GenerateEvent, GenerateOptions, GenerateResponse, Message, NliResult, RatatoskrError, Result,
+    ToolDefinition,
 };
 
 /// The core gateway trait that all implementations must provide.
@@ -71,5 +72,37 @@ pub trait ModelGateway: Send + Sync {
     /// Count tokens for a given model
     fn count_tokens(&self, _text: &str, _model: &str) -> Result<usize> {
         Err(RatatoskrError::NotImplemented("count_tokens"))
+    }
+
+    /// Batch NLI inference — more efficient for multiple pairs
+    async fn infer_nli_batch(
+        &self,
+        pairs: &[(&str, &str)],
+        model: &str,
+    ) -> Result<Vec<NliResult>> {
+        // Default: sequential fallback
+        let mut results = Vec::with_capacity(pairs.len());
+        for (premise, hypothesis) in pairs {
+            results.push(self.infer_nli(premise, hypothesis, model).await?);
+        }
+        Ok(results)
+    }
+
+    /// Non-streaming text generation
+    async fn generate(
+        &self,
+        _prompt: &str,
+        _options: &GenerateOptions,
+    ) -> Result<GenerateResponse> {
+        Err(RatatoskrError::NotImplemented("generate"))
+    }
+
+    /// Streaming text generation
+    async fn generate_stream(
+        &self,
+        _prompt: &str,
+        _options: &GenerateOptions,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
+        Err(RatatoskrError::NotImplemented("generate_stream"))
     }
 }
