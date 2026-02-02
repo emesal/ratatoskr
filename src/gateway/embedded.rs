@@ -22,9 +22,14 @@ pub struct EmbeddedGateway {
     google_key: Option<String>,
     ollama_url: Option<String>,
     timeout_secs: u64,
+    #[cfg(feature = "huggingface")]
+    huggingface: Option<crate::providers::HuggingFaceClient>,
+    #[cfg(feature = "huggingface")]
+    router: super::routing::CapabilityRouter,
 }
 
 impl EmbeddedGateway {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         openrouter_key: Option<String>,
         anthropic_key: Option<String>,
@@ -32,6 +37,8 @@ impl EmbeddedGateway {
         google_key: Option<String>,
         ollama_url: Option<String>,
         timeout_secs: u64,
+        #[cfg(feature = "huggingface")] huggingface: Option<crate::providers::HuggingFaceClient>,
+        #[cfg(feature = "huggingface")] router: super::routing::CapabilityRouter,
     ) -> Self {
         Self {
             openrouter_key,
@@ -40,7 +47,20 @@ impl EmbeddedGateway {
             google_key,
             ollama_url,
             timeout_secs,
+            #[cfg(feature = "huggingface")]
+            huggingface,
+            #[cfg(feature = "huggingface")]
+            router,
         }
+    }
+
+    /// Check if at least one chat provider is configured.
+    fn has_chat_provider(&self) -> bool {
+        self.openrouter_key.is_some()
+            || self.anthropic_key.is_some()
+            || self.openai_key.is_some()
+            || self.google_key.is_some()
+            || self.ollama_url.is_some()
     }
 
     /// Build an llm provider for the given model and tools
@@ -249,6 +269,65 @@ impl ModelGateway for EmbeddedGateway {
     }
 
     fn capabilities(&self) -> Capabilities {
-        Capabilities::chat_only()
+        let mut caps = if self.has_chat_provider() {
+            Capabilities::chat_only()
+        } else {
+            Capabilities::default()
+        };
+
+        #[cfg(feature = "huggingface")]
+        if self.huggingface.is_some() {
+            caps.embeddings = self.router.embed_provider().is_some();
+            caps.nli = self.router.nli_provider().is_some();
+            caps.classification = self.router.classify_provider().is_some();
+        }
+
+        caps
+    }
+
+    #[cfg(feature = "huggingface")]
+    async fn embed(&self, text: &str, model: &str) -> Result<crate::Embedding> {
+        let hf = self
+            .huggingface
+            .as_ref()
+            .ok_or(RatatoskrError::Unsupported)?;
+        hf.embed(text, model).await
+    }
+
+    #[cfg(feature = "huggingface")]
+    async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<crate::Embedding>> {
+        let hf = self
+            .huggingface
+            .as_ref()
+            .ok_or(RatatoskrError::Unsupported)?;
+        hf.embed_batch(texts, model).await
+    }
+
+    #[cfg(feature = "huggingface")]
+    async fn infer_nli(
+        &self,
+        premise: &str,
+        hypothesis: &str,
+        model: &str,
+    ) -> Result<crate::NliResult> {
+        let hf = self
+            .huggingface
+            .as_ref()
+            .ok_or(RatatoskrError::Unsupported)?;
+        hf.infer_nli(premise, hypothesis, model).await
+    }
+
+    #[cfg(feature = "huggingface")]
+    async fn classify_zero_shot(
+        &self,
+        text: &str,
+        labels: &[&str],
+        model: &str,
+    ) -> Result<crate::ClassifyResult> {
+        let hf = self
+            .huggingface
+            .as_ref()
+            .ok_or(RatatoskrError::Unsupported)?;
+        hf.classify(text, labels, model).await
     }
 }

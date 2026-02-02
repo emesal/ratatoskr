@@ -1,4 +1,4 @@
-use ratatoskr::{Capabilities, Ratatoskr};
+use ratatoskr::{Capabilities, ModelGateway, Ratatoskr};
 
 #[test]
 fn test_builder_no_provider_error() {
@@ -21,4 +21,32 @@ fn test_capabilities_chat_only() {
     assert!(caps.chat);
     assert!(caps.chat_streaming);
     assert!(!caps.embeddings);
+}
+
+#[test]
+#[cfg(feature = "huggingface")]
+fn test_builder_with_huggingface() {
+    let gateway = Ratatoskr::builder()
+        .huggingface("hf_test_key")
+        .build()
+        .expect("should build with huggingface only");
+
+    let caps = gateway.capabilities();
+    assert!(caps.embeddings);
+    assert!(caps.nli);
+    assert!(caps.classification);
+}
+
+#[test]
+#[cfg(feature = "huggingface")]
+fn test_builder_openrouter_and_huggingface() {
+    let gateway = Ratatoskr::builder()
+        .openrouter("sk-or-test")
+        .huggingface("hf_test")
+        .build()
+        .expect("should build with both providers");
+
+    let caps = gateway.capabilities();
+    assert!(caps.chat);
+    assert!(caps.embeddings);
 }

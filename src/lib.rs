@@ -4,7 +4,7 @@
 //! different LLM providers, allowing consumers to interact with models
 //! without coupling to provider-specific implementations.
 //!
-//! # Example
+//! # Chat Example
 //!
 //! ```rust,no_run
 //! use ratatoskr::{Ratatoskr, Message, ChatOptions, ModelGateway};
@@ -28,10 +28,33 @@
 //!     Ok(())
 //! }
 //! ```
+//!
+//! # Embeddings Example (requires `huggingface` feature)
+//!
+//! ```rust,ignore
+//! use ratatoskr::{Ratatoskr, ModelGateway};
+//!
+//! #[tokio::main]
+//! async fn main() -> ratatoskr::Result<()> {
+//!     let gateway = Ratatoskr::builder()
+//!         .huggingface("hf_your_key")
+//!         .build()?;
+//!
+//!     let embedding = gateway.embed(
+//!         "Hello, world!",
+//!         "sentence-transformers/all-MiniLM-L6-v2",
+//!     ).await?;
+//!
+//!     println!("Dimensions: {}", embedding.dimensions);
+//!     Ok(())
+//! }
+//! ```
 
 mod convert;
 pub mod error;
 pub mod gateway;
+#[cfg(feature = "huggingface")]
+pub mod providers;
 pub mod traits;
 pub mod types;
 

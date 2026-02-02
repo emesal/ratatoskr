@@ -21,6 +21,8 @@ pub struct RatatoskrBuilder {
     google_key: Option<String>,
     ollama_url: Option<String>,
     default_timeout_secs: Option<u64>,
+    #[cfg(feature = "huggingface")]
+    huggingface_key: Option<String>,
 }
 
 impl RatatoskrBuilder {
@@ -32,6 +34,8 @@ impl RatatoskrBuilder {
             google_key: None,
             ollama_url: None,
             default_timeout_secs: None,
+            #[cfg(feature = "huggingface")]
+            huggingface_key: None,
         }
     }
 
@@ -65,23 +69,57 @@ impl RatatoskrBuilder {
         self
     }
 
+    /// Configure HuggingFace provider for embeddings, NLI, and classification.
+    #[cfg(feature = "huggingface")]
+    pub fn huggingface(mut self, api_key: impl Into<String>) -> Self {
+        self.huggingface_key = Some(api_key.into());
+        self
+    }
+
     /// Set default timeout for all requests (seconds).
     pub fn timeout(mut self, secs: u64) -> Self {
         self.default_timeout_secs = Some(secs);
         self
     }
 
+    /// Check if at least one chat provider is configured.
+    fn has_chat_provider(&self) -> bool {
+        self.openrouter_key.is_some()
+            || self.anthropic_key.is_some()
+            || self.openai_key.is_some()
+            || self.google_key.is_some()
+            || self.ollama_url.is_some()
+    }
+
+    /// Check if at least one capability provider is configured.
+    #[cfg(feature = "huggingface")]
+    fn has_capability_provider(&self) -> bool {
+        self.huggingface_key.is_some()
+    }
+
+    #[cfg(not(feature = "huggingface"))]
+    fn has_capability_provider(&self) -> bool {
+        false
+    }
+
     /// Build the gateway.
     pub fn build(self) -> Result<EmbeddedGateway> {
-        // Must have at least one provider
-        if self.openrouter_key.is_none()
-            && self.anthropic_key.is_none()
-            && self.openai_key.is_none()
-            && self.google_key.is_none()
-            && self.ollama_url.is_none()
-        {
+        // Must have at least one provider (chat or capability)
+        if !self.has_chat_provider() && !self.has_capability_provider() {
             return Err(RatatoskrError::NoProvider);
         }
+
+        #[cfg(feature = "huggingface")]
+        let huggingface = self
+            .huggingface_key
+            .map(crate::providers::HuggingFaceClient::new);
+
+        #[cfg(feature = "huggingface")]
+        let router = if huggingface.is_some() {
+            super::routing::CapabilityRouter::new().with_huggingface()
+        } else {
+            super::routing::CapabilityRouter::new()
+        };
 
         Ok(EmbeddedGateway::new(
             self.openrouter_key,
@@ -90,6 +128,10 @@ impl RatatoskrBuilder {
             self.google_key,
             self.ollama_url,
             self.default_timeout_secs.unwrap_or(120),
+            #[cfg(feature = "huggingface")]
+            huggingface,
+            #[cfg(feature = "huggingface")]
+            router,
         ))
     }
 }
