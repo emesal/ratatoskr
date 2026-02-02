@@ -32,6 +32,8 @@
 mod convert;
 pub mod error;
 pub mod gateway;
+#[cfg(feature = "huggingface")]
+pub mod providers;
 pub mod traits;
 pub mod types;
 
