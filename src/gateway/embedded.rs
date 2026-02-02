@@ -191,17 +191,36 @@ impl ModelGateway for EmbeddedGateway {
         let (system_prompt, llm_messages) = to_llm_messages(messages);
         let provider = self.build_provider(options, system_prompt.as_deref(), tools)?;
 
-        // For simplicity, always use the basic chat_stream which returns strings
-        // Tool calling via streaming is more complex and not fully supported in all providers
+        // Use chat_stream_with_tools to properly handle tool calls in streaming
         let stream = provider
-            .chat_stream(&llm_messages)
+            .chat_stream_with_tools(&llm_messages, provider.tools())
             .await
             .map_err(RatatoskrError::from)?;
 
-        // Convert stream to our ChatEvent type
+        // Convert llm StreamChunk to our ChatEvent type
         let converted_stream = stream.map(
-            |result: std::result::Result<String, llm::error::LLMError>| {
-                result.map(ChatEvent::Content).map_err(RatatoskrError::from)
+            |result: std::result::Result<llm::chat::StreamChunk, llm::error::LLMError>| {
+                result
+                    .map(|chunk| match chunk {
+                        llm::chat::StreamChunk::Text(text) => ChatEvent::Content(text),
+                        llm::chat::StreamChunk::ToolUseStart { index, id, name } => {
+                            ChatEvent::ToolCallStart { index, id, name }
+                        }
+                        llm::chat::StreamChunk::ToolUseInputDelta {
+                            index,
+                            partial_json,
+                        } => ChatEvent::ToolCallDelta {
+                            index,
+                            arguments: partial_json,
+                        },
+                        llm::chat::StreamChunk::ToolUseComplete { .. } => {
+                            // We don't have a direct equivalent; the caller accumulates from deltas
+                            // Emit Done to signal completion (caller should have accumulated tool calls)
+                            ChatEvent::Done
+                        }
+                        llm::chat::StreamChunk::Done { .. } => ChatEvent::Done,
+                    })
+                    .map_err(RatatoskrError::from)
             },
         );
 
