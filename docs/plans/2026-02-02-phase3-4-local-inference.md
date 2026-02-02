@@ -2,11 +2,21 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+**Status:** 🟡 IN PROGRESS (6/15 tasks complete)
+
 **Goal:** Add local inference capabilities (embeddings via fastembed-rs, NLI via ONNX) and token counting, enabling örlög to run high-volume operations without API costs.
 
 **Architecture:** Hybrid approach — `fastembed-rs` for batteries-included embeddings, raw `ort` for NLI cross-encoder models. Token counting via HuggingFace `tokenizers` crate with extensible provider pattern.
 
 **Tech Stack:** Rust, fastembed, ort, tokenizers, hf-hub
+
+**Progress:**
+- ✅ Tasks 1-6: Core infrastructure (dependencies, tokenizer, types, device, fastembed)
+- ⏳ Tasks 7-9: ONNX NLI, model manager, capabilities
+- ⏳ Tasks 10-12: Builder integration, gateway updates, generate impl
+- ⏳ Tasks 13-15: Live tests, lint, documentation
+
+**Latest Commit:** `0a17cff` - feat(local-inference): add phase 3 foundation (tasks 1-6)
 
 ---
 
@@ -627,41 +637,53 @@ tests/
 
 ## Implementation Tasks
 
-### Task 1: Add Dependencies
-- Update `Cargo.toml` with new features and dependencies
-- Verify: `cargo check --features local-inference`
+### ✅ Task 1: Add Dependencies (COMPLETED)
+- ✅ Update `Cargo.toml` with new features and dependencies
+- ✅ Added: fastembed v5, ort v2.0.0-rc, tokenizers v0.22, hf-hub v0.4, dirs v5
+- ✅ Features: local-inference, cuda
+- ✅ Verify: `cargo check --features local-inference`
 
-### Task 2: Token Counting Module
-- Create `src/tokenizer/mod.rs` with `TokenizerProvider` trait
-- Create `src/tokenizer/hf.rs` with `HfTokenizer` implementation
-- Create `TokenizerRegistry` with default mappings
-- Create `tests/tokenizer_test.rs`
-- Verify: `cargo test --test tokenizer_test --features local-inference`
+### ✅ Task 2: Token Counting Module (COMPLETED)
+- ✅ Create `src/tokenizer/mod.rs` with `TokenizerProvider` trait
+- ✅ Create `src/tokenizer/hf.rs` with `HfTokenizer` implementation
+- ✅ Create `TokenizerRegistry` with default mappings (claude, gpt-4, llama, mistral)
+- ✅ Lazy loading with double-checked locking
+- ✅ Alias support with recursive resolution
+- ✅ Create `tests/tokenizer_test.rs` (5 tests passing)
+- ✅ Added Configuration and DataError to RatatoskrError
+- ✅ Verify: `cargo test --test tokenizer_test --features local-inference`
 
-### Task 3: Generate Types
-- Create `src/types/generate.rs` with `GenerateOptions`, `GenerateResponse`, `GenerateEvent`
-- Update `src/types/mod.rs` exports
-- Update `src/lib.rs` exports
-- Verify: `cargo check`
+### ✅ Task 3: Generate Types (COMPLETED)
+- ✅ Create `src/types/generate.rs` with `GenerateOptions`, `GenerateResponse`, `GenerateEvent`
+- ✅ Builder pattern for GenerateOptions
+- ✅ Update `src/types/mod.rs` exports
+- ✅ Update `src/lib.rs` exports
+- ✅ Verify: `cargo check`
 
-### Task 4: Trait Additions
-- Add `infer_nli_batch()` with default impl to `ModelGateway`
-- Add `generate()` and `generate_stream()` stubs to `ModelGateway`
-- Create `tests/traits_test.rs` additions
-- Verify: `cargo test --test traits_test`
+### ✅ Task 4: Trait Additions (COMPLETED)
+- ✅ Add `infer_nli_batch()` with default impl to `ModelGateway`
+- ✅ Add `generate()` and `generate_stream()` stubs to `ModelGateway`
+- ✅ Update `tests/traits_test.rs` (5 tests passing)
+- ✅ Verify: `cargo test --test traits_test`
 
-### Task 5: Device & Model Source Types
-- Create `src/model/mod.rs`
-- Create `src/model/device.rs` with `Device` enum
-- Create `src/model/source.rs` with `ModelSource` enum and download logic
-- Verify: `cargo check --features local-inference`
+### ✅ Task 5: Device & Model Source Types (COMPLETED)
+- ✅ Create `src/model/mod.rs`
+- ✅ Create `src/model/device.rs` with `Device` enum (Cpu, Cuda)
+- ✅ Create `src/model/source.rs` with `ModelSource` enum and download logic
+- ✅ Create `src/model/manager.rs` stub (ModelManager, ModelManagerConfig, LoadedModels)
+- ✅ Note: execution_provider helper deferred to Task 7
+- ✅ Verify: `cargo check --features local-inference`
 
-### Task 6: FastEmbed Provider
-- Create `src/providers/fastembed.rs`
-- Add `LocalEmbeddingModel` enum
-- Implement `FastEmbedProvider` with embed/embed_batch
-- Create `tests/fastembed_test.rs`
-- Verify: `cargo test --test fastembed_test --features local-inference`
+### ✅ Task 6: FastEmbed Provider (COMPLETED)
+- ✅ Create `src/providers/fastembed.rs`
+- ✅ Add `LocalEmbeddingModel` enum (4 variants: AllMiniLmL6V2, AllMiniLmL12V2, BgeSmallEn, BgeBaseEn)
+- ✅ Implement `FastEmbedProvider` with embed/embed_batch (requires &mut self)
+- ✅ Model properties: name(), dimensions(), cache_key()
+- ✅ EmbeddingModelInfo struct
+- ✅ Create `tests/fastembed_test.rs` (1 test passing)
+- ✅ Verify: `cargo test --test fastembed_test --features local-inference`
+
+**Commit:** `0a17cff` - feat(local-inference): add phase 3 foundation (tasks 1-6)
 
 ### Task 7: ONNX NLI Provider
 - Create `src/providers/onnx_nli.rs`
