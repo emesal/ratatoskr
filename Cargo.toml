@@ -8,7 +8,7 @@ repository = "https://github.com/emesal/ratatoskr"
 readme = "README.md"
 keywords = ["llm", "ai", "openrouter", "api", "gateway"]
 categories = ["api-bindings", "asynchronous"]
-rust-version = "1.85"
+rust-version = "1.93"
 
 [features]
 default = ["openai", "anthropic", "openrouter", "ollama", "google", "huggingface"]
@@ -40,7 +40,7 @@ hf-hub = { version = "0.4", optional = true }
 dirs = { version = "5", optional = true }
 
 [build-dependencies]
-vergen-gitcl = { version = "1", features = ["build", "cargo"] }
+vergen-gitcl = { version = "10.0.0-beta.5", features = ["build", "cargo"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
