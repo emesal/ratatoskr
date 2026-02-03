@@ -18,13 +18,15 @@ use std::path::PathBuf;
 #[cfg(feature = "local-inference")]
 use std::sync::{Arc, RwLock};
 
-/// Trait for tokenizer implementations, allowing future expansion.
 pub trait TokenizerProvider: Send + Sync {
     /// Count tokens in the given text.
     fn count_tokens(&self, text: &str) -> Result<usize>;
 
     /// Tokenize text into token IDs.
     fn tokenize(&self, text: &str) -> Result<Vec<u32>>;
+
+    /// Tokenize text into detailed Token objects with IDs, text, and byte offsets.
+    fn tokenize_detailed(&self, text: &str) -> Result<Vec<crate::Token>>;
 }
 
 /// Source for a tokenizer model.
@@ -122,6 +124,14 @@ impl TokenizerRegistry {
     pub fn tokenize(&self, text: &str, model: &str) -> Result<Vec<u32>> {
         let provider = self.get_or_load_tokenizer(model)?;
         provider.tokenize(text)
+    }
+
+    /// Tokenize text into detailed Token objects with IDs, text, and byte offsets.
+    ///
+    /// Lazily loads the tokenizer if not already cached.
+    pub fn tokenize_detailed(&self, text: &str, model: &str) -> Result<Vec<crate::Token>> {
+        let provider = self.get_or_load_tokenizer(model)?;
+        provider.tokenize_detailed(text)
     }
 
     /// Get or lazily load a tokenizer for the given model.

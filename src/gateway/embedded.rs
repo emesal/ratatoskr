@@ -10,10 +10,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures_util::Stream;
 
+#[cfg(feature = "local-inference")]
+use crate::Token;
 use crate::providers::ProviderRegistry;
 use crate::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, GenerateEvent, GenerateOptions,
-    GenerateResponse, Message, ModelGateway, Result, ToolDefinition,
+    GenerateResponse, Message, ModelCapability, ModelGateway, ModelInfo, ModelStatus, Result,
+    StanceResult, ToolDefinition,
 };
 
 #[cfg(feature = "local-inference")]
@@ -148,5 +151,96 @@ impl ModelGateway for EmbeddedGateway {
         options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
         self.registry.generate_stream(prompt, options).await
+    }
+
+    async fn classify_stance(&self, text: &str, target: &str, model: &str) -> Result<StanceResult> {
+        self.registry.classify_stance(text, target, model).await
+    }
+
+    #[cfg(feature = "local-inference")]
+    fn tokenize(&self, text: &str, model: &str) -> Result<Vec<Token>> {
+        self.tokenizer_registry.tokenize_detailed(text, model)
+    }
+
+    fn list_models(&self) -> Vec<ModelInfo> {
+        let names = self.registry.provider_names();
+
+        let mut models = Vec::new();
+
+        for name in names.embedding {
+            models.push(ModelInfo {
+                id: name.clone(),
+                provider: name,
+                capabilities: vec![ModelCapability::Embed],
+                context_window: None,
+                dimensions: None,
+            });
+        }
+
+        for name in names.nli {
+            models.push(ModelInfo {
+                id: name.clone(),
+                provider: name,
+                capabilities: vec![ModelCapability::Nli],
+                context_window: None,
+                dimensions: None,
+            });
+        }
+
+        for name in names.classify {
+            models.push(ModelInfo {
+                id: name.clone(),
+                provider: name,
+                capabilities: vec![ModelCapability::Classify],
+                context_window: None,
+                dimensions: None,
+            });
+        }
+
+        for name in names.chat {
+            models.push(ModelInfo {
+                id: name.clone(),
+                provider: name,
+                capabilities: vec![ModelCapability::Chat],
+                context_window: None,
+                dimensions: None,
+            });
+        }
+
+        for name in names.generate {
+            models.push(ModelInfo {
+                id: name.clone(),
+                provider: name,
+                capabilities: vec![ModelCapability::Generate],
+                context_window: None,
+                dimensions: None,
+            });
+        }
+
+        models
+    }
+
+    #[allow(unused_variables)]
+    fn model_status(&self, model: &str) -> ModelStatus {
+        #[cfg(feature = "local-inference")]
+        {
+            let loaded = self.model_manager.loaded_models();
+            let model_str = model.to_string();
+            if loaded.embeddings.contains(&model_str) || loaded.nli.contains(&model_str) {
+                return ModelStatus::Ready;
+            }
+            if self.model_manager.can_load(model) {
+                return ModelStatus::Available;
+            }
+            return ModelStatus::Unavailable {
+                reason: "RAM budget exceeded".into(),
+            };
+        }
+
+        #[cfg(not(feature = "local-inference"))]
+        {
+            // For API-only mode, always "ready" if provider exists
+            ModelStatus::Ready
+        }
     }
 }

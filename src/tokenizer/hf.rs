@@ -62,4 +62,22 @@ impl TokenizerProvider for HfTokenizer {
 
         Ok(encoding.get_ids().to_vec())
     }
+
+    fn tokenize_detailed(&self, text: &str) -> Result<Vec<crate::Token>> {
+        let encoding = self
+            .inner
+            .encode(text, false)
+            .map_err(|e| RatatoskrError::DataError(format!("Tokenization failed: {}", e)))?;
+
+        let ids = encoding.get_ids();
+        let tokens = encoding.get_tokens();
+        let offsets = encoding.get_offsets();
+
+        Ok(ids
+            .iter()
+            .zip(tokens.iter())
+            .zip(offsets.iter())
+            .map(|((id, tok_text), (start, end))| crate::Token::new(*id, tok_text, *start, *end))
+            .collect())
+    }
 }

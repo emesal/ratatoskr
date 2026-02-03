@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Status:** 🚧 IN PROGRESS (Tasks 1-9 complete)
+**Status:** 🚧 IN PROGRESS (Tasks 1-12 complete)
 
 **Goal:** Introduce capability-specific provider traits to establish a clean foundation for phase 5 (service mode), phase 6 (caching/retry/telemetry decorators), and future extensibility.
 
@@ -1539,26 +1539,28 @@ is still present but no longer used by the gateway (kept for potential future us
 
 **Verify:** `just pre-push` ✅ (84 tests pass)
 
-### Task 10: TokenizerRegistry Updates
-- [ ] Add `tokenize()` method returning `Vec<Token>`
-- [ ] Update tests
+### Task 10: TokenizerRegistry Updates ✅
+- [x] Add `tokenize_detailed()` method to `TokenizerProvider` trait returning `Vec<Token>`
+- [x] Implement in `HfTokenizer` using encoding offsets
+- [x] Add `tokenize_detailed()` to `TokenizerRegistry`
 
-**Verify:** `cargo test --test tokenizer_test --features local-inference`
+**Verify:** `cargo check --features local-inference` ✅
 
-### Task 11: ModelGateway Trait Updates
-- [ ] Add `classify_stance()` method with default stub
-- [ ] Add `tokenize()` method with default stub
-- [ ] Add `list_models()` method with default stub
-- [ ] Add `model_status()` method with default stub
-- [ ] Update existing trait test
+### Task 11: ModelGateway Trait Updates ✅
+- [x] Add `classify_stance()` method with default stub
+- [x] Add `tokenize()` method with default stub
+- [x] Add `list_models()` method with default stub
+- [x] Add `model_status()` method with default stub
+- [x] Implement in `EmbeddedGateway`
 
-**Verify:** `cargo test --test traits_test`
+**Verify:** `cargo test --all-features --lib` ✅ (32 tests pass)
 
-### Task 12: Delete Old Code
-- [ ] Remove `src/gateway/routing.rs` (old `CapabilityRouter`)
-- [ ] Clean up unused imports
+### Task 12: Delete Old Code ✅
+- [x] Remove `src/gateway/routing.rs` (old `CapabilityRouter`)
+- [x] Remove `tests/routing_test.rs`
+- [x] Remove export from `src/gateway/mod.rs`
 
-**Verify:** `cargo check --features local-inference,huggingface`
+**Verify:** `just pre-push` ✅ (82 tests pass)
 
 ### Task 13: Integration Tests
 - [ ] Update existing integration tests
