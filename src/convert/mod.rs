@@ -95,7 +95,10 @@ pub fn from_llm_usage(usage: &llm::chat::Usage) -> RataUsage {
     }
 }
 
-/// Determine backend from model string
+/// Determine backend from model string.
+///
+/// This is kept for potential future use in model routing logic.
+#[allow(dead_code)]
 pub fn backend_from_model(model: &str) -> LLMBackend {
     // Model string patterns:
     // "anthropic/claude-..." -> OpenRouter

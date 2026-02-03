@@ -5,8 +5,9 @@ use futures_util::Stream;
 use std::pin::Pin;
 
 use crate::{
-    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, Message,
-    NliResult, RatatoskrError, Result, ToolDefinition,
+    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
+    GenerateOptions, GenerateResponse, Message, ModelInfo, ModelStatus, NliResult, RatatoskrError,
+    Result, StanceResult, Token, ToolDefinition,
 };
 
 /// The core gateway trait that all implementations must provide.
@@ -71,5 +72,65 @@ pub trait ModelGateway: Send + Sync {
     /// Count tokens for a given model
     fn count_tokens(&self, _text: &str, _model: &str) -> Result<usize> {
         Err(RatatoskrError::NotImplemented("count_tokens"))
+    }
+
+    /// Batch NLI inference — more efficient for multiple pairs
+    async fn infer_nli_batch(&self, pairs: &[(&str, &str)], model: &str) -> Result<Vec<NliResult>> {
+        // Default: sequential fallback
+        let mut results = Vec::with_capacity(pairs.len());
+        for (premise, hypothesis) in pairs {
+            results.push(self.infer_nli(premise, hypothesis, model).await?);
+        }
+        Ok(results)
+    }
+
+    /// Non-streaming text generation
+    async fn generate(
+        &self,
+        _prompt: &str,
+        _options: &GenerateOptions,
+    ) -> Result<GenerateResponse> {
+        Err(RatatoskrError::NotImplemented("generate"))
+    }
+
+    /// Streaming text generation
+    async fn generate_stream(
+        &self,
+        _prompt: &str,
+        _options: &GenerateOptions,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
+        Err(RatatoskrError::NotImplemented("generate_stream"))
+    }
+
+    // ===== Phase 5: Extended capabilities =====
+
+    /// Stance detection toward a target topic.
+    ///
+    /// Determines whether text expresses favor, against, or neutral stance
+    /// toward a specific target topic.
+    async fn classify_stance(
+        &self,
+        _text: &str,
+        _target: &str,
+        _model: &str,
+    ) -> Result<StanceResult> {
+        Err(RatatoskrError::NotImplemented("classify_stance"))
+    }
+
+    /// Tokenize text into detailed Token objects with IDs, text, and byte offsets.
+    fn tokenize(&self, _text: &str, _model: &str) -> Result<Vec<Token>> {
+        Err(RatatoskrError::NotImplemented("tokenize"))
+    }
+
+    /// List all available models and their capabilities.
+    fn list_models(&self) -> Vec<ModelInfo> {
+        vec![]
+    }
+
+    /// Get the status of a specific model.
+    fn model_status(&self, _model: &str) -> ModelStatus {
+        ModelStatus::Unavailable {
+            reason: "Not implemented".into(),
+        }
     }
 }

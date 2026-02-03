@@ -143,3 +143,92 @@ async fn test_live_nli() {
         nli.entailment
     );
 }
+
+// ============================================================================
+// Stance Classification via ZeroShotStanceProvider
+// ============================================================================
+
+/// Test live stance detection using ZeroShotStanceProvider.
+#[tokio::test]
+#[ignore = "requires HF_API_KEY"]
+async fn test_live_stance_favor() {
+    use ratatoskr::StanceLabel;
+    use ratatoskr::providers::traits::{ClassifyProvider, StanceProvider, ZeroShotStanceProvider};
+    use std::sync::Arc;
+
+    let client: Arc<dyn ClassifyProvider> = Arc::new(HuggingFaceClient::new(get_api_key()));
+    let model = "facebook/bart-large-mnli";
+    let stance_provider = ZeroShotStanceProvider::new(client, model);
+
+    let result = stance_provider
+        .classify_stance(
+            "I absolutely love renewable energy and think we should invest more in it.",
+            "renewable energy",
+            model,
+        )
+        .await;
+
+    let stance = result.expect("live stance classification should succeed");
+
+    // Verify scores are valid probabilities
+    assert!(
+        stance.favor >= 0.0 && stance.favor <= 1.0,
+        "favor should be between 0 and 1"
+    );
+    assert!(
+        stance.against >= 0.0 && stance.against <= 1.0,
+        "against should be between 0 and 1"
+    );
+    assert!(
+        stance.neutral >= 0.0 && stance.neutral <= 1.0,
+        "neutral should be between 0 and 1"
+    );
+
+    // Target should be preserved
+    assert_eq!(stance.target, "renewable energy");
+
+    // Should detect favor (text expresses support)
+    assert_eq!(
+        stance.label,
+        StanceLabel::Favor,
+        "should detect favor stance, got {:?} (favor={}, against={}, neutral={})",
+        stance.label,
+        stance.favor,
+        stance.against,
+        stance.neutral
+    );
+}
+
+/// Test live stance detection against a topic.
+#[tokio::test]
+#[ignore = "requires HF_API_KEY"]
+async fn test_live_stance_against() {
+    use ratatoskr::StanceLabel;
+    use ratatoskr::providers::traits::{ClassifyProvider, StanceProvider, ZeroShotStanceProvider};
+    use std::sync::Arc;
+
+    let client: Arc<dyn ClassifyProvider> = Arc::new(HuggingFaceClient::new(get_api_key()));
+    let model = "facebook/bart-large-mnli";
+    let stance_provider = ZeroShotStanceProvider::new(client, model);
+
+    let result = stance_provider
+        .classify_stance(
+            "This policy is terrible and will cause significant harm to our community.",
+            "the policy",
+            model,
+        )
+        .await;
+
+    let stance = result.expect("live stance classification should succeed");
+
+    // Should detect against (text expresses opposition)
+    assert_eq!(
+        stance.label,
+        StanceLabel::Against,
+        "should detect against stance, got {:?} (favor={}, against={}, neutral={})",
+        stance.label,
+        stance.favor,
+        stance.against,
+        stance.neutral
+    );
+}

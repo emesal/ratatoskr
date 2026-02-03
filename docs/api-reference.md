@@ -23,38 +23,54 @@ At least one provider must be configured or `build()` returns `NoProvider` error
 
 ## ModelGateway Trait
 
-### chat()
-
-Non-streaming chat completion.
+### Chat
 
 ```rust
-async fn chat(
-    &self,
-    messages: &[Message],
-    tools: Option<&[ToolDefinition]>,
-    options: &ChatOptions,
-) -> Result<ChatResponse>
+async fn chat(&self, messages: &[Message], tools: Option<&[ToolDefinition]>, options: &ChatOptions) -> Result<ChatResponse>
+async fn chat_stream(&self, ...) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>>
 ```
 
-### chat_stream()
-
-Streaming chat completion.
+### Generate
 
 ```rust
-async fn chat_stream(
-    &self,
-    messages: &[Message],
-    tools: Option<&[ToolDefinition]>,
-    options: &ChatOptions,
-) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>>
+async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse>
+async fn generate_stream(&self, ...) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>>
 ```
 
-### capabilities()
+### Embeddings
 
-Query gateway capabilities.
+```rust
+async fn embed(&self, text: &str, model: &str) -> Result<Embedding>
+async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<Embedding>>
+```
+
+### NLI
+
+```rust
+async fn infer_nli(&self, premise: &str, hypothesis: &str, model: &str) -> Result<NliResult>
+async fn infer_nli_batch(&self, pairs: &[(&str, &str)], model: &str) -> Result<Vec<NliResult>>
+```
+
+### Classification
+
+```rust
+async fn classify_zero_shot(&self, text: &str, labels: &[&str], model: &str) -> Result<ClassifyResult>
+async fn classify_stance(&self, text: &str, target: &str, model: &str) -> Result<StanceResult>
+```
+
+### Tokenization
+
+```rust
+fn count_tokens(&self, text: &str, model: &str) -> Result<usize>
+fn tokenize(&self, text: &str, model: &str) -> Result<Vec<Token>>
+```
+
+### Introspection
 
 ```rust
 fn capabilities(&self) -> Capabilities
+fn list_models(&self) -> Vec<ModelInfo>
+fn model_status(&self, model: &str) -> ModelStatus
 ```
 
 ## Types
@@ -228,15 +244,86 @@ tool_call.parse_arguments::<T>()?  // Deserialize arguments
 pub struct Capabilities {
     pub chat: bool,
     pub chat_streaming: bool,
+    pub generate: bool,
+    pub tool_use: bool,
     pub embeddings: bool,
     pub nli: bool,
     pub classification: bool,
+    pub stance: bool,
     pub token_counting: bool,
+    pub local_inference: bool,
 }
 
 // Constructors
-Capabilities::chat_only()  // Phase 1
-Capabilities::full()       // Future
+Capabilities::chat_only()
+Capabilities::full()
+```
+
+### Embedding
+
+```rust
+pub struct Embedding {
+    pub values: Vec<f32>,
+    pub model: String,
+    pub dimensions: usize,
+}
+```
+
+### NliResult
+
+```rust
+pub struct NliResult {
+    pub entailment: f32,
+    pub contradiction: f32,
+    pub neutral: f32,
+    pub label: NliLabel,  // Entailment | Contradiction | Neutral
+}
+```
+
+### StanceResult
+
+```rust
+pub struct StanceResult {
+    pub favor: f32,
+    pub against: f32,
+    pub neutral: f32,
+    pub label: StanceLabel,  // Favor | Against | Neutral
+    pub target: String,
+}
+```
+
+### Token
+
+```rust
+pub struct Token {
+    pub id: u32,
+    pub text: String,
+    pub start: usize,  // byte offset
+    pub end: usize,
+}
+```
+
+### ModelInfo
+
+```rust
+pub struct ModelInfo {
+    pub id: String,
+    pub provider: String,
+    pub capabilities: Vec<ModelCapability>,
+    pub context_window: Option<usize>,
+    pub dimensions: Option<usize>,  // for embedding models
+}
+```
+
+### ModelStatus
+
+```rust
+pub enum ModelStatus {
+    Available,
+    Loading,
+    Ready,
+    Unavailable { reason: String },
+}
 ```
 
 ## Errors
@@ -252,6 +339,10 @@ pub enum RatatoskrError {
     AuthenticationFailed,
     ModelNotFound(String),
 
+    // Provider routing
+    NoProvider,                    // No provider registered for capability
+    ModelNotAvailable,             // Provider can't handle model (triggers fallback)
+
     // Streaming
     Stream(String),
 
@@ -260,7 +351,7 @@ pub enum RatatoskrError {
     InvalidInput(String),
 
     // Configuration
-    NoProvider,
+    Configuration(String),
     NotImplemented(&'static str),
     Unsupported,
 
@@ -273,6 +364,8 @@ pub enum RatatoskrError {
     Llm(String),
 }
 ```
+
+Note: `ModelNotAvailable` is used internally by providers to signal the registry should try the next provider in the fallback chain.
 
 ### Result Type
 
@@ -297,6 +390,7 @@ use ratatoskr::{
 
     // Options
     ChatOptions,
+    GenerateOptions,
     ToolChoice,
     ResponseFormat,
     ReasoningConfig,
@@ -305,6 +399,8 @@ use ratatoskr::{
     // Responses
     ChatResponse,
     ChatEvent,
+    GenerateResponse,
+    GenerateEvent,
     FinishReason,
     Usage,
 
@@ -312,8 +408,29 @@ use ratatoskr::{
     ToolDefinition,
     ToolCall,
 
+    // Embeddings & NLI
+    Embedding,
+    NliResult,
+    NliLabel,
+    ClassifyResult,
+    StanceResult,
+    StanceLabel,
+
+    // Tokenization
+    Token,
+
+    // Model introspection
+    ModelInfo,
+    ModelStatus,
+    ModelCapability,
+
     // Capabilities
     Capabilities,
+
+    // Local inference (with feature)
+    Device,
+    LocalEmbeddingModel,
+    LocalNliModel,
 
     // Errors
     RatatoskrError,

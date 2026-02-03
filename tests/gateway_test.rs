@@ -50,3 +50,29 @@ fn test_builder_openrouter_and_huggingface() {
     assert!(caps.chat);
     assert!(caps.embeddings);
 }
+
+// Local inference builder tests
+#[test]
+#[cfg(feature = "local-inference")]
+fn test_builder_methods_compile() {
+    use ratatoskr::tokenizer::TokenizerSource;
+    use ratatoskr::{Device, LocalEmbeddingModel, LocalNliModel};
+    use std::path::PathBuf;
+
+    // This test just verifies the builder methods compile and chain correctly.
+    // We don't actually build because that requires chat OR local providers,
+    // and we don't want to load models in unit tests.
+    let _builder = Ratatoskr::builder()
+        .openrouter("test-key")
+        .local_embeddings(LocalEmbeddingModel::AllMiniLmL6V2)
+        .local_nli(LocalNliModel::NliDebertaV3Small)
+        .device(Device::Cpu)
+        .cache_dir("/tmp/cache")
+        .tokenizer_mapping(
+            "custom-model",
+            TokenizerSource::Local {
+                path: PathBuf::from("/path/to/tokenizer.json"),
+            },
+        )
+        .timeout(60);
+}

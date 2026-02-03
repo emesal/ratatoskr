@@ -36,11 +36,23 @@ pub enum RatatoskrError {
     #[error("no provider configured")]
     NoProvider,
 
+    /// Provider cannot handle this model (wrong model, RAM constrained, etc.)
+    /// The registry should try the next provider in the fallback chain.
+    #[error("model not available from this provider")]
+    ModelNotAvailable,
+
+    #[error("configuration error: {0}")]
+    Configuration(String),
+
     #[error("operation not implemented: {0}")]
     NotImplemented(&'static str),
 
     #[error("provider does not support this operation")]
     Unsupported,
+
+    // Data processing errors
+    #[error("data error: {0}")]
+    DataError(String),
 
     // Soft errors
     #[error("empty response from model")]
