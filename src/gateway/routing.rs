@@ -7,20 +7,27 @@
 /// Which provider handles embeddings
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EmbedProvider {
+    /// HuggingFace Inference API.
     HuggingFace,
-    // Future: OpenAI, Ollama, Cohere, etc.
+    /// Local FastEmbed provider.
+    #[cfg(feature = "local-inference")]
+    FastEmbed,
 }
 
 /// Which provider handles NLI
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NliProvider {
+    /// HuggingFace Inference API.
     HuggingFace,
-    // Future: Local ONNX, etc.
+    /// Local ONNX Runtime provider.
+    #[cfg(feature = "local-inference")]
+    Onnx,
 }
 
 /// Which provider handles zero-shot classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassifyProvider {
+    /// HuggingFace Inference API.
     HuggingFace,
     // Future: Local ONNX, etc.
 }
@@ -47,6 +54,20 @@ impl CapabilityRouter {
         self.embed = Some(EmbedProvider::HuggingFace);
         self.nli = Some(NliProvider::HuggingFace);
         self.classify = Some(ClassifyProvider::HuggingFace);
+        self
+    }
+
+    /// Configure local FastEmbed for embeddings.
+    #[cfg(feature = "local-inference")]
+    pub fn with_local_embeddings(mut self) -> Self {
+        self.embed = Some(EmbedProvider::FastEmbed);
+        self
+    }
+
+    /// Configure local ONNX for NLI.
+    #[cfg(feature = "local-inference")]
+    pub fn with_local_nli(mut self) -> Self {
+        self.nli = Some(NliProvider::Onnx);
         self
     }
 

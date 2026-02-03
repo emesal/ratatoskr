@@ -12,7 +12,10 @@ fn test_capabilities_chat_only() {
     let caps = Capabilities::chat_only();
     assert!(caps.chat);
     assert!(caps.chat_streaming);
+    assert!(caps.generate);
+    assert!(caps.tool_use);
     assert!(!caps.embeddings);
+    assert!(!caps.local_inference);
 }
 
 #[test]
@@ -85,8 +88,39 @@ fn test_capabilities_merge_is_symmetric() {
     // Merge should be symmetric (a.merge(b) == b.merge(a))
     assert_eq!(ab.chat, ba.chat);
     assert_eq!(ab.chat_streaming, ba.chat_streaming);
+    assert_eq!(ab.generate, ba.generate);
+    assert_eq!(ab.tool_use, ba.tool_use);
     assert_eq!(ab.embeddings, ba.embeddings);
     assert_eq!(ab.nli, ba.nli);
     assert_eq!(ab.classification, ba.classification);
     assert_eq!(ab.token_counting, ba.token_counting);
+    assert_eq!(ab.local_inference, ba.local_inference);
+}
+
+#[test]
+fn test_capabilities_local_only() {
+    let caps = Capabilities::local_only();
+    assert!(!caps.chat, "local_only should not have chat");
+    assert!(!caps.chat_streaming, "local_only should not have chat_streaming");
+    assert!(!caps.generate, "local_only should not have generate");
+    assert!(!caps.tool_use, "local_only should not have tool_use");
+    assert!(caps.embeddings, "local_only should have embeddings");
+    assert!(caps.nli, "local_only should have nli");
+    assert!(!caps.classification, "local_only should not have classification");
+    assert!(caps.token_counting, "local_only should have token_counting");
+    assert!(caps.local_inference, "local_only should have local_inference");
+}
+
+#[test]
+fn test_capabilities_full() {
+    let caps = Capabilities::full();
+    assert!(caps.chat);
+    assert!(caps.chat_streaming);
+    assert!(caps.generate);
+    assert!(caps.tool_use);
+    assert!(caps.embeddings);
+    assert!(caps.nli);
+    assert!(caps.classification);
+    assert!(caps.token_counting);
+    assert!(caps.local_inference);
 }

@@ -5,12 +5,24 @@ use serde::{Deserialize, Serialize};
 /// What capabilities a gateway supports
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Capabilities {
+    /// Multi-turn chat conversations.
     pub chat: bool,
+    /// Streaming chat responses.
     pub chat_streaming: bool,
+    /// Single-turn text generation.
+    pub generate: bool,
+    /// Tool/function calling support.
+    pub tool_use: bool,
+    /// Text embeddings.
     pub embeddings: bool,
+    /// Natural language inference.
     pub nli: bool,
+    /// Zero-shot classification.
     pub classification: bool,
+    /// Token counting for models.
     pub token_counting: bool,
+    /// Local inference (no API calls needed).
+    pub local_inference: bool,
 }
 
 impl Capabilities {
@@ -19,23 +31,39 @@ impl Capabilities {
         Self {
             chat: true,
             chat_streaming: true,
+            generate: true,
+            tool_use: true,
             ..Default::default()
         }
     }
 
-    /// Full capabilities (future)
+    /// Full capabilities (all features)
     pub fn full() -> Self {
         Self {
             chat: true,
             chat_streaming: true,
+            generate: true,
+            tool_use: true,
             embeddings: true,
             nli: true,
             classification: true,
             token_counting: true,
+            local_inference: true,
         }
     }
 
-    /// HuggingFace-only capabilities (embeddings, NLI, classification)
+    /// Local inference only capabilities (no API needed)
+    pub fn local_only() -> Self {
+        Self {
+            embeddings: true,
+            nli: true,
+            token_counting: true,
+            local_inference: true,
+            ..Default::default()
+        }
+    }
+
+    /// HuggingFace API capabilities (embeddings, NLI, classification)
     pub fn huggingface_only() -> Self {
         Self {
             embeddings: true,
@@ -50,10 +78,13 @@ impl Capabilities {
         Self {
             chat: self.chat || other.chat,
             chat_streaming: self.chat_streaming || other.chat_streaming,
+            generate: self.generate || other.generate,
+            tool_use: self.tool_use || other.tool_use,
             embeddings: self.embeddings || other.embeddings,
             nli: self.nli || other.nli,
             classification: self.classification || other.classification,
             token_counting: self.token_counting || other.token_counting,
+            local_inference: self.local_inference || other.local_inference,
         }
     }
 }

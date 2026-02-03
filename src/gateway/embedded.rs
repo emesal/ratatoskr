@@ -1,6 +1,8 @@
 //! EmbeddedGateway - wraps the llm crate for embedded mode
 
 use std::pin::Pin;
+#[cfg(feature = "local-inference")]
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures_util::{Stream, StreamExt};
@@ -14,6 +16,11 @@ use crate::{
     Result, ToolDefinition,
 };
 
+#[cfg(feature = "local-inference")]
+use crate::model::ModelManager;
+#[cfg(feature = "local-inference")]
+use crate::tokenizer::TokenizerRegistry;
+
 /// Gateway that wraps the llm crate for embedded mode.
 pub struct EmbeddedGateway {
     openrouter_key: Option<String>,
@@ -24,8 +31,11 @@ pub struct EmbeddedGateway {
     timeout_secs: u64,
     #[cfg(feature = "huggingface")]
     huggingface: Option<crate::providers::HuggingFaceClient>,
-    #[cfg(feature = "huggingface")]
     router: super::routing::CapabilityRouter,
+    #[cfg(feature = "local-inference")]
+    model_manager: Arc<ModelManager>,
+    #[cfg(feature = "local-inference")]
+    tokenizer_registry: Arc<TokenizerRegistry>,
 }
 
 impl EmbeddedGateway {
@@ -38,7 +48,9 @@ impl EmbeddedGateway {
         ollama_url: Option<String>,
         timeout_secs: u64,
         #[cfg(feature = "huggingface")] huggingface: Option<crate::providers::HuggingFaceClient>,
-        #[cfg(feature = "huggingface")] router: super::routing::CapabilityRouter,
+        router: super::routing::CapabilityRouter,
+        #[cfg(feature = "local-inference")] model_manager: Arc<ModelManager>,
+        #[cfg(feature = "local-inference")] tokenizer_registry: Arc<TokenizerRegistry>,
     ) -> Self {
         Self {
             openrouter_key,
@@ -49,8 +61,11 @@ impl EmbeddedGateway {
             timeout_secs,
             #[cfg(feature = "huggingface")]
             huggingface,
-            #[cfg(feature = "huggingface")]
             router,
+            #[cfg(feature = "local-inference")]
+            model_manager,
+            #[cfg(feature = "local-inference")]
+            tokenizer_registry,
         }
     }
 
@@ -282,6 +297,26 @@ impl ModelGateway for EmbeddedGateway {
             caps.classification = self.router.classify_provider().is_some();
         }
 
+        #[cfg(feature = "local-inference")]
+        {
+            use super::routing::{EmbedProvider, NliProvider};
+
+            // Local embeddings
+            if matches!(self.router.embed_provider(), Some(EmbedProvider::FastEmbed)) {
+                caps.embeddings = true;
+                caps.local_inference = true;
+            }
+
+            // Local NLI
+            if matches!(self.router.nli_provider(), Some(NliProvider::Onnx)) {
+                caps.nli = true;
+                caps.local_inference = true;
+            }
+
+            // Token counting is available when we have a tokenizer registry
+            caps.token_counting = true;
+        }
+
         caps
     }
 
@@ -329,5 +364,10 @@ impl ModelGateway for EmbeddedGateway {
             .as_ref()
             .ok_or(RatatoskrError::Unsupported)?;
         hf.classify(text, labels, model).await
+    }
+
+    #[cfg(feature = "local-inference")]
+    fn count_tokens(&self, text: &str, model: &str) -> Result<usize> {
+        self.tokenizer_registry.count_tokens(text, model)
     }
 }

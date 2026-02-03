@@ -7,8 +7,12 @@
 pub mod fastembed;
 #[cfg(feature = "huggingface")]
 pub mod huggingface;
+#[cfg(feature = "local-inference")]
+pub mod onnx_nli;
 
 #[cfg(feature = "local-inference")]
 pub use fastembed::{EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel};
 #[cfg(feature = "huggingface")]
 pub use huggingface::HuggingFaceClient;
+#[cfg(feature = "local-inference")]
+pub use onnx_nli::{LocalNliModel, NliModelInfo, OnnxNliProvider};

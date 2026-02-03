@@ -77,7 +77,10 @@ pub use model::{Device, LoadedModels, ModelManager, ModelManagerConfig, ModelSou
 
 // Re-export local inference provider types when feature is enabled
 #[cfg(feature = "local-inference")]
-pub use providers::{EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel};
+pub use providers::{
+    EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel, LocalNliModel, NliModelInfo,
+    OnnxNliProvider,
+};
 
 // Re-export all types
 pub use types::{

@@ -3,6 +3,16 @@
 use super::EmbeddedGateway;
 use crate::{RatatoskrError, Result};
 
+#[cfg(feature = "local-inference")]
+use std::path::PathBuf;
+
+#[cfg(feature = "local-inference")]
+use crate::model::Device;
+#[cfg(feature = "local-inference")]
+use crate::providers::{LocalEmbeddingModel, LocalNliModel};
+#[cfg(feature = "local-inference")]
+use crate::tokenizer::TokenizerSource;
+
 /// Main entry point for creating gateway instances.
 pub struct Ratatoskr;
 
@@ -23,6 +33,16 @@ pub struct RatatoskrBuilder {
     default_timeout_secs: Option<u64>,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
+    #[cfg(feature = "local-inference")]
+    local_embedding_model: Option<LocalEmbeddingModel>,
+    #[cfg(feature = "local-inference")]
+    local_nli_model: Option<LocalNliModel>,
+    #[cfg(feature = "local-inference")]
+    device: Device,
+    #[cfg(feature = "local-inference")]
+    cache_dir: Option<PathBuf>,
+    #[cfg(feature = "local-inference")]
+    tokenizer_mappings: Vec<(String, TokenizerSource)>,
 }
 
 impl RatatoskrBuilder {
@@ -36,6 +56,16 @@ impl RatatoskrBuilder {
             default_timeout_secs: None,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
+            #[cfg(feature = "local-inference")]
+            local_embedding_model: None,
+            #[cfg(feature = "local-inference")]
+            local_nli_model: None,
+            #[cfg(feature = "local-inference")]
+            device: Device::default(),
+            #[cfg(feature = "local-inference")]
+            cache_dir: None,
+            #[cfg(feature = "local-inference")]
+            tokenizer_mappings: Vec::new(),
         }
     }
 
@@ -76,6 +106,45 @@ impl RatatoskrBuilder {
         self
     }
 
+    /// Enable local embeddings via FastEmbed.
+    #[cfg(feature = "local-inference")]
+    pub fn local_embeddings(mut self, model: LocalEmbeddingModel) -> Self {
+        self.local_embedding_model = Some(model);
+        self
+    }
+
+    /// Enable local NLI via ONNX Runtime.
+    #[cfg(feature = "local-inference")]
+    pub fn local_nli(mut self, model: LocalNliModel) -> Self {
+        self.local_nli_model = Some(model);
+        self
+    }
+
+    /// Set the device for local inference (default: CPU).
+    #[cfg(feature = "local-inference")]
+    pub fn device(mut self, device: Device) -> Self {
+        self.device = device;
+        self
+    }
+
+    /// Set the cache directory for model downloads.
+    #[cfg(feature = "local-inference")]
+    pub fn cache_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.cache_dir = Some(path.into());
+        self
+    }
+
+    /// Add a custom tokenizer mapping.
+    #[cfg(feature = "local-inference")]
+    pub fn tokenizer_mapping(
+        mut self,
+        model_pattern: impl Into<String>,
+        source: TokenizerSource,
+    ) -> Self {
+        self.tokenizer_mappings.push((model_pattern.into(), source));
+        self
+    }
+
     /// Set default timeout for all requests (seconds).
     pub fn timeout(mut self, secs: u64) -> Self {
         self.default_timeout_secs = Some(secs);
@@ -92,13 +161,15 @@ impl RatatoskrBuilder {
     }
 
     /// Check if at least one capability provider is configured.
-    #[cfg(feature = "huggingface")]
     fn has_capability_provider(&self) -> bool {
-        self.huggingface_key.is_some()
-    }
-
-    #[cfg(not(feature = "huggingface"))]
-    fn has_capability_provider(&self) -> bool {
+        #[cfg(feature = "huggingface")]
+        if self.huggingface_key.is_some() {
+            return true;
+        }
+        #[cfg(feature = "local-inference")]
+        if self.local_embedding_model.is_some() || self.local_nli_model.is_some() {
+            return true;
+        }
         false
     }
 
@@ -114,11 +185,52 @@ impl RatatoskrBuilder {
             .huggingface_key
             .map(crate::providers::HuggingFaceClient::new);
 
+        // Build the capability router
+        let mut router = super::routing::CapabilityRouter::new();
+
         #[cfg(feature = "huggingface")]
-        let router = if huggingface.is_some() {
-            super::routing::CapabilityRouter::new().with_huggingface()
-        } else {
-            super::routing::CapabilityRouter::new()
+        if huggingface.is_some() {
+            router = router.with_huggingface();
+        }
+
+        #[cfg(feature = "local-inference")]
+        {
+            if self.local_embedding_model.is_some() {
+                router = router.with_local_embeddings();
+            }
+            if self.local_nli_model.is_some() {
+                router = router.with_local_nli();
+            }
+        }
+
+        // Build model manager for local inference
+        #[cfg(feature = "local-inference")]
+        let model_manager = {
+            use crate::model::ModelManagerConfig;
+            let config = ModelManagerConfig {
+                cache_dir: self.cache_dir.unwrap_or_else(|| {
+                    std::env::var("RATATOSKR_CACHE_DIR")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|_| {
+                            dirs::cache_dir()
+                                .unwrap_or_else(|| std::path::PathBuf::from(".cache"))
+                                .join("ratatoskr")
+                                .join("models")
+                        })
+                }),
+                default_device: self.device,
+            };
+            std::sync::Arc::new(crate::model::ModelManager::new(config))
+        };
+
+        // Build tokenizer registry for local inference
+        #[cfg(feature = "local-inference")]
+        let tokenizer_registry = {
+            let mut registry = crate::tokenizer::TokenizerRegistry::new();
+            for (pattern, source) in self.tokenizer_mappings {
+                registry.register(&pattern, source);
+            }
+            std::sync::Arc::new(registry)
         };
 
         Ok(EmbeddedGateway::new(
@@ -130,8 +242,11 @@ impl RatatoskrBuilder {
             self.default_timeout_secs.unwrap_or(120),
             #[cfg(feature = "huggingface")]
             huggingface,
-            #[cfg(feature = "huggingface")]
             router,
+            #[cfg(feature = "local-inference")]
+            model_manager,
+            #[cfg(feature = "local-inference")]
+            tokenizer_registry,
         ))
     }
 }
