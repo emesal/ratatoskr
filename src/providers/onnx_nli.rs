@@ -327,6 +327,121 @@ fn get_cache_dir() -> PathBuf {
         })
 }
 
+/// Provider that implements `NliProvider` trait using local ONNX models.
+///
+/// This provider wraps a `ModelManager` and a specific model type. It checks
+/// if the requested model matches, and if so, uses the manager to get/load
+/// the model and perform NLI inference. Returns `ModelNotAvailable` when:
+/// - The requested model doesn't match this provider's model
+/// - RAM budget would be exceeded by loading the model
+///
+/// # Example
+///
+/// ```ignore
+/// use std::sync::Arc;
+/// use ratatoskr::providers::{LocalNliProvider, LocalNliModel};
+/// use ratatoskr::model::ModelManager;
+///
+/// let manager = Arc::new(ModelManager::with_defaults());
+/// let provider = LocalNliProvider::new(
+///     LocalNliModel::NliDebertaV3Small,
+///     manager,
+/// );
+/// ```
+pub struct LocalNliProvider {
+    /// The specific model this provider handles.
+    local_model: LocalNliModel,
+    /// Shared model manager for lazy loading.
+    manager: std::sync::Arc<crate::model::ModelManager>,
+}
+
+impl LocalNliProvider {
+    /// Create a new local NLI provider.
+    ///
+    /// The provider will only handle requests for the specified model.
+    /// Other model names will result in `ModelNotAvailable`.
+    pub fn new(
+        model: LocalNliModel,
+        manager: std::sync::Arc<crate::model::ModelManager>,
+    ) -> Self {
+        Self {
+            local_model: model,
+            manager,
+        }
+    }
+
+    /// Get the model name this provider handles.
+    pub fn model_name(&self) -> &str {
+        self.local_model.name()
+    }
+}
+
+#[async_trait::async_trait]
+impl super::traits::NliProvider for LocalNliProvider {
+    fn name(&self) -> &str {
+        self.local_model.name()
+    }
+
+    async fn infer_nli(
+        &self,
+        premise: &str,
+        hypothesis: &str,
+        model: &str,
+    ) -> Result<NliResult> {
+        // Check if this is the model we handle
+        if model != self.local_model.name() {
+            return Err(RatatoskrError::ModelNotAvailable);
+        }
+
+        // Get or load the model through the manager (checks RAM budget)
+        let provider = self.manager.nli(self.local_model.clone())?;
+
+        // ONNX is sync, wrap in spawn_blocking
+        let premise = premise.to_owned();
+        let hypothesis = hypothesis.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let mut provider_guard = provider.write().map_err(|e| {
+                RatatoskrError::Configuration(format!("Failed to acquire lock: {}", e))
+            })?;
+            provider_guard.infer_nli(&premise, &hypothesis)
+        })
+        .await
+        .map_err(|e| RatatoskrError::DataError(format!("Task join error: {}", e)))?
+    }
+
+    async fn infer_nli_batch(
+        &self,
+        pairs: &[(&str, &str)],
+        model: &str,
+    ) -> Result<Vec<NliResult>> {
+        // Check if this is the model we handle
+        if model != self.local_model.name() {
+            return Err(RatatoskrError::ModelNotAvailable);
+        }
+
+        // Get or load the model through the manager (checks RAM budget)
+        let provider = self.manager.nli(self.local_model.clone())?;
+
+        // ONNX is sync, wrap in spawn_blocking
+        let pairs: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(p, h)| (p.to_string(), h.to_string()))
+            .collect();
+        tokio::task::spawn_blocking(move || {
+            let mut provider_guard = provider.write().map_err(|e| {
+                RatatoskrError::Configuration(format!("Failed to acquire lock: {}", e))
+            })?;
+            let pair_refs: Vec<(&str, &str)> = pairs
+                .iter()
+                .map(|(p, h)| (p.as_str(), h.as_str()))
+                .collect();
+            provider_guard.infer_nli_batch(&pair_refs)
+        })
+        .await
+        .map_err(|e| RatatoskrError::DataError(format!("Task join error: {}", e)))?
+    }
+}
+
 /// Download model and tokenizer from HuggingFace Hub.
 fn download_model(repo_id: &str, _cache_dir: &std::path::Path) -> Result<(PathBuf, PathBuf)> {
     use hf_hub::api::sync::Api;

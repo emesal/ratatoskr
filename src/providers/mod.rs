@@ -24,8 +24,8 @@ pub use traits::{
 
 // Re-export concrete providers
 #[cfg(feature = "local-inference")]
-pub use fastembed::{EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel};
+pub use fastembed::{EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel, LocalEmbeddingProvider};
 #[cfg(feature = "huggingface")]
 pub use huggingface::HuggingFaceClient;
 #[cfg(feature = "local-inference")]
-pub use onnx_nli::{LocalNliModel, NliModelInfo, OnnxNliProvider};
+pub use onnx_nli::{LocalNliModel, LocalNliProvider, NliModelInfo, OnnxNliProvider};

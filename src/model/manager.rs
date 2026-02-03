@@ -20,6 +20,10 @@ pub struct ModelManagerConfig {
 
     /// Default device for inference.
     pub default_device: Device,
+
+    /// Maximum RAM budget in bytes for loaded models.
+    /// None means unlimited.
+    pub ram_budget: Option<usize>,
 }
 
 impl Default for ModelManagerConfig {
@@ -34,6 +38,7 @@ impl Default for ModelManagerConfig {
                         .join("models")
                 }),
             default_device: Device::default(),
+            ram_budget: None,
         }
     }
 }
@@ -52,9 +57,14 @@ pub struct LoadedModels {
 ///
 /// Thread-safe with double-checked locking to ensure models are loaded at most once.
 /// Models are stored in Arc so they can be shared across threads.
+///
+/// Tracks RAM usage and enforces budget constraints. When RAM budget would be
+/// exceeded, returns `ModelNotAvailable` so the registry can try API fallback.
 pub struct ModelManager {
     embedding_models: RwLock<HashMap<String, Arc<RwLock<FastEmbedProvider>>>>,
     nli_models: RwLock<HashMap<String, Arc<RwLock<OnnxNliProvider>>>>,
+    /// Tracks estimated RAM usage per loaded model (key = model name).
+    loaded_sizes: RwLock<HashMap<String, usize>>,
     config: ModelManagerConfig,
 }
 
@@ -64,6 +74,7 @@ impl ModelManager {
         Self {
             embedding_models: RwLock::new(HashMap::new()),
             nli_models: RwLock::new(HashMap::new()),
+            loaded_sizes: RwLock::new(HashMap::new()),
             config,
         }
     }
@@ -76,8 +87,10 @@ impl ModelManager {
     /// Get or lazily load an embedding model.
     ///
     /// Uses double-checked locking to ensure thread-safe lazy loading.
+    /// Returns `ModelNotAvailable` if loading would exceed RAM budget.
     pub fn embedding(&self, model: LocalEmbeddingModel) -> Result<Arc<RwLock<FastEmbedProvider>>> {
         let key = model.cache_key();
+        let model_name = model.name();
 
         // Fast path: check if already loaded (read lock)
         {
@@ -88,6 +101,11 @@ impl ModelManager {
             if let Some(provider) = models.get(&key) {
                 return Ok(Arc::clone(provider));
             }
+        }
+
+        // Check RAM budget before attempting to load
+        if !self.can_load(model_name) {
+            return Err(RatatoskrError::ModelNotAvailable);
         }
 
         // Slow path: need to load (write lock)
@@ -103,7 +121,13 @@ impl ModelManager {
         // Actually load the model
         let provider = FastEmbedProvider::new(model)?;
         let arc_provider = Arc::new(RwLock::new(provider));
-        models.insert(key, Arc::clone(&arc_provider));
+        models.insert(key.clone(), Arc::clone(&arc_provider));
+
+        // Track RAM usage
+        let size = self.estimate_model_size(model_name);
+        if let Ok(mut sizes) = self.loaded_sizes.write() {
+            sizes.insert(key, size);
+        }
 
         Ok(arc_provider)
     }
@@ -111,8 +135,10 @@ impl ModelManager {
     /// Get or lazily load an NLI model.
     ///
     /// Uses double-checked locking to ensure thread-safe lazy loading.
+    /// Returns `ModelNotAvailable` if loading would exceed RAM budget.
     pub fn nli(&self, model: LocalNliModel) -> Result<Arc<RwLock<OnnxNliProvider>>> {
         let key = model.cache_key();
+        let model_name = model.name().to_string();
 
         // Fast path: check if already loaded (read lock)
         {
@@ -123,6 +149,11 @@ impl ModelManager {
             if let Some(provider) = models.get(&key) {
                 return Ok(Arc::clone(provider));
             }
+        }
+
+        // Check RAM budget before attempting to load
+        if !self.can_load(&model_name) {
+            return Err(RatatoskrError::ModelNotAvailable);
         }
 
         // Slow path: need to load (write lock)
@@ -138,7 +169,13 @@ impl ModelManager {
         // Actually load the model
         let provider = OnnxNliProvider::new(model, self.config.default_device)?;
         let arc_provider = Arc::new(RwLock::new(provider));
-        models.insert(key, Arc::clone(&arc_provider));
+        models.insert(key.clone(), Arc::clone(&arc_provider));
+
+        // Track RAM usage
+        let size = self.estimate_model_size(&model_name);
+        if let Ok(mut sizes) = self.loaded_sizes.write() {
+            sizes.insert(key, size);
+        }
 
         Ok(arc_provider)
     }
@@ -166,10 +203,16 @@ impl ModelManager {
     /// Returns true if the model was found and removed.
     pub fn unload_embedding(&self, model: &LocalEmbeddingModel) -> bool {
         let key = model.cache_key();
-        self.embedding_models
+        let removed = self
+            .embedding_models
             .write()
             .map(|mut models| models.remove(&key).is_some())
-            .unwrap_or(false)
+            .unwrap_or(false);
+
+        if removed && let Ok(mut sizes) = self.loaded_sizes.write() {
+            sizes.remove(&key);
+        }
+        removed
     }
 
     /// Unload an NLI model from cache.
@@ -177,10 +220,16 @@ impl ModelManager {
     /// Returns true if the model was found and removed.
     pub fn unload_nli(&self, model: &LocalNliModel) -> bool {
         let key = model.cache_key();
-        self.nli_models
+        let removed = self
+            .nli_models
             .write()
             .map(|mut models| models.remove(&key).is_some())
-            .unwrap_or(false)
+            .unwrap_or(false);
+
+        if removed && let Ok(mut sizes) = self.loaded_sizes.write() {
+            sizes.remove(&key);
+        }
+        removed
     }
 
     /// Get information about currently loaded models.
@@ -200,6 +249,69 @@ impl ModelManager {
         LoadedModels { embeddings, nli }
     }
 
+    /// Check if we have RAM budget to load a model.
+    ///
+    /// Returns true if:
+    /// - No RAM budget is configured (unlimited), or
+    /// - The model is already loaded, or
+    /// - Loading the model would not exceed the budget.
+    pub fn can_load(&self, model_name: &str) -> bool {
+        let Some(budget) = self.config.ram_budget else {
+            return true; // No budget = unlimited
+        };
+
+        // Check if already loaded (by model name, not cache key)
+        let sizes = match self.loaded_sizes.read() {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+
+        // If any loaded model contains this name, it's already loaded
+        for key in sizes.keys() {
+            if key.contains(model_name) {
+                return true;
+            }
+        }
+
+        // Estimate size and check budget
+        let estimated_size = self.estimate_model_size(model_name);
+        let current_usage: usize = sizes.values().sum();
+
+        current_usage + estimated_size <= budget
+    }
+
+    /// Estimate model size in bytes based on model name.
+    ///
+    /// These are rough estimates based on typical model sizes.
+    /// Could be made more accurate with model metadata.
+    fn estimate_model_size(&self, model_name: &str) -> usize {
+        match model_name {
+            // Embedding models
+            n if n.contains("MiniLM-L6") => 90 * 1024 * 1024,    // ~90MB
+            n if n.contains("MiniLM-L12") => 120 * 1024 * 1024,  // ~120MB
+            n if n.contains("bge-small") || n.contains("BGE-small") => 130 * 1024 * 1024, // ~130MB
+            n if n.contains("bge-base") || n.contains("BGE-base") => 440 * 1024 * 1024,   // ~440MB
+            // NLI models
+            n if n.contains("deberta") && n.contains("small") => 300 * 1024 * 1024, // ~300MB
+            n if n.contains("deberta") && n.contains("base") => 400 * 1024 * 1024,  // ~400MB
+            // Default estimate
+            _ => 200 * 1024 * 1024, // ~200MB default
+        }
+    }
+
+    /// Get current total RAM usage of loaded models.
+    pub fn current_usage(&self) -> usize {
+        self.loaded_sizes
+            .read()
+            .map(|sizes| sizes.values().sum())
+            .unwrap_or(0)
+    }
+
+    /// Get the configured RAM budget.
+    pub fn ram_budget(&self) -> Option<usize> {
+        self.config.ram_budget
+    }
+
     /// Get the configuration.
     pub fn config(&self) -> &ModelManagerConfig {
         &self.config
@@ -215,6 +327,7 @@ mod tests {
         let config = ModelManagerConfig::default();
         assert!(config.cache_dir.to_string_lossy().contains("ratatoskr"));
         assert_eq!(config.default_device, Device::Cpu);
+        assert!(config.ram_budget.is_none());
     }
 
     #[test]
@@ -230,5 +343,84 @@ mod tests {
         let loaded = manager.loaded_models();
         assert!(loaded.embeddings.is_empty());
         assert!(loaded.nli.is_empty());
+        assert_eq!(manager.current_usage(), 0);
+        assert!(manager.ram_budget().is_none());
+    }
+
+    #[test]
+    fn test_can_load_unlimited_budget() {
+        let manager = ModelManager::with_defaults();
+        // No budget = unlimited, should always return true
+        assert!(manager.can_load("any-model"));
+        assert!(manager.can_load("all-MiniLM-L6-v2"));
+        assert!(manager.can_load("nli-deberta-v3-base"));
+    }
+
+    #[test]
+    fn test_can_load_with_budget() {
+        let config = ModelManagerConfig {
+            ram_budget: Some(100 * 1024 * 1024), // 100MB budget
+            ..Default::default()
+        };
+        let manager = ModelManager::new(config);
+
+        // MiniLM-L6 is ~90MB, should fit
+        assert!(manager.can_load("all-MiniLM-L6-v2"));
+
+        // BGE-base is ~440MB, should not fit
+        assert!(!manager.can_load("BGE-base-en"));
+
+        // Deberta-base is ~400MB, should not fit
+        assert!(!manager.can_load("nli-deberta-v3-base"));
+    }
+
+    #[test]
+    fn test_estimate_model_size() {
+        let manager = ModelManager::with_defaults();
+
+        // Embedding models
+        assert_eq!(
+            manager.estimate_model_size("all-MiniLM-L6-v2"),
+            90 * 1024 * 1024
+        );
+        assert_eq!(
+            manager.estimate_model_size("all-MiniLM-L12-v2"),
+            120 * 1024 * 1024
+        );
+        assert_eq!(
+            manager.estimate_model_size("BGE-small-en"),
+            130 * 1024 * 1024
+        );
+        assert_eq!(
+            manager.estimate_model_size("BGE-base-en"),
+            440 * 1024 * 1024
+        );
+
+        // NLI models
+        assert_eq!(
+            manager.estimate_model_size("nli-deberta-v3-small"),
+            300 * 1024 * 1024
+        );
+        assert_eq!(
+            manager.estimate_model_size("nli-deberta-v3-base"),
+            400 * 1024 * 1024
+        );
+
+        // Unknown model gets default
+        assert_eq!(
+            manager.estimate_model_size("some-unknown-model"),
+            200 * 1024 * 1024
+        );
+    }
+
+    #[test]
+    fn test_config_with_ram_budget() {
+        let config = ModelManagerConfig {
+            ram_budget: Some(1024 * 1024 * 1024), // 1GB
+            ..Default::default()
+        };
+        let manager = ModelManager::new(config);
+
+        assert_eq!(manager.ram_budget(), Some(1024 * 1024 * 1024));
     }
 }

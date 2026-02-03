@@ -43,6 +43,8 @@ pub struct RatatoskrBuilder {
     cache_dir: Option<PathBuf>,
     #[cfg(feature = "local-inference")]
     tokenizer_mappings: Vec<(String, TokenizerSource)>,
+    #[cfg(feature = "local-inference")]
+    ram_budget: Option<usize>,
 }
 
 impl RatatoskrBuilder {
@@ -66,6 +68,8 @@ impl RatatoskrBuilder {
             cache_dir: None,
             #[cfg(feature = "local-inference")]
             tokenizer_mappings: Vec::new(),
+            #[cfg(feature = "local-inference")]
+            ram_budget: None,
         }
     }
 
@@ -131,6 +135,17 @@ impl RatatoskrBuilder {
     #[cfg(feature = "local-inference")]
     pub fn cache_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.cache_dir = Some(path.into());
+        self
+    }
+
+    /// Set the RAM budget for local model loading.
+    ///
+    /// When set, the model manager will refuse to load models that would
+    /// exceed this budget, returning `ModelNotAvailable` so the registry
+    /// can fall back to API providers.
+    #[cfg(feature = "local-inference")]
+    pub fn ram_budget(mut self, bytes: usize) -> Self {
+        self.ram_budget = Some(bytes);
         self
     }
 
@@ -219,6 +234,7 @@ impl RatatoskrBuilder {
                         })
                 }),
                 default_device: self.device,
+                ram_budget: self.ram_budget,
             };
             std::sync::Arc::new(crate::model::ModelManager::new(config))
         };

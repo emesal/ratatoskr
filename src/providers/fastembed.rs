@@ -76,6 +76,105 @@ pub struct FastEmbedProvider {
     model_info: EmbeddingModelInfo,
 }
 
+/// Provider that implements `EmbeddingProvider` trait using local fastembed models.
+///
+/// This provider wraps a `ModelManager` and a specific model type. It checks
+/// if the requested model matches, and if so, uses the manager to get/load
+/// the model and perform embeddings. Returns `ModelNotAvailable` when:
+/// - The requested model doesn't match this provider's model
+/// - RAM budget would be exceeded by loading the model
+///
+/// # Example
+///
+/// ```ignore
+/// use std::sync::Arc;
+/// use ratatoskr::providers::{LocalEmbeddingProvider, LocalEmbeddingModel};
+/// use ratatoskr::model::ModelManager;
+///
+/// let manager = Arc::new(ModelManager::with_defaults());
+/// let provider = LocalEmbeddingProvider::new(
+///     LocalEmbeddingModel::AllMiniLmL6V2,
+///     manager,
+/// );
+/// ```
+pub struct LocalEmbeddingProvider {
+    /// The specific model this provider handles.
+    local_model: LocalEmbeddingModel,
+    /// Shared model manager for lazy loading.
+    manager: std::sync::Arc<crate::model::ModelManager>,
+}
+
+impl LocalEmbeddingProvider {
+    /// Create a new local embedding provider.
+    ///
+    /// The provider will only handle requests for the specified model.
+    /// Other model names will result in `ModelNotAvailable`.
+    pub fn new(
+        model: LocalEmbeddingModel,
+        manager: std::sync::Arc<crate::model::ModelManager>,
+    ) -> Self {
+        Self {
+            local_model: model,
+            manager,
+        }
+    }
+
+    /// Get the model name this provider handles.
+    pub fn model_name(&self) -> &'static str {
+        self.local_model.name()
+    }
+}
+
+#[async_trait::async_trait]
+impl super::traits::EmbeddingProvider for LocalEmbeddingProvider {
+    fn name(&self) -> &str {
+        self.local_model.name()
+    }
+
+    async fn embed(&self, text: &str, model: &str) -> Result<Embedding> {
+        // Check if this is the model we handle
+        if model != self.local_model.name() {
+            return Err(RatatoskrError::ModelNotAvailable);
+        }
+
+        // Get or load the model through the manager (checks RAM budget)
+        let provider = self.manager.embedding(self.local_model)?;
+
+        // FastEmbed is sync, wrap in spawn_blocking
+        let text = text.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let mut provider_guard = provider.write().map_err(|e| {
+                RatatoskrError::Configuration(format!("Failed to acquire lock: {}", e))
+            })?;
+            provider_guard.embed(&text)
+        })
+        .await
+        .map_err(|e| RatatoskrError::DataError(format!("Task join error: {}", e)))?
+    }
+
+    async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<Embedding>> {
+        // Check if this is the model we handle
+        if model != self.local_model.name() {
+            return Err(RatatoskrError::ModelNotAvailable);
+        }
+
+        // Get or load the model through the manager (checks RAM budget)
+        let provider = self.manager.embedding(self.local_model)?;
+
+        // FastEmbed is sync, wrap in spawn_blocking
+        let texts: Vec<String> = texts.iter().map(|s| s.to_string()).collect();
+        tokio::task::spawn_blocking(move || {
+            let mut provider_guard = provider.write().map_err(|e| {
+                RatatoskrError::Configuration(format!("Failed to acquire lock: {}", e))
+            })?;
+            let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
+            provider_guard.embed_batch(&text_refs)
+        })
+        .await
+        .map_err(|e| RatatoskrError::DataError(format!("Task join error: {}", e)))?
+    }
+}
+
 impl FastEmbedProvider {
     /// Create a new provider with the specified model.
     ///

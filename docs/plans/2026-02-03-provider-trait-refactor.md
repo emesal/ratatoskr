@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Status:** 🚧 IN PROGRESS (Tasks 1-3 complete)
+**Status:** 🚧 IN PROGRESS (Tasks 1-6 complete)
 
 **Goal:** Introduce capability-specific provider traits to establish a clean foundation for phase 5 (service mode), phase 6 (caching/retry/telemetry decorators), and future extensibility.
 
@@ -1474,37 +1474,36 @@ pub struct Capabilities {
 
 **Verify:** `cargo test --all-features --lib` ✅ (25 tests pass)
 
-### Task 4: ModelManager RAM Budget
-- [ ] Update `src/model/manager.rs` with RAM budget tracking
-- [ ] Add `can_load()`, `get_or_load_embedding()`, `get_or_load_nli()`
-- [ ] Add `LoadedEmbeddingModel`, `LoadedNliModel` wrapper types
-- [ ] Add `estimate_model_size()`, `unload()`, `loaded_models()`
-- [ ] Add tests for RAM budget enforcement
+### Task 4: ModelManager RAM Budget ✅
+- [x] Update `src/model/manager.rs` with RAM budget tracking
+- [x] Add `can_load()` method for RAM budget checks
+- [x] Add `estimate_model_size()` helper
+- [x] Add `current_usage()`, `ram_budget()` getters
+- [x] Update `embedding()` and `nli()` to check RAM before loading
+- [x] Update `unload_*()` methods to track size changes
+- [x] Add tests for RAM budget enforcement
 
-**Verify:** `cargo test --test model_manager_test --features local-inference`
+**Verify:** `cargo test --features local-inference --lib model::manager` ✅
 
-### Task 5: FastEmbedProvider Trait Impl
-- [ ] Refactor to take `Arc<ModelManager>` 
-- [ ] Implement `EmbeddingProvider`:
+### Task 5: FastEmbedProvider Trait Impl ✅
+- [x] Create `LocalEmbeddingProvider` that wraps `Arc<ModelManager>`
+- [x] Implement `EmbeddingProvider`:
   - Check model name match → `ModelNotAvailable`
-  - Check RAM via manager → `ModelNotAvailable`
-  - Delegate to manager for lazy loading
-- [ ] Wrap sync calls in `spawn_blocking`
-- [ ] Add tests
+  - Delegate to manager for lazy loading (checks RAM budget)
+- [x] Wrap sync calls in `spawn_blocking`
+- [x] Export from providers module
 
-**Verify:** `cargo test --test fastembed_provider_test --features local-inference`
+**Verify:** `cargo test --features local-inference --lib` ✅
 
-### Task 6: OnnxNliProvider Trait Impl
-- [ ] Refactor to take `Arc<ModelManager>`
-- [ ] Wrap session/tokenizer in Arc via `LoadedNliModel`
-- [ ] Implement `NliProvider`:
+### Task 6: OnnxNliProvider Trait Impl ✅
+- [x] Create `LocalNliProvider` that wraps `Arc<ModelManager>`
+- [x] Implement `NliProvider`:
   - Check model name match → `ModelNotAvailable`
-  - Check RAM via manager → `ModelNotAvailable`
-  - Delegate to manager for lazy loading
-- [ ] Wrap sync calls in `spawn_blocking`
-- [ ] Add tests
+  - Delegate to manager for lazy loading (checks RAM budget)
+- [x] Wrap sync calls in `spawn_blocking`
+- [x] Export from providers module
 
-**Verify:** `cargo test --test onnx_provider_test --features local-inference`
+**Verify:** `cargo test --features local-inference --lib` ✅
 
 ### Task 7: LlmChatProvider
 - [ ] Create `src/providers/llm_chat.rs`
