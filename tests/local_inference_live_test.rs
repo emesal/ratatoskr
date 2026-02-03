@@ -262,3 +262,118 @@ async fn test_live_gateway_count_tokens() {
 
     assert!(count > 0);
 }
+
+// ============================================================================
+// RAM Budget and Fallback Tests
+// ============================================================================
+
+/// Test that LocalEmbeddingProvider returns ModelNotAvailable for wrong model.
+#[tokio::test]
+#[ignore]
+async fn test_live_local_provider_wrong_model() {
+    use ratatoskr::RatatoskrError;
+    use ratatoskr::model::ModelManager;
+    use ratatoskr::providers::LocalEmbeddingProvider;
+    use ratatoskr::providers::traits::EmbeddingProvider;
+    use std::sync::Arc;
+
+    let manager = Arc::new(ModelManager::with_defaults());
+    let provider = LocalEmbeddingProvider::new(LocalEmbeddingModel::AllMiniLmL6V2, manager);
+
+    // Request a different model than what provider handles
+    let result = provider.embed("test", "some-other-model").await;
+
+    assert!(
+        matches!(result, Err(RatatoskrError::ModelNotAvailable)),
+        "expected ModelNotAvailable for wrong model, got {:?}",
+        result
+    );
+}
+
+/// Test that LocalEmbeddingProvider returns ModelNotAvailable when RAM budget exceeded.
+#[tokio::test]
+#[ignore]
+async fn test_live_local_provider_ram_budget_exceeded() {
+    use ratatoskr::model::{ModelManager, ModelManagerConfig};
+    use ratatoskr::providers::LocalEmbeddingProvider;
+    use ratatoskr::providers::traits::EmbeddingProvider;
+    use ratatoskr::{Device, RatatoskrError};
+    use std::sync::Arc;
+
+    // Create manager with impossible RAM budget (1 byte)
+    let config = ModelManagerConfig {
+        ram_budget: Some(1),
+        default_device: Device::Cpu,
+        ..Default::default()
+    };
+    let manager = Arc::new(ModelManager::new(config));
+    let provider = LocalEmbeddingProvider::new(LocalEmbeddingModel::AllMiniLmL6V2, manager);
+
+    // Request should fail due to RAM budget
+    let result = provider.embed("test", "all-MiniLM-L6-v2").await;
+
+    assert!(
+        matches!(result, Err(RatatoskrError::ModelNotAvailable)),
+        "expected ModelNotAvailable due to RAM budget, got {:?}",
+        result
+    );
+}
+
+/// Test LocalEmbeddingProvider trait implementation with correct model.
+/// This loads the actual model - slow on first run.
+#[tokio::test]
+#[ignore]
+async fn test_live_local_embedding_provider_trait() {
+    use ratatoskr::model::ModelManager;
+    use ratatoskr::providers::LocalEmbeddingProvider;
+    use ratatoskr::providers::traits::EmbeddingProvider;
+    use std::sync::Arc;
+
+    let manager = Arc::new(ModelManager::with_defaults());
+    let provider = LocalEmbeddingProvider::new(LocalEmbeddingModel::AllMiniLmL6V2, manager);
+
+    // Request the correct model
+    let result = provider.embed("Hello world!", "all-MiniLM-L6-v2").await;
+
+    let embedding = result.expect("embedding should succeed with correct model");
+    assert_eq!(embedding.dimensions, 384);
+    assert_eq!(embedding.model, "all-MiniLM-L6-v2");
+
+    // Verify embedding is normalized
+    let norm: f32 = embedding.values.iter().map(|x| x * x).sum::<f32>().sqrt();
+    assert!(
+        (norm - 1.0).abs() < 0.01,
+        "Expected L2 norm ≈ 1, got {}",
+        norm
+    );
+}
+
+/// Test LocalNliProvider trait implementation.
+#[tokio::test]
+#[ignore]
+async fn test_live_local_nli_provider_trait() {
+    use ratatoskr::NliLabel;
+    use ratatoskr::model::ModelManager;
+    use ratatoskr::providers::traits::NliProvider;
+    use ratatoskr::providers::{LocalNliModel, LocalNliProvider};
+    use std::sync::Arc;
+
+    let manager = Arc::new(ModelManager::with_defaults());
+    let provider = LocalNliProvider::new(LocalNliModel::NliDebertaV3Small, manager);
+
+    // Test with the correct model name
+    let result = provider
+        .infer_nli(
+            "The cat is sleeping on the mat.",
+            "An animal is resting.",
+            "nli-deberta-v3-small",
+        )
+        .await;
+
+    let nli = result.expect("NLI should succeed with correct model");
+    assert!(
+        matches!(nli.label, NliLabel::Entailment),
+        "Expected entailment, got {:?}",
+        nli.label
+    );
+}

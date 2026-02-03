@@ -690,3 +690,99 @@ cuda = ["ort/cuda"]
 ```
 
 All local inference is behind `local-inference` to keep the crate lightweight for API-only users. CUDA is a separate flag due to its native dependencies.
+
+## Appendix B: Provider Trait Refactor (2026-02-03)
+
+This appendix documents the provider trait refactor implemented to prepare for Phase 5 (service mode) and Phase 6 (decorators).
+
+### B.1 Problem Statement
+
+The original architecture had routing infrastructure that wasn't wired up, and lacked the abstractions needed for:
+- Service mode protocol handlers dispatching to providers uniformly
+- Decorator patterns: `CachingProvider<T>`, `RetryingProvider<T>`, `InstrumentedProvider<T>`
+- Fallback chains: try providers in priority order, transparent local→remote fallback
+- RAM-aware routing: local providers signal unavailability when memory-constrained
+
+### B.2 Provider Traits
+
+Instead of one god-trait, we have capability-specific traits:
+
+```rust
+#[async_trait]
+pub trait EmbeddingProvider: Send + Sync {
+    fn name(&self) -> &str;
+    async fn embed(&self, text: &str, model: &str) -> Result<Embedding>;
+    async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<Embedding>>;
+}
+
+#[async_trait]
+pub trait NliProvider: Send + Sync {
+    fn name(&self) -> &str;
+    async fn infer_nli(&self, premise: &str, hypothesis: &str, model: &str) -> Result<NliResult>;
+}
+
+#[async_trait]
+pub trait StanceProvider: Send + Sync {
+    fn name(&self) -> &str;
+    async fn classify_stance(&self, text: &str, target: &str, model: &str) -> Result<StanceResult>;
+}
+
+// Also: ClassifyProvider, ChatProvider, GenerateProvider
+```
+
+Providers receive the model string and self-report availability via `ModelNotAvailable` error.
+
+### B.3 ProviderRegistry (Fallback Chain)
+
+The registry holds providers per capability in priority order:
+
+```rust
+pub struct ProviderRegistry {
+    embedding: Vec<Arc<dyn EmbeddingProvider>>,
+    nli: Vec<Arc<dyn NliProvider>>,
+    classify: Vec<Arc<dyn ClassifyProvider>>,
+    stance: Vec<Arc<dyn StanceProvider>>,
+    chat: Vec<Arc<dyn ChatProvider>>,
+    generate: Vec<Arc<dyn GenerateProvider>>,
+}
+```
+
+When a capability is requested, the registry tries providers in order. If a provider returns `ModelNotAvailable`, the registry tries the next provider. This enables:
+- Local first, API fallback
+- RAM budget enforcement (local provider declines when memory-constrained)
+- Model-specific routing (providers only handle models they know)
+
+### B.4 RAM Budget Tracking
+
+`ModelManager` tracks loaded models and enforces RAM budget:
+
+```rust
+impl ModelManager {
+    pub fn can_load(&self, model_name: &str) -> bool {
+        // Check if RAM budget would be exceeded
+    }
+}
+```
+
+Local providers check `can_load()` before attempting to load models. If budget would be exceeded, they return `ModelNotAvailable`, triggering fallback to API providers.
+
+### B.5 Stance Detection
+
+Stance detection uses a separate trait (`StanceProvider`) rather than reusing `ClassifyProvider`:
+- Dedicated stance models (e.g., `cardiffnlp/twitter-roberta-base-stance`) can be added later
+- `ZeroShotStanceProvider` wraps `ClassifyProvider` as a fallback
+- Clear separation of concerns
+
+### B.6 Gateway Simplification
+
+`EmbeddedGateway` is now a thin wrapper that delegates to `ProviderRegistry`:
+
+```rust
+impl ModelGateway for EmbeddedGateway {
+    async fn embed(&self, text: &str, model: &str) -> Result<Embedding> {
+        self.registry.embed(text, model).await
+    }
+}
+```
+
+The old `CapabilityRouter` was removed as routing now happens naturally through the fallback chain.

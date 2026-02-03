@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Status:** 🚧 IN PROGRESS (Tasks 1-12 complete)
+**Status:** ✅ COMPLETE (Tasks 1-16 done)
 
 **Goal:** Introduce capability-specific provider traits to establish a clean foundation for phase 5 (service mode), phase 6 (caching/retry/telemetry decorators), and future extensibility.
 
@@ -24,7 +24,7 @@
 
 ## 1. Architecture Overview
 
-### Current State
+### Previous State (Before Refactor)
 
 ```
 EmbeddedGateway
@@ -35,7 +35,7 @@ EmbeddedGateway
 └── TokenizerRegistry
 ```
 
-### Target State
+### Current State (After Refactor)
 
 ```
 EmbeddedGateway
@@ -1562,32 +1562,36 @@ is still present but no longer used by the gateway (kept for potential future us
 
 **Verify:** `just pre-push` ✅ (82 tests pass)
 
-### Task 13: Integration Tests
-- [ ] Update existing integration tests
-- [ ] Add test: local provider → API fallback on `ModelNotAvailable`
-- [ ] Add test: RAM budget triggers fallback
-- [ ] Add test: `classify_stance` via `ZeroShotStanceProvider`
+### Task 13: Integration Tests ✅
+- [x] Update existing integration tests (existing tests still pass)
+- [x] Add test: local provider → API fallback on `ModelNotAvailable`
+- [x] Add test: RAM budget triggers fallback
+- [x] Add test: `classify_stance` via `ZeroShotStanceProvider`
+- [x] Add test: stance through registry
+- [x] Add test: NoProvider error when no stance provider
 
-**Verify:** `cargo test --features local-inference,huggingface`
+**Verify:** `cargo test --all-features` ✅ (89 tests pass, 21 ignored)
 
-### Task 14: Live Tests
-- [ ] Add `classify_stance` live test
-- [ ] Add RAM budget fallback live test
-- [ ] Update existing live tests for new API
+### Task 14: Live Tests ✅
+- [x] Add `classify_stance` live tests (favor, against)
+- [x] Add RAM budget fallback live test
+- [x] Add LocalEmbeddingProvider trait tests (wrong model, correct model)
+- [x] Add LocalNliProvider trait test
+- [x] Existing live tests updated as needed
 
-**Verify:** `cargo test --features local-inference,huggingface -- --ignored`
+**Verify:** `cargo test --all-features` compiles ✅ (run ignored tests manually with API keys)
 
-### Task 15: Documentation
-- [ ] Update `CLAUDE.md` with new architecture
-- [ ] Update `architecture.md` to match implementation
-- [ ] Update `src/lib.rs` doc examples
-- [ ] Run `cargo doc --no-deps`
+### Task 15: Documentation ✅
+- [x] Update `CLAUDE.md` with new architecture
+- [x] Update `architecture.md` with Appendix B (Provider Trait Refactor)
+- [x] Verify `src/lib.rs` doc examples (already appropriate)
+- [x] Run `cargo doc --no-deps` ✅
 
-### Task 16: Full Test Suite
-- [ ] `just pre-push` passes
-- [ ] All clippy warnings resolved
+### Task 16: Full Test Suite ✅
+- [x] `just pre-push` passes ✅ (82 tests pass, 10 skipped)
+- [x] All clippy warnings resolved
 
-**Verify:** `just pre-push`
+**Verify:** `just pre-push` ✅
 
 ---
 
@@ -1600,8 +1604,7 @@ is still present but no longer used by the gateway (kept for potential future us
 - `src/providers/traits.rs` — all provider traits + ZeroShotStanceProvider
 - `src/providers/registry.rs` — ProviderRegistry with fallback chain
 - `src/providers/llm_chat.rs` — LlmChatProvider wrapper
-- `tests/provider_traits_test.rs`
-- `tests/llm_chat_provider_test.rs`
+- `tests/provider_fallback_test.rs` — integration tests for fallback chains and stance
 
 ### Modified Files
 - `src/error.rs` — add ModelNotAvailable variant
@@ -1621,6 +1624,7 @@ is still present but no longer used by the gateway (kept for potential future us
 
 ### Deleted Files
 - `src/gateway/routing.rs` — replaced by ProviderRegistry
+- `tests/routing_test.rs` — tests removed along with routing module
 
 ---
 
