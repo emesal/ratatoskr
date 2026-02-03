@@ -360,10 +360,7 @@ impl LocalNliProvider {
     ///
     /// The provider will only handle requests for the specified model.
     /// Other model names will result in `ModelNotAvailable`.
-    pub fn new(
-        model: LocalNliModel,
-        manager: std::sync::Arc<crate::model::ModelManager>,
-    ) -> Self {
+    pub fn new(model: LocalNliModel, manager: std::sync::Arc<crate::model::ModelManager>) -> Self {
         Self {
             local_model: model,
             manager,
@@ -382,12 +379,7 @@ impl super::traits::NliProvider for LocalNliProvider {
         self.local_model.name()
     }
 
-    async fn infer_nli(
-        &self,
-        premise: &str,
-        hypothesis: &str,
-        model: &str,
-    ) -> Result<NliResult> {
+    async fn infer_nli(&self, premise: &str, hypothesis: &str, model: &str) -> Result<NliResult> {
         // Check if this is the model we handle
         if model != self.local_model.name() {
             return Err(RatatoskrError::ModelNotAvailable);
@@ -409,11 +401,7 @@ impl super::traits::NliProvider for LocalNliProvider {
         .map_err(|e| RatatoskrError::DataError(format!("Task join error: {}", e)))?
     }
 
-    async fn infer_nli_batch(
-        &self,
-        pairs: &[(&str, &str)],
-        model: &str,
-    ) -> Result<Vec<NliResult>> {
+    async fn infer_nli_batch(&self, pairs: &[(&str, &str)], model: &str) -> Result<Vec<NliResult>> {
         // Check if this is the model we handle
         if model != self.local_model.name() {
             return Err(RatatoskrError::ModelNotAvailable);

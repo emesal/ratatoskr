@@ -287,10 +287,10 @@ impl ModelManager {
     fn estimate_model_size(&self, model_name: &str) -> usize {
         match model_name {
             // Embedding models
-            n if n.contains("MiniLM-L6") => 90 * 1024 * 1024,    // ~90MB
-            n if n.contains("MiniLM-L12") => 120 * 1024 * 1024,  // ~120MB
+            n if n.contains("MiniLM-L6") => 90 * 1024 * 1024, // ~90MB
+            n if n.contains("MiniLM-L12") => 120 * 1024 * 1024, // ~120MB
             n if n.contains("bge-small") || n.contains("BGE-small") => 130 * 1024 * 1024, // ~130MB
-            n if n.contains("bge-base") || n.contains("BGE-base") => 440 * 1024 * 1024,   // ~440MB
+            n if n.contains("bge-base") || n.contains("BGE-base") => 440 * 1024 * 1024, // ~440MB
             // NLI models
             n if n.contains("deberta") && n.contains("small") => 300 * 1024 * 1024, // ~300MB
             n if n.contains("deberta") && n.contains("base") => 400 * 1024 * 1024,  // ~400MB

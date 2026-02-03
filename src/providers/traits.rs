@@ -30,11 +30,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures_util::Stream;
 
+use crate::Result;
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
     GenerateOptions, GenerateResponse, Message, NliResult, StanceResult, ToolDefinition,
 };
-use crate::Result;
 
 // ============================================================================
 // Embedding Provider
@@ -83,11 +83,7 @@ pub trait NliProvider: Send + Sync {
     /// Batch NLI inference.
     ///
     /// Default implementation calls `infer_nli` sequentially.
-    async fn infer_nli_batch(
-        &self,
-        pairs: &[(&str, &str)],
-        model: &str,
-    ) -> Result<Vec<NliResult>> {
+    async fn infer_nli_batch(&self, pairs: &[(&str, &str)], model: &str) -> Result<Vec<NliResult>> {
         let mut results = Vec::with_capacity(pairs.len());
         for (premise, hypothesis) in pairs {
             results.push(self.infer_nli(premise, hypothesis, model).await?);
@@ -158,7 +154,12 @@ impl StanceProvider for ZeroShotStanceProvider {
         "zero-shot-stance"
     }
 
-    async fn classify_stance(&self, text: &str, target: &str, _model: &str) -> Result<StanceResult> {
+    async fn classify_stance(
+        &self,
+        text: &str,
+        target: &str,
+        _model: &str,
+    ) -> Result<StanceResult> {
         // Construct prompt that includes target
         let prompt = format!("{} [Target: {}]", text, target);
         let labels = ["favor", "against", "neutral"];

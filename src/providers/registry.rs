@@ -230,7 +230,11 @@ impl ProviderRegistry {
     }
 
     /// Text generation using the fallback chain.
-    pub async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
+    pub async fn generate(
+        &self,
+        prompt: &str,
+        options: &GenerateOptions,
+    ) -> Result<GenerateResponse> {
         for provider in &self.generate {
             match provider.generate(prompt, options).await {
                 Ok(result) => return Ok(result),
@@ -294,7 +298,11 @@ impl ProviderRegistry {
     /// List all registered provider names per capability (in priority order).
     pub fn provider_names(&self) -> ProviderNames {
         ProviderNames {
-            embedding: self.embedding.iter().map(|p| p.name().to_string()).collect(),
+            embedding: self
+                .embedding
+                .iter()
+                .map(|p| p.name().to_string())
+                .collect(),
             nli: self.nli.iter().map(|p| p.name().to_string()).collect(),
             classify: self.classify.iter().map(|p| p.name().to_string()).collect(),
             stance: self.stance.iter().map(|p| p.name().to_string()).collect(),
