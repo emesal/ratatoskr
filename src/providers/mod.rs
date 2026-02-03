@@ -5,6 +5,7 @@
 //! - `ProviderRegistry` for fallback chain routing
 //! - Concrete provider implementations (HuggingFace, FastEmbed, ONNX, etc.)
 
+pub mod llm_chat;
 pub mod registry;
 pub mod traits;
 
@@ -24,8 +25,11 @@ pub use traits::{
 
 // Re-export concrete providers
 #[cfg(feature = "local-inference")]
-pub use fastembed::{EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel, LocalEmbeddingProvider};
+pub use fastembed::{
+    EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel, LocalEmbeddingProvider,
+};
 #[cfg(feature = "huggingface")]
 pub use huggingface::HuggingFaceClient;
+pub use llm_chat::LlmChatProvider;
 #[cfg(feature = "local-inference")]
 pub use onnx_nli::{LocalNliModel, LocalNliProvider, NliModelInfo, OnnxNliProvider};

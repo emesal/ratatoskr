@@ -190,33 +190,16 @@ impl RatatoskrBuilder {
 
     /// Build the gateway.
     pub fn build(self) -> Result<EmbeddedGateway> {
+        use crate::providers::{LlmChatProvider, ProviderRegistry};
+        use llm::builder::LLMBackend;
+        use std::sync::Arc;
+
         // Must have at least one provider (chat or capability)
         if !self.has_chat_provider() && !self.has_capability_provider() {
             return Err(RatatoskrError::NoProvider);
         }
 
-        #[cfg(feature = "huggingface")]
-        let huggingface = self
-            .huggingface_key
-            .map(crate::providers::HuggingFaceClient::new);
-
-        // Build the capability router
-        let mut router = super::routing::CapabilityRouter::new();
-
-        #[cfg(feature = "huggingface")]
-        if huggingface.is_some() {
-            router = router.with_huggingface();
-        }
-
-        #[cfg(feature = "local-inference")]
-        {
-            if self.local_embedding_model.is_some() {
-                router = router.with_local_embeddings();
-            }
-            if self.local_nli_model.is_some() {
-                router = router.with_local_nli();
-            }
-        }
+        let timeout_secs = self.default_timeout_secs.unwrap_or(120);
 
         // Build model manager for local inference
         #[cfg(feature = "local-inference")]
@@ -233,11 +216,111 @@ impl RatatoskrBuilder {
                                 .join("models")
                         })
                 }),
-                default_device: self.device,
+                default_device: self.device.clone(),
                 ram_budget: self.ram_budget,
             };
-            std::sync::Arc::new(crate::model::ModelManager::new(config))
+            Arc::new(crate::model::ModelManager::new(config))
         };
+
+        // Build provider registry with fallback chain
+        let mut registry = ProviderRegistry::new();
+
+        // =====================================================================
+        // Register LOCAL providers FIRST (higher priority)
+        // =====================================================================
+
+        #[cfg(feature = "local-inference")]
+        if let Some(model) = &self.local_embedding_model {
+            let provider = Arc::new(crate::providers::LocalEmbeddingProvider::new(
+                model.clone(),
+                model_manager.clone(),
+            ));
+            registry.add_embedding(provider);
+        }
+
+        #[cfg(feature = "local-inference")]
+        if let Some(model) = &self.local_nli_model {
+            let provider = Arc::new(crate::providers::LocalNliProvider::new(
+                model.clone(),
+                model_manager.clone(),
+            ));
+            registry.add_nli(provider);
+        }
+
+        // =====================================================================
+        // Register API providers as FALLBACKS (lower priority)
+        // =====================================================================
+
+        #[cfg(feature = "huggingface")]
+        if let Some(ref key) = self.huggingface_key {
+            let client = Arc::new(crate::providers::HuggingFaceClient::new(key));
+
+            // HuggingFace accepts any model, registered as fallback
+            registry.add_embedding(client.clone());
+            registry.add_nli(client.clone());
+            registry.add_classify(client.clone());
+
+            // Also register ZeroShotStanceProvider as stance fallback
+            let stance_fallback = Arc::new(crate::providers::ZeroShotStanceProvider::new(
+                client.clone(),
+                "facebook/bart-large-mnli",
+            ));
+            registry.add_stance(stance_fallback);
+        }
+
+        // =====================================================================
+        // Register CHAT providers
+        // =====================================================================
+
+        // OpenRouter (routes to many models, good default)
+        if let Some(ref key) = self.openrouter_key {
+            let provider = Arc::new(
+                LlmChatProvider::new(LLMBackend::OpenRouter, key.clone(), "openrouter")
+                    .timeout_secs(timeout_secs),
+            );
+            registry.add_chat(provider.clone());
+            registry.add_generate(provider);
+        }
+
+        // Direct Anthropic
+        if let Some(ref key) = self.anthropic_key {
+            let provider = Arc::new(
+                LlmChatProvider::new(LLMBackend::Anthropic, key.clone(), "anthropic")
+                    .timeout_secs(timeout_secs),
+            );
+            registry.add_chat(provider.clone());
+            registry.add_generate(provider);
+        }
+
+        // Direct OpenAI
+        if let Some(ref key) = self.openai_key {
+            let provider = Arc::new(
+                LlmChatProvider::new(LLMBackend::OpenAI, key.clone(), "openai")
+                    .timeout_secs(timeout_secs),
+            );
+            registry.add_chat(provider.clone());
+            registry.add_generate(provider);
+        }
+
+        // Google (Gemini)
+        if let Some(ref key) = self.google_key {
+            let provider = Arc::new(
+                LlmChatProvider::new(LLMBackend::Google, key.clone(), "google")
+                    .timeout_secs(timeout_secs),
+            );
+            registry.add_chat(provider.clone());
+            registry.add_generate(provider);
+        }
+
+        // Ollama
+        if let Some(ref url) = self.ollama_url {
+            let mut provider = LlmChatProvider::new(LLMBackend::Ollama, "ollama", "ollama")
+                .timeout_secs(timeout_secs);
+            provider = provider.ollama_url(url.clone());
+            let provider = Arc::new(provider);
+            registry.add_chat(provider.clone());
+            registry.add_generate(provider);
+        }
 
         // Build tokenizer registry for local inference
         #[cfg(feature = "local-inference")]
@@ -246,19 +329,11 @@ impl RatatoskrBuilder {
             for (pattern, source) in self.tokenizer_mappings {
                 registry.register(&pattern, source);
             }
-            std::sync::Arc::new(registry)
+            Arc::new(registry)
         };
 
         Ok(EmbeddedGateway::new(
-            self.openrouter_key,
-            self.anthropic_key,
-            self.openai_key,
-            self.google_key,
-            self.ollama_url,
-            self.default_timeout_secs.unwrap_or(120),
-            #[cfg(feature = "huggingface")]
-            huggingface,
-            router,
+            registry,
             #[cfg(feature = "local-inference")]
             model_manager,
             #[cfg(feature = "local-inference")]

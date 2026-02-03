@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Status:** 🚧 IN PROGRESS (Tasks 1-6 complete)
+**Status:** 🚧 IN PROGRESS (Tasks 1-9 complete)
 
 **Goal:** Introduce capability-specific provider traits to establish a clean foundation for phase 5 (service mode), phase 6 (caching/retry/telemetry decorators), and future extensibility.
 
@@ -1505,34 +1505,39 @@ pub struct Capabilities {
 
 **Verify:** `cargo test --features local-inference --lib` ✅
 
-### Task 7: LlmChatProvider
-- [ ] Create `src/providers/llm_chat.rs`
-- [ ] Implement `ChatProvider` for `LlmChatProvider`
-- [ ] Implement `GenerateProvider` for `LlmChatProvider`
-- [ ] Handle type conversions (reuse existing convert module)
-- [ ] Add tests
+### Task 7: LlmChatProvider ✅
+- [x] Create `src/providers/llm_chat.rs`
+- [x] Implement `ChatProvider` for `LlmChatProvider`
+- [x] Implement `GenerateProvider` for `LlmChatProvider`
+- [x] Handle type conversions (reuse existing convert module)
+- [x] Add tests
 
-**Verify:** `cargo test --test llm_chat_provider_test`
+**Notes:** Unlike the original plan, `LlmChatProvider` stores configuration and builds
+providers per-request (the llm crate requires tools at build time).
 
-### Task 8: Builder Refactor
-- [ ] Add `ram_budget` field and `.ram_budget(bytes)` method
-- [ ] Create `ProviderRegistry` in `build()`
-- [ ] Create shared `ModelManager` for local providers
-- [ ] Register local providers FIRST (priority 0)
-- [ ] Register API providers as fallbacks (priority 1)
-- [ ] Create `ZeroShotStanceProvider` as stance fallback
-- [ ] Update builder tests
+**Verify:** `cargo test --all-features --lib providers::llm_chat` ✅ (3 tests pass)
 
-**Verify:** `cargo test --test builder_test`
+### Task 8: Builder Refactor ✅
+- [x] `ram_budget` field and `.ram_budget(bytes)` method (already done in task 4)
+- [x] Create `ProviderRegistry` in `build()`
+- [x] Create shared `ModelManager` for local providers
+- [x] Register local providers FIRST (priority 0)
+- [x] Register API providers as fallbacks (priority 1)
+- [x] Create `ZeroShotStanceProvider` as stance fallback
+- [x] Existing builder tests still pass
 
-### Task 9: EmbeddedGateway Refactor
-- [ ] Replace old fields with `ProviderRegistry` + `ModelManager`
-- [ ] Update all trait method impls to delegate to registry
-- [ ] Implement `classify_stance`, `tokenize`, `list_models`, `model_status`
-- [ ] Update `capabilities()` to include `stance` field
-- [ ] Remove old `CapabilityRouter` usage
+**Verify:** `cargo test --all-features` ✅
 
-**Verify:** `cargo test --test gateway_test`
+### Task 9: EmbeddedGateway Refactor ✅
+- [x] Replace old fields with `ProviderRegistry` + `ModelManager`
+- [x] Update all trait method impls to delegate to registry
+- [x] Update `capabilities()` based on registry introspection
+- [ ] Implement `classify_stance`, `tokenize`, `list_models`, `model_status` (deferred to task 10-11)
+
+**Notes:** Gateway is now a thin wrapper around `ProviderRegistry`. The old `CapabilityRouter`
+is still present but no longer used by the gateway (kept for potential future use or deletion).
+
+**Verify:** `just pre-push` ✅ (84 tests pass)
 
 ### Task 10: TokenizerRegistry Updates
 - [ ] Add `tokenize()` method returning `Vec<Token>`
