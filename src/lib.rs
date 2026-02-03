@@ -55,7 +55,7 @@ pub mod error;
 pub mod gateway;
 #[cfg(feature = "local-inference")]
 pub mod model;
-#[cfg(feature = "huggingface")]
+#[cfg(any(feature = "huggingface", feature = "local-inference"))]
 pub mod providers;
 #[cfg(feature = "local-inference")]
 pub mod tokenizer;
@@ -74,6 +74,10 @@ pub use tokenizer::{HfTokenizer, TokenizerProvider, TokenizerRegistry, Tokenizer
 // Re-export model types when feature is enabled
 #[cfg(feature = "local-inference")]
 pub use model::{Device, LoadedModels, ModelManager, ModelManagerConfig, ModelSource};
+
+// Re-export local inference provider types when feature is enabled
+#[cfg(feature = "local-inference")]
+pub use providers::{EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel};
 
 // Re-export all types
 pub use types::{
