@@ -12,8 +12,11 @@ Ratatoskr provides a stable, provider-agnostic interface for interacting with la
 - **Tool calling** — Full function/tool support with JSON schema parameters
 - **Extended thinking** — Reasoning config for models that support it
 - **Text generation** — Simple prompt-in, text-out interface
-- **Local inference** — Embeddings via fastembed-rs, NLI via ONNX Runtime
+- **Embeddings** — Local via fastembed-rs or remote via HuggingFace API
+- **NLI** — Natural language inference for semantic analysis
+- **Stance detection** — Classify text as favor/against/neutral toward a target
 - **Token counting** — HuggingFace tokenizers with model-appropriate defaults
+- **Fallback chains** — Automatic local→remote fallback when resources constrained
 - **Type-safe** — Strong Rust types for messages, options, and responses
 
 ## Quick Start
@@ -107,8 +110,11 @@ let gateway = Ratatoskr::builder()
     .local_nli(LocalNliModel::NliDebertaV3Small)
     .device(Device::Cpu)                               // or Device::Cuda { device_id: 0 }
     .cache_dir("/custom/model/cache")                  // Optional
+    .ram_budget(1024 * 1024 * 1024)                    // Optional: 1GB limit for local models
     .build()?;
 ```
+
+When RAM budget is set, local providers automatically fall back to API providers when memory is constrained.
 
 ## Model Routing
 
@@ -228,25 +234,33 @@ Your Application
 ModelGateway trait  ← stable public API
        │
        ▼
-EmbeddedGateway     ← routes to providers
+EmbeddedGateway     ← delegates to ProviderRegistry
        │
-       ├─► Chat Providers (via llm crate)
-       │     ├── OpenRouter
-       │     ├── Anthropic
-       │     ├── OpenAI
-       │     ├── Google
-       │     └── Ollama
+       ▼
+ProviderRegistry    ← fallback chains per capability
        │
-       ├─► HuggingFace (API-based)
-       │     └── embeddings, NLI, classification
+       ├─► Embedding Providers
+       │     ├── LocalEmbeddingProvider (fastembed) [priority 0]
+       │     └── HuggingFaceClient [priority 1, fallback]
        │
-       └─► Local Inference (no API)
-             ├── FastEmbed (embeddings)
-             ├── ONNX Runtime (NLI)
-             └── HF Tokenizers (token counting)
+       ├─► NLI Providers
+       │     ├── LocalNliProvider (ONNX) [priority 0]
+       │     └── HuggingFaceClient [priority 1, fallback]
+       │
+       ├─► Stance Providers
+       │     └── ZeroShotStanceProvider (wraps ClassifyProvider)
+       │
+       └─► Chat/Generate Providers
+             ├── OpenRouter
+             ├── Anthropic
+             ├── OpenAI
+             ├── Google
+             └── Ollama
 ```
 
 The `ModelGateway` trait is the stability boundary. Your code depends only on this trait, insulating you from provider changes.
+
+**Fallback behaviour:** When a local provider returns `ModelNotAvailable` (wrong model or RAM budget exceeded), the registry automatically tries the next provider in the chain.
 
 ## Text Generation
 
@@ -310,6 +324,24 @@ let result = provider.infer_nli("A cat is sleeping", "An animal is resting")?;
 println!("{:?}: {:.2}", result.label, result.entailment);  // Entailment: 0.95
 ```
 
+### Stance Detection
+
+Classify text as expressing favor, against, or neutral toward a target topic:
+
+```rust
+use ratatoskr::ModelGateway;
+
+let stance = gateway.classify_stance(
+    "I strongly support renewable energy initiatives.",
+    "renewable energy",
+    "facebook/bart-large-mnli",
+).await?;
+
+println!("{:?}: favor={:.2}, against={:.2}",
+    stance.label, stance.favor, stance.against);
+// Favor: favor=0.85, against=0.05
+```
+
 ### Token Counting
 
 ```rust
@@ -318,6 +350,12 @@ use ratatoskr::tokenizer::TokenizerRegistry;
 let registry = TokenizerRegistry::new();
 let count = registry.count_tokens("Hello, world!", "claude-sonnet-4")?;
 println!("Tokens: {}", count);  // ~3
+
+// Detailed tokenization with offsets
+let tokens = gateway.tokenize("Hello, world!", "claude-sonnet-4")?;
+for token in tokens {
+    println!("{}: bytes {}..{}", token.text, token.start, token.end);
+}
 ```
 
 Supported embedding models: `AllMiniLmL6V2`, `AllMiniLmL12V2`, `BgeSmallEn`, `BgeBaseEn`
@@ -329,8 +367,9 @@ Supported NLI models: `NliDebertaV3Base`, `NliDebertaV3Small`, or custom ONNX mo
 - **Phase 1**: Chat completions via OpenRouter and direct providers ✓
 - **Phase 2**: HuggingFace provider (embeddings, NLI, classification) ✓
 - **Phase 3-4**: Local inference (embeddings, NLI, tokenizers, generate) ✓
+- **Provider Trait Refactor**: Fallback chains, RAM budget, stance detection ✓
 - **Phase 5**: Service mode (gRPC/socket)
-- **Phase 6**: Caching, metrics, intelligent routing
+- **Phase 6**: Caching, metrics, decorator patterns
 
 ## Development
 

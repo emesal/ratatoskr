@@ -5,8 +5,10 @@ edition = "2024"
 description = "Unified model gateway for LLM APIs"
 license = "ISC"
 repository = "https://github.com/emesal/ratatoskr"
+readme = "README.md"
 keywords = ["llm", "ai", "openrouter", "api", "gateway"]
 categories = ["api-bindings", "asynchronous"]
+rust-version = "1.85"
 
 [features]
 default = ["openai", "anthropic", "openrouter", "ollama", "google", "huggingface"]

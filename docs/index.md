@@ -23,13 +23,15 @@ Your Application
 ModelGateway trait  ← stable public API
        │
        ▼
-EmbeddedGateway     ← routes to providers
+EmbeddedGateway     ← delegates to ProviderRegistry
        │
-       ├─► OpenRouter (100+ models)
-       ├─► Anthropic (Claude direct)
-       ├─► OpenAI (GPT, o1, o3 direct)
-       ├─► Google (Gemini)
-       └─► Ollama (local)
+       ▼
+ProviderRegistry    ← fallback chains per capability
+       │
+       ├─► Embeddings: LocalEmbedding → HuggingFace
+       ├─► NLI: LocalNli → HuggingFace
+       ├─► Stance: ZeroShotStanceProvider
+       └─► Chat: OpenRouter, Anthropic, OpenAI, Google, Ollama
 ```
 
 ## Quick Example
@@ -60,16 +62,15 @@ async fn main() -> ratatoskr::Result<()> {
 
 ## Project Status
 
-Ratatoskr is in active development. Current phase: **Phase 1 (Chat Completions)**.
+Ratatoskr is in active development. Current phase: **Pre-alpha (Phases 1-4 complete)**.
 
 | Phase | Status | Features |
 |-------|--------|----------|
-| 1 | Current | Chat, streaming, tools |
-| 2 | Planned | Additional providers |
-| 3 | Planned | Embeddings, NLI |
-| 4 | Planned | Local ONNX inference |
-| 5 | Planned | Service mode (gRPC) |
-| 6 | Planned | Caching, metrics |
+| 1 | ✓ Complete | Chat, streaming, tools |
+| 2 | ✓ Complete | HuggingFace API (embeddings, NLI, classification) |
+| 3-4 | ✓ Complete | Local inference, tokenizers, stance detection |
+| 5 | Planned | Service mode (gRPC/socket) |
+| 6 | Planned | Caching, metrics, decorator patterns |
 
 ## Links
 
