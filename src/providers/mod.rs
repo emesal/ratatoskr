@@ -1,7 +1,12 @@
-//! Provider implementations for non-chat capabilities.
+//! Provider implementations for capabilities.
 //!
-//! This module contains clients for providers that handle specific capabilities
-//! like embeddings, NLI, and classification. Chat is handled by the llm crate.
+//! This module contains:
+//! - Provider traits (`EmbeddingProvider`, `NliProvider`, etc.)
+//! - `ProviderRegistry` for fallback chain routing
+//! - Concrete provider implementations (HuggingFace, FastEmbed, ONNX, etc.)
+
+pub mod registry;
+pub mod traits;
 
 #[cfg(feature = "local-inference")]
 pub mod fastembed;
@@ -10,6 +15,14 @@ pub mod huggingface;
 #[cfg(feature = "local-inference")]
 pub mod onnx_nli;
 
+// Re-export traits
+pub use registry::{ProviderNames, ProviderRegistry};
+pub use traits::{
+    ChatProvider, ClassifyProvider, EmbeddingProvider, GenerateProvider, NliProvider,
+    StanceProvider, ZeroShotStanceProvider,
+};
+
+// Re-export concrete providers
 #[cfg(feature = "local-inference")]
 pub use fastembed::{EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel};
 #[cfg(feature = "huggingface")]

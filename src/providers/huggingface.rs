@@ -5,9 +5,11 @@
 
 use std::time::Duration;
 
+use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
+use super::traits::{ClassifyProvider, EmbeddingProvider, NliProvider};
 use crate::{ClassifyResult, Embedding, NliLabel, NliResult, RatatoskrError, Result};
 
 /// Default base URL for HuggingFace Inference API
@@ -307,4 +309,56 @@ struct ZeroShotParameters<'a> {
 struct ZeroShotResponse {
     labels: Vec<String>,
     scores: Vec<f32>,
+}
+
+// ============================================================================
+// Provider Trait Implementations
+// ============================================================================
+
+/// HuggingFace accepts any model string and forwards it to the API.
+/// It never returns `ModelNotAvailable` — it's a universal fallback.
+#[async_trait]
+impl EmbeddingProvider for HuggingFaceClient {
+    fn name(&self) -> &str {
+        "huggingface"
+    }
+
+    async fn embed(&self, text: &str, model: &str) -> Result<Embedding> {
+        // Delegate to the existing method
+        HuggingFaceClient::embed(self, text, model).await
+    }
+
+    async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<Embedding>> {
+        // Delegate to the existing method
+        HuggingFaceClient::embed_batch(self, texts, model).await
+    }
+}
+
+#[async_trait]
+impl NliProvider for HuggingFaceClient {
+    fn name(&self) -> &str {
+        "huggingface"
+    }
+
+    async fn infer_nli(&self, premise: &str, hypothesis: &str, model: &str) -> Result<NliResult> {
+        // Delegate to the existing method
+        HuggingFaceClient::infer_nli(self, premise, hypothesis, model).await
+    }
+}
+
+#[async_trait]
+impl ClassifyProvider for HuggingFaceClient {
+    fn name(&self) -> &str {
+        "huggingface"
+    }
+
+    async fn classify_zero_shot(
+        &self,
+        text: &str,
+        labels: &[&str],
+        model: &str,
+    ) -> Result<ClassifyResult> {
+        // Delegate to the existing `classify` method
+        HuggingFaceClient::classify(self, text, labels, model).await
+    }
 }

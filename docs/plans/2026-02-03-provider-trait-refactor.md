@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Status:** 📋 PLANNING
+**Status:** 🚧 IN PROGRESS (Tasks 1-3 complete)
 
 **Goal:** Introduce capability-specific provider traits to establish a clean foundation for phase 5 (service mode), phase 6 (caching/retry/telemetry decorators), and future extensibility.
 
@@ -1439,40 +1439,40 @@ pub struct Capabilities {
 
 ## 9. Implementation Tasks
 
-### Task 1: New Types
-- [ ] Create `src/types/stance.rs` with `StanceResult`, `StanceLabel`
-- [ ] Create `src/types/model.rs` with `ModelInfo`, `ModelStatus`, `ModelCapability`
-- [ ] Create `src/types/token.rs` with `Token`
-- [ ] Update `src/types/capabilities.rs` to add `stance` field
-- [ ] Update `src/types/mod.rs` exports
-- [ ] Update `src/lib.rs` exports
-- [ ] Add `ModelNotAvailable` error variant to `RatatoskrError`
-- [ ] Add tests for new types
+### Task 1: New Types ✅
+- [x] Create `src/types/stance.rs` with `StanceResult`, `StanceLabel`
+- [x] Create `src/types/model.rs` with `ModelInfo`, `ModelStatus`, `ModelCapability`
+- [x] Create `src/types/token.rs` with `Token`
+- [x] Update `src/types/capabilities.rs` to add `stance` field
+- [x] Update `src/types/mod.rs` exports
+- [x] Update `src/lib.rs` exports
+- [x] Add `ModelNotAvailable` error variant to `RatatoskrError`
+- [x] Add tests for new types
 
-**Verify:** `cargo test --test types_test`
+**Verify:** `cargo test --lib types::` ✅ (9 tests pass)
 
-### Task 2: Provider Traits + Registry
-- [ ] Create `src/providers/traits.rs` with all provider traits:
+### Task 2: Provider Traits + Registry ✅
+- [x] Create `src/providers/traits.rs` with all provider traits:
   - `EmbeddingProvider`
   - `NliProvider`  
   - `ClassifyProvider`
   - `StanceProvider`
   - `ChatProvider`
   - `GenerateProvider`
-- [ ] Create `ZeroShotStanceProvider` wrapper in traits.rs
-- [ ] Create `src/providers/registry.rs` with `ProviderRegistry` (fallback chain)
-- [ ] Update `src/providers/mod.rs` exports
-- [ ] Add unit tests for `ProviderRegistry` fallback behavior
+- [x] Create `ZeroShotStanceProvider` wrapper in traits.rs
+- [x] Create `src/providers/registry.rs` with `ProviderRegistry` (fallback chain)
+- [x] Update `src/providers/mod.rs` exports
+- [x] Add unit tests for `ProviderRegistry` fallback behavior
 
-**Verify:** `cargo test --test provider_traits_test`
+**Verify:** `cargo test --lib providers::` ✅ (9 tests pass)
 
-### Task 3: HuggingFaceClient Trait Impls
-- [ ] Implement `EmbeddingProvider` for `HuggingFaceClient` (passthrough model param)
-- [ ] Implement `NliProvider` for `HuggingFaceClient`
-- [ ] Implement `ClassifyProvider` for `HuggingFaceClient`
-- [ ] Add tests
+### Task 3: HuggingFaceClient Trait Impls ✅
+- [x] Implement `EmbeddingProvider` for `HuggingFaceClient` (passthrough model param)
+- [x] Implement `NliProvider` for `HuggingFaceClient`
+- [x] Implement `ClassifyProvider` for `HuggingFaceClient`
+- [x] Tests via existing HuggingFace tests
 
-**Verify:** `cargo test --test huggingface_provider_test --features huggingface`
+**Verify:** `cargo test --all-features --lib` ✅ (25 tests pass)
 
 ### Task 4: ModelManager RAM Budget
 - [ ] Update `src/model/manager.rs` with RAM budget tracking

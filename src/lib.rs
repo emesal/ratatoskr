@@ -76,7 +76,6 @@ pub mod error;
 pub mod gateway;
 #[cfg(feature = "local-inference")]
 pub mod model;
-#[cfg(any(feature = "huggingface", feature = "local-inference"))]
 pub mod providers;
 #[cfg(feature = "local-inference")]
 pub mod tokenizer;
@@ -106,7 +105,7 @@ pub use providers::{
 // Re-export all types
 pub use types::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason,
-    GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent, NliLabel, NliResult,
-    ReasoningConfig, ReasoningEffort, ResponseFormat, Role, ToolCall, ToolChoice, ToolDefinition,
-    Usage,
+    GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent, ModelCapability,
+    ModelInfo, ModelStatus, NliLabel, NliResult, ReasoningConfig, ReasoningEffort, ResponseFormat,
+    Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice, ToolDefinition, Usage,
 };

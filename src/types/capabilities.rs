@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// What capabilities a gateway supports
+/// What capabilities a gateway supports.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Capabilities {
     /// Multi-turn chat conversations.
@@ -19,6 +19,8 @@ pub struct Capabilities {
     pub nli: bool,
     /// Zero-shot classification.
     pub classification: bool,
+    /// Stance detection toward target topics.
+    pub stance: bool,
     /// Token counting for models.
     pub token_counting: bool,
     /// Local inference (no API calls needed).
@@ -37,7 +39,7 @@ impl Capabilities {
         }
     }
 
-    /// Full capabilities (all features)
+    /// Full capabilities (all features).
     pub fn full() -> Self {
         Self {
             chat: true,
@@ -47,6 +49,7 @@ impl Capabilities {
             embeddings: true,
             nli: true,
             classification: true,
+            stance: true,
             token_counting: true,
             local_inference: true,
         }
@@ -83,6 +86,7 @@ impl Capabilities {
             embeddings: self.embeddings || other.embeddings,
             nli: self.nli || other.nli,
             classification: self.classification || other.classification,
+            stance: self.stance || other.stance,
             token_counting: self.token_counting || other.token_counting,
             local_inference: self.local_inference || other.local_inference,
         }
