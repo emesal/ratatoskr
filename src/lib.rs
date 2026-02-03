@@ -81,6 +81,7 @@ pub mod providers;
 pub mod tokenizer;
 pub mod traits;
 pub mod types;
+pub mod version;
 
 // Re-export main types at crate root
 pub use error::{RatatoskrError, Result};
@@ -101,6 +102,9 @@ pub use providers::{
     EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel, LocalNliModel, NliModelInfo,
     OnnxNliProvider,
 };
+
+// Re-export version info
+pub use version::{GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};
 
 // Re-export all types
 pub use types::{
