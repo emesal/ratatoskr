@@ -2,7 +2,7 @@
 
 Ratatoskr is a unified LLM gateway abstraction layer. The core idea: consumers (chibi, orlog) interact only with the `ModelGateway` trait while the `llm` crate is an internal implementation detail.
 
-**Current Status**: Phase 2 (HuggingFace Provider) complete. See `docs/plans/2026-02-02-phase2-implementation.md` for details.
+**Current Status**: Phase 3-4 (Local Inference) nearly complete. See `docs/plans/2026-02-02-phase3-4-local-inference.md` for details.
 
 ## Principles
 
@@ -51,13 +51,20 @@ src/
 ├── lib.rs              # Public API re-exports
 ├── error.rs            # RatatoskrError, Result
 ├── traits.rs           # ModelGateway trait
-├── types/              # Message, Tool, ChatOptions, ChatEvent, etc.
+├── types/              # Message, Tool, ChatOptions, ChatEvent, GenerateOptions, etc.
 ├── gateway/
 │   ├── embedded.rs     # EmbeddedGateway wrapping llm crate
 │   ├── builder.rs      # Ratatoskr::builder()
 │   └── routing.rs      # CapabilityRouter for provider selection
 ├── providers/          # External provider clients (feature-gated)
-│   └── huggingface.rs  # HuggingFace Inference API client
+│   ├── huggingface.rs  # HuggingFace Inference API client
+│   ├── fastembed.rs    # Local embeddings via fastembed-rs
+│   └── onnx_nli.rs     # Local NLI via ONNX Runtime
+├── tokenizer/          # Token counting (local-inference feature)
+│   └── mod.rs          # TokenizerRegistry, HfTokenizer
+├── model/              # Model management (local-inference feature)
+│   ├── manager.rs      # ModelManager for lazy loading
+│   └── device.rs       # Device enum (CPU, CUDA)
 └── convert/            # ratatoskr ↔ llm type conversions (internal)
 ```
 
@@ -76,7 +83,10 @@ Ratatoskr::builder()
     .openrouter(api_key)
     .anthropic(anthropic_key)
     .ollama("http://localhost:11434")
-    .huggingface(hf_key)  // requires `huggingface` feature
+    .huggingface(hf_key)              // requires `huggingface` feature
+    .local_embeddings(model)          // requires `local-inference` feature
+    .local_nli(model)                 // requires `local-inference` feature
+    .device(Device::Cpu)              // or Device::Cuda { device_id: 0 }
     .build()?
 ```
 
@@ -92,6 +102,20 @@ With the `huggingface` feature enabled, the gateway supports:
 
 Models are HuggingFace model IDs, e.g., `sentence-transformers/all-MiniLM-L6-v2`, `facebook/bart-large-mnli`.
 
+### Local Inference Capabilities (Phase 3-4)
+
+With the `local-inference` feature enabled:
+- `generate(prompt, options)` — non-streaming text generation
+- `generate_stream(prompt, options)` — streaming text generation
+- `count_tokens(text, model)` — token counting with model-appropriate tokenizers
+- Local embeddings via `FastEmbedProvider` (fastembed-rs)
+- Local NLI via `OnnxNliProvider` (ONNX Runtime)
+- `ModelManager` for lazy model loading with caching
+- `TokenizerRegistry` with default mappings for common models
+
+Supported embedding models: `AllMiniLmL6V2`, `AllMiniLmL12V2`, `BgeSmallEn`, `BgeBaseEn`
+Supported NLI models: `NliDebertaV3Base`, `NliDebertaV3Small`, or custom ONNX models
+
 ## Testing Strategy
 
 1. **Unit tests** — types, conversions, builder (fast, no I/O)
@@ -106,11 +130,18 @@ Full test coverage required.
 HF_API_KEY=hf_xxx cargo test --test huggingface_live_test --features huggingface -- --ignored
 ```
 
+### Local Inference Live Tests
+
+```bash
+cargo test --test local_inference_live_test --features local-inference -- --ignored
+```
+
+Note: First run downloads models (~100MB+ for embeddings, ~500MB+ for NLI).
+
 ## Phase Roadmap
 
 - Phase 1: OpenRouter Chat ✓
 - Phase 2: HuggingFace provider (embeddings, NLI, classification) ✓
-- Phase 3: Ollama, Anthropic direct
-- Phase 4: ONNX local inference
+- Phase 3-4: Local inference (embeddings, NLI, tokenizers, generate) ✓
 - Phase 5: Service mode (gRPC/socket)
 - Phase 6: Caching, metrics, advanced routing

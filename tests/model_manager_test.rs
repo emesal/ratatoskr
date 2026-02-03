@@ -2,7 +2,9 @@
 
 #![cfg(feature = "local-inference")]
 
-use ratatoskr::{LocalEmbeddingModel, LocalNliModel, LoadedModels, ModelManager, ModelManagerConfig};
+use ratatoskr::{
+    LoadedModels, LocalEmbeddingModel, LocalNliModel, ModelManager, ModelManagerConfig,
+};
 use std::path::PathBuf;
 
 #[test]
@@ -54,11 +56,15 @@ fn test_model_manager_embedding_lazy_load() {
     let manager = ModelManager::with_defaults();
 
     // First call should load the model
-    let provider = manager.embedding(LocalEmbeddingModel::AllMiniLmL6V2).unwrap();
+    let provider = manager
+        .embedding(LocalEmbeddingModel::AllMiniLmL6V2)
+        .unwrap();
     assert!(provider.read().unwrap().model_info().dimensions == 384);
 
     // Second call should return cached provider
-    let provider2 = manager.embedding(LocalEmbeddingModel::AllMiniLmL6V2).unwrap();
+    let provider2 = manager
+        .embedding(LocalEmbeddingModel::AllMiniLmL6V2)
+        .unwrap();
     assert!(std::sync::Arc::ptr_eq(&provider, &provider2));
 
     // Should show up in loaded models
@@ -74,7 +80,9 @@ fn test_model_manager_embedding_unload() {
     let manager = ModelManager::with_defaults();
 
     // Load a model
-    let _ = manager.embedding(LocalEmbeddingModel::AllMiniLmL6V2).unwrap();
+    let _ = manager
+        .embedding(LocalEmbeddingModel::AllMiniLmL6V2)
+        .unwrap();
     assert_eq!(manager.loaded_models().embeddings.len(), 1);
 
     // Unload it

@@ -1,6 +1,6 @@
 //! Local embeddings via fastembed-rs.
 
-use crate::error::{Result, RatatoskrError};
+use crate::error::{RatatoskrError, Result};
 use crate::types::Embedding;
 
 /// Supported local embedding models.
@@ -94,10 +94,9 @@ impl FastEmbedProvider {
             .with_show_download_progress(true)
             .with_cache_dir(cache_dir);
 
-        let model_instance =
-            fastembed::TextEmbedding::try_new(options).map_err(|e| {
-                RatatoskrError::Configuration(format!("Failed to load embedding model: {}", e))
-            })?;
+        let model_instance = fastembed::TextEmbedding::try_new(options).map_err(|e| {
+            RatatoskrError::Configuration(format!("Failed to load embedding model: {}", e))
+        })?;
 
         Ok(Self {
             model: model_instance,

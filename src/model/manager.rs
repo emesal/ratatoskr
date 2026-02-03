@@ -76,10 +76,7 @@ impl ModelManager {
     /// Get or lazily load an embedding model.
     ///
     /// Uses double-checked locking to ensure thread-safe lazy loading.
-    pub fn embedding(
-        &self,
-        model: LocalEmbeddingModel,
-    ) -> Result<Arc<RwLock<FastEmbedProvider>>> {
+    pub fn embedding(&self, model: LocalEmbeddingModel) -> Result<Arc<RwLock<FastEmbedProvider>>> {
         let key = model.cache_key();
 
         // Fast path: check if already loaded (read lock)

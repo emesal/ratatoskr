@@ -48,8 +48,7 @@ fn test_device_default() {
 #[ignore]
 fn test_onnx_nli_inference() {
     // This test downloads the model on first run
-    let mut provider =
-        OnnxNliProvider::new(LocalNliModel::NliDebertaV3Small, Device::Cpu).unwrap();
+    let mut provider = OnnxNliProvider::new(LocalNliModel::NliDebertaV3Small, Device::Cpu).unwrap();
 
     // Test entailment
     let result = provider
@@ -79,8 +78,7 @@ fn test_onnx_nli_inference() {
 #[test]
 #[ignore]
 fn test_onnx_nli_batch_inference() {
-    let mut provider =
-        OnnxNliProvider::new(LocalNliModel::NliDebertaV3Small, Device::Cpu).unwrap();
+    let mut provider = OnnxNliProvider::new(LocalNliModel::NliDebertaV3Small, Device::Cpu).unwrap();
 
     let pairs = [
         ("The sky is blue.", "The sky has a color."),

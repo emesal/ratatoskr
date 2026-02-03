@@ -49,6 +49,27 @@
 //!     Ok(())
 //! }
 //! ```
+//!
+//! # Text Generation Example
+//!
+//! ```rust,ignore
+//! use ratatoskr::{Ratatoskr, GenerateOptions, ModelGateway};
+//!
+//! #[tokio::main]
+//! async fn main() -> ratatoskr::Result<()> {
+//!     let gateway = Ratatoskr::builder()
+//!         .ollama("http://localhost:11434")
+//!         .build()?;
+//!
+//!     let response = gateway.generate(
+//!         "Once upon a time",
+//!         &GenerateOptions::new("llama3.2:1b").max_tokens(100),
+//!     ).await?;
+//!
+//!     println!("{}", response.text);
+//!     Ok(())
+//! }
+//! ```
 
 mod convert;
 pub mod error;

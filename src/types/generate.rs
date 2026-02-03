@@ -62,6 +62,12 @@ impl GenerateOptions {
         self.stop_sequences = sequences;
         self
     }
+
+    /// Add a single stop sequence.
+    pub fn stop_sequence(mut self, sequence: impl Into<String>) -> Self {
+        self.stop_sequences.push(sequence.into());
+        self
+    }
 }
 
 /// Response from text generation.
@@ -84,7 +90,7 @@ pub struct GenerateResponse {
 
 /// Events emitted during streaming generation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "data")]
 pub enum GenerateEvent {
     /// Text chunk generated.
     #[serde(rename = "text")]

@@ -2,11 +2,11 @@
 //!
 //! Uses cross-encoder models for natural language inference.
 
-use crate::error::{Result, RatatoskrError};
+use crate::error::{RatatoskrError, Result};
 use crate::model::Device;
 use crate::types::{NliLabel, NliResult};
-use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
+use ort::session::builder::GraphOptimizationLevel;
 use std::path::PathBuf;
 
 /// Supported local NLI models.
@@ -120,8 +120,7 @@ impl OnnxNliProvider {
 
     /// Run NLI inference on a single premise-hypothesis pair.
     pub fn infer_nli(&mut self, premise: &str, hypothesis: &str) -> Result<NliResult> {
-        let (input_ids, attention_mask, token_type_ids) =
-            self.encode_pair(premise, hypothesis)?;
+        let (input_ids, attention_mask, token_type_ids) = self.encode_pair(premise, hypothesis)?;
 
         let outputs = self.run_inference(&input_ids, &attention_mask, Some(&token_type_ids))?;
         scores_to_result(&outputs[0], &self.model_info)
@@ -165,11 +164,7 @@ impl OnnxNliProvider {
             .iter()
             .map(|&m| m as i64)
             .collect();
-        let token_type_ids: Vec<i64> = encoding
-            .get_type_ids()
-            .iter()
-            .map(|&t| t as i64)
-            .collect();
+        let token_type_ids: Vec<i64> = encoding.get_type_ids().iter().map(|&t| t as i64).collect();
 
         Ok((input_ids, attention_mask, token_type_ids))
     }
@@ -187,10 +182,9 @@ impl OnnxNliProvider {
         let shape = [1_usize, seq_len];
 
         // Create tensor views — ort v2 expects (shape, slice)
-        let input_ids_tensor =
-            TensorRef::from_array_view((shape, input_ids)).map_err(|e| {
-                RatatoskrError::DataError(format!("Failed to create input_ids tensor: {}", e))
-            })?;
+        let input_ids_tensor = TensorRef::from_array_view((shape, input_ids)).map_err(|e| {
+            RatatoskrError::DataError(format!("Failed to create input_ids tensor: {}", e))
+        })?;
 
         let attention_mask_tensor =
             TensorRef::from_array_view((shape, attention_mask)).map_err(|e| {
@@ -229,9 +223,9 @@ impl OnnxNliProvider {
             .ok_or_else(|| RatatoskrError::DataError("No logits output found".to_string()))?;
 
         // try_extract_tensor returns (&Shape, &[T])
-        let (tensor_shape, logits_data) = logits.try_extract_tensor::<f32>().map_err(|e| {
-            RatatoskrError::DataError(format!("Failed to extract logits: {}", e))
-        })?;
+        let (tensor_shape, logits_data) = logits
+            .try_extract_tensor::<f32>()
+            .map_err(|e| RatatoskrError::DataError(format!("Failed to extract logits: {}", e)))?;
 
         // Convert to Vec<Vec<f32>> (batch_size x num_labels)
         let batch_size = tensor_shape[0] as usize;
@@ -292,9 +286,13 @@ fn softmax(logits: &[f32]) -> Vec<f32> {
 /// Build an ONNX session with the appropriate execution provider.
 fn build_session(model_path: &std::path::Path, device: &Device) -> Result<Session> {
     let builder = Session::builder()
-        .map_err(|e| RatatoskrError::Configuration(format!("Failed to create session builder: {}", e)))?
+        .map_err(|e| {
+            RatatoskrError::Configuration(format!("Failed to create session builder: {}", e))
+        })?
         .with_optimization_level(GraphOptimizationLevel::Level3)
-        .map_err(|e| RatatoskrError::Configuration(format!("Failed to set optimization level: {}", e)))?;
+        .map_err(|e| {
+            RatatoskrError::Configuration(format!("Failed to set optimization level: {}", e))
+        })?;
 
     // Configure execution provider based on device
     let builder = match device {
@@ -303,11 +301,9 @@ fn build_session(model_path: &std::path::Path, device: &Device) -> Result<Sessio
         Device::Cuda { device_id } => {
             use ort::execution_providers::CUDAExecutionProvider;
             builder
-                .with_execution_providers([
-                    CUDAExecutionProvider::default()
-                        .with_device_id(*device_id as i32)
-                        .build(),
-                ])
+                .with_execution_providers([CUDAExecutionProvider::default()
+                    .with_device_id(*device_id as i32)
+                    .build()])
                 .map_err(|e| {
                     RatatoskrError::Configuration(format!("Failed to configure CUDA: {}", e))
                 })?
@@ -376,7 +372,11 @@ mod tests {
     fn test_scores_to_result_entailment() {
         let model_info = NliModelInfo {
             name: "test".to_string(),
-            labels: vec!["contradiction".into(), "entailment".into(), "neutral".into()],
+            labels: vec![
+                "contradiction".into(),
+                "entailment".into(),
+                "neutral".into(),
+            ],
         };
 
         // High entailment score (index 1)
@@ -392,7 +392,11 @@ mod tests {
     fn test_scores_to_result_contradiction() {
         let model_info = NliModelInfo {
             name: "test".to_string(),
-            labels: vec!["contradiction".into(), "entailment".into(), "neutral".into()],
+            labels: vec![
+                "contradiction".into(),
+                "entailment".into(),
+                "neutral".into(),
+            ],
         };
 
         // High contradiction score (index 0)

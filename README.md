@@ -11,6 +11,9 @@ Ratatoskr provides a stable, provider-agnostic interface for interacting with la
 - **Streaming & non-streaming** — Both chat interfaces supported
 - **Tool calling** — Full function/tool support with JSON schema parameters
 - **Extended thinking** — Reasoning config for models that support it
+- **Text generation** — Simple prompt-in, text-out interface
+- **Local inference** — Embeddings via fastembed-rs, NLI via ONNX Runtime
+- **Token counting** — HuggingFace tokenizers with model-appropriate defaults
 - **Type-safe** — Strong Rust types for messages, options, and responses
 
 ## Quick Start
@@ -61,9 +64,21 @@ Enable only the providers you need:
 ```toml
 [dependencies]
 ratatoskr = { version = "0.1", default-features = false, features = ["openrouter", "anthropic"] }
+
+# For HuggingFace API (embeddings, NLI, classification)
+ratatoskr = { version = "0.1", features = ["huggingface"] }
+
+# For local inference (no API keys needed)
+ratatoskr = { version = "0.1", features = ["local-inference"] }
+
+# GPU support for ONNX
+ratatoskr = { version = "0.1", features = ["local-inference", "cuda"] }
 ```
 
-Available features: `openai`, `anthropic`, `openrouter`, `ollama`, `google` (all enabled by default).
+Available features:
+- Chat providers: `openai`, `anthropic`, `openrouter`, `ollama`, `google` (default)
+- API inference: `huggingface`
+- Local inference: `local-inference`, `cuda`
 
 ## Provider Configuration
 
@@ -74,11 +89,26 @@ let gateway = Ratatoskr::builder()
     .openai("sk-...")                  // Direct OpenAI API
     .google("...")                     // Google/Gemini API
     .ollama("http://localhost:11434")  // Local Ollama instance
+    .huggingface("hf_...")             // HuggingFace Inference API
     .timeout(120)                      // Request timeout in seconds
     .build()?;
 ```
 
 At least one provider must be configured.
+
+### Local Inference Configuration
+
+```rust
+use ratatoskr::{Device, LocalEmbeddingModel, LocalNliModel};
+
+let gateway = Ratatoskr::builder()
+    .openrouter("sk-or-...")                           // Still need chat provider
+    .local_embeddings(LocalEmbeddingModel::AllMiniLmL6V2)
+    .local_nli(LocalNliModel::NliDebertaV3Small)
+    .device(Device::Cpu)                               // or Device::Cuda { device_id: 0 }
+    .cache_dir("/custom/model/cache")                  // Optional
+    .build()?;
+```
 
 ## Model Routing
 
@@ -200,21 +230,105 @@ ModelGateway trait  ← stable public API
        ▼
 EmbeddedGateway     ← routes to providers
        │
-       ├─► OpenRouter
-       ├─► Anthropic
-       ├─► OpenAI
-       ├─► Google
-       └─► Ollama
+       ├─► Chat Providers (via llm crate)
+       │     ├── OpenRouter
+       │     ├── Anthropic
+       │     ├── OpenAI
+       │     ├── Google
+       │     └── Ollama
+       │
+       ├─► HuggingFace (API-based)
+       │     └── embeddings, NLI, classification
+       │
+       └─► Local Inference (no API)
+             ├── FastEmbed (embeddings)
+             ├── ONNX Runtime (NLI)
+             └── HF Tokenizers (token counting)
 ```
 
 The `ModelGateway` trait is the stability boundary. Your code depends only on this trait, insulating you from provider changes.
 
+## Text Generation
+
+For simple prompt-to-text generation (without the chat/message structure):
+
+```rust
+use ratatoskr::GenerateOptions;
+
+let response = gateway.generate(
+    "Once upon a time",
+    &GenerateOptions::new("llama3.2:1b")
+        .max_tokens(100)
+        .temperature(0.7),
+).await?;
+
+println!("{}", response.text);
+```
+
+Streaming generation:
+
+```rust
+use ratatoskr::GenerateEvent;
+use futures_util::StreamExt;
+
+let mut stream = gateway.generate_stream(
+    "Once upon a time",
+    &GenerateOptions::new("anthropic/claude-3-haiku").max_tokens(100),
+).await?;
+
+while let Some(event) = stream.next().await {
+    match event? {
+        GenerateEvent::Text(text) => print!("{}", text),
+        GenerateEvent::Done => break,
+    }
+}
+```
+
+## Local Inference
+
+With the `local-inference` feature, run embeddings and NLI locally without API keys:
+
+```rust
+use ratatoskr::providers::{FastEmbedProvider, LocalEmbeddingModel};
+
+// Local embeddings
+let mut provider = FastEmbedProvider::new(LocalEmbeddingModel::AllMiniLmL6V2)?;
+let embedding = provider.embed("Hello, world!")?;
+println!("Dimensions: {}", embedding.dimensions);  // 384
+
+// Batch embeddings
+let embeddings = provider.embed_batch(&["First", "Second", "Third"])?;
+```
+
+```rust
+use ratatoskr::providers::{OnnxNliProvider, LocalNliModel};
+use ratatoskr::Device;
+
+// Local NLI
+let mut provider = OnnxNliProvider::new(LocalNliModel::NliDebertaV3Small, Device::Cpu)?;
+let result = provider.infer_nli("A cat is sleeping", "An animal is resting")?;
+println!("{:?}: {:.2}", result.label, result.entailment);  // Entailment: 0.95
+```
+
+### Token Counting
+
+```rust
+use ratatoskr::tokenizer::TokenizerRegistry;
+
+let registry = TokenizerRegistry::new();
+let count = registry.count_tokens("Hello, world!", "claude-sonnet-4")?;
+println!("Tokens: {}", count);  // ~3
+```
+
+Supported embedding models: `AllMiniLmL6V2`, `AllMiniLmL12V2`, `BgeSmallEn`, `BgeBaseEn`
+
+Supported NLI models: `NliDebertaV3Base`, `NliDebertaV3Small`, or custom ONNX models
+
 ## Roadmap
 
-- **Phase 1** (current): Chat completions via OpenRouter and direct providers
-- **Phase 2**: Additional provider integrations
-- **Phase 3**: Embeddings and NLI support
-- **Phase 4**: Local ONNX inference
+- **Phase 1**: Chat completions via OpenRouter and direct providers ✓
+- **Phase 2**: HuggingFace provider (embeddings, NLI, classification) ✓
+- **Phase 3-4**: Local inference (embeddings, NLI, tokenizers, generate) ✓
 - **Phase 5**: Service mode (gRPC/socket)
 - **Phase 6**: Caching, metrics, intelligent routing
 

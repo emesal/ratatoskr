@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Status:** 🟡 IN PROGRESS (11/15 tasks complete)
+**Status:** ✅ COMPLETE (15/15 tasks)
 
 **Goal:** Add local inference capabilities (embeddings via fastembed-rs, NLI via ONNX) and token counting, enabling örlög to run high-volume operations without API costs.
 
@@ -14,8 +14,10 @@
 - ✅ Tasks 1-6: Core infrastructure (dependencies, tokenizer, types, device, fastembed)
 - ✅ Tasks 7-9: ONNX NLI, model manager, capabilities
 - ✅ Tasks 10-11: Builder integration, gateway updates
-- ⏳ Task 12: Generate impl (via llm crate)
-- ⏳ Tasks 13-15: Live tests, lint, documentation
+- ✅ Task 12: Generate impl (via llm crate)
+- ✅ Task 13: Live tests
+- ✅ Task 14: Lint
+- ✅ Task 15: Documentation
 
 **Latest Commit:** `0a17cff` - feat(local-inference): add phase 3 foundation (tasks 1-6)
 
@@ -725,23 +727,30 @@ tests/
 - ⏸️ Actual routing of embed/NLI calls to local providers (deferred — infrastructure ready)
 - ✅ Verify: `cargo test --features local-inference`
 
-### Task 12: Implement generate() via llm crate
-- Add `generate()` and `generate_stream()` implementations
-- Create `tests/generate_test.rs`
-- Verify: `cargo test --test generate_test`
+### ✅ Task 12: Implement generate() via llm crate (COMPLETED)
+- ✅ Add `generate()` implementation using llm crate's `CompletionProvider::complete()`
+- ✅ Add `generate_stream()` implementation wrapping `chat_stream()` (llm doesn't have streaming completion)
+- ✅ Add `stop_sequence()` builder method to `GenerateOptions`
+- ✅ Fix `GenerateEvent` serde (adjacently tagged for newtype variant)
+- ✅ Create `tests/generate_test.rs` (10 unit tests + 2 ignored live tests)
+- ✅ Verify: `cargo test --test generate_test`
 
-### Task 13: Live Tests
-- Create `tests/local_inference_live_test.rs` with `#[ignore]` tests
-- Test local embeddings with real model
-- Test local NLI with real model
-- Test token counting
-- Verify: `cargo test --test local_inference_live_test --features local-inference -- --ignored`
+### ✅ Task 13: Live Tests (COMPLETED)
+- ✅ Create `tests/local_inference_live_test.rs` with `#[ignore]` tests (13 tests)
+- ✅ Local embedding tests: single, batch, different models
+- ✅ Local NLI tests: single, batch
+- ✅ Token counting tests: basic, different models
+- ✅ Model manager lazy loading test
+- ✅ Gateway integration test
+- ✅ Verify: `cargo test --test local_inference_live_test --features local-inference -- --ignored`
 
-### Task 14: Full Test Suite & Lint
-- Verify: `just pre-push`
+### ✅ Task 14: Full Test Suite & Lint (COMPLETED)
+- ✅ Verify: `just pre-push` passes
+- ✅ Verify: `cargo clippy --features local-inference -- -D warnings` passes
 
-### Task 15: Update Documentation
-- Update `CLAUDE.md` with Phase 3-4 status
-- Update `src/lib.rs` doc examples
-- Update architecture appendix
-- Verify: `cargo doc --no-deps --features local-inference`
+### ✅ Task 15: Update Documentation (COMPLETED)
+- ✅ Update `CLAUDE.md` with Phase 3-4 status, project structure, and capabilities
+- ✅ Update `README.md` with features, local inference, text generation examples
+- ✅ Update `src/lib.rs` doc examples (added generate example)
+- ✅ Update architecture diagrams
+- ✅ Verify: `cargo doc --no-deps --features local-inference`

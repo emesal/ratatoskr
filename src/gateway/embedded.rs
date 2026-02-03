@@ -12,8 +12,8 @@ use llm::builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder};
 use crate::convert::{backend_from_model, from_llm_tool_calls, from_llm_usage, to_llm_messages};
 use crate::types::response::FinishReason;
 use crate::{
-    Capabilities, ChatEvent, ChatOptions, ChatResponse, Message, ModelGateway, RatatoskrError,
-    Result, ToolDefinition,
+    Capabilities, ChatEvent, ChatOptions, ChatResponse, GenerateEvent, GenerateOptions,
+    GenerateResponse, Message, ModelGateway, RatatoskrError, Result, ToolDefinition,
 };
 
 #[cfg(feature = "local-inference")]
@@ -33,6 +33,7 @@ pub struct EmbeddedGateway {
     huggingface: Option<crate::providers::HuggingFaceClient>,
     router: super::routing::CapabilityRouter,
     #[cfg(feature = "local-inference")]
+    #[allow(dead_code)] // TODO: use for local embed/NLI routing
     model_manager: Arc<ModelManager>,
     #[cfg(feature = "local-inference")]
     tokenizer_registry: Arc<TokenizerRegistry>,
@@ -369,5 +370,73 @@ impl ModelGateway for EmbeddedGateway {
     #[cfg(feature = "local-inference")]
     fn count_tokens(&self, text: &str, model: &str) -> Result<usize> {
         self.tokenizer_registry.count_tokens(text, model)
+    }
+
+    async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
+        use llm::completion::CompletionRequest;
+
+        // Build a minimal ChatOptions to reuse build_provider
+        let mut chat_options = ChatOptions::default().model(&options.model);
+        if let Some(temp) = options.temperature {
+            chat_options = chat_options.temperature(temp);
+        }
+        if let Some(max) = options.max_tokens {
+            chat_options = chat_options.max_tokens(max);
+        }
+
+        // Build provider without system prompt or tools
+        let provider = self.build_provider(&chat_options, None, None)?;
+
+        // Create completion request
+        let mut req_builder = CompletionRequest::builder(prompt);
+        if let Some(max_tokens) = options.max_tokens {
+            req_builder = req_builder.max_tokens(max_tokens as u32);
+        }
+        if let Some(temp) = options.temperature {
+            req_builder = req_builder.temperature(temp);
+        }
+        // Note: top_p and stop_sequences not supported by llm crate's CompletionRequest
+
+        let response = provider.complete(&req_builder.build()).await?;
+
+        Ok(GenerateResponse {
+            text: response.text,
+            usage: None, // llm crate's CompletionResponse doesn't include usage
+            model: Some(options.model.clone()),
+            finish_reason: FinishReason::Stop,
+        })
+    }
+
+    async fn generate_stream(
+        &self,
+        prompt: &str,
+        options: &GenerateOptions,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
+        // llm crate doesn't have streaming completion, so we use chat_stream
+        // by wrapping the prompt in a user message
+        let messages = vec![Message::user(prompt)];
+
+        let mut chat_options = ChatOptions::default().model(&options.model);
+        if let Some(temp) = options.temperature {
+            chat_options = chat_options.temperature(temp);
+        }
+        if let Some(max) = options.max_tokens {
+            chat_options = chat_options.max_tokens(max);
+        }
+
+        // Get streaming chat response
+        let chat_stream = self.chat_stream(&messages, None, &chat_options).await?;
+
+        // Convert ChatEvent to GenerateEvent
+        let generate_stream = chat_stream.map(|result| {
+            result.map(|event| match event {
+                ChatEvent::Content(text) => GenerateEvent::Text(text),
+                ChatEvent::Done => GenerateEvent::Done,
+                // Ignore other events (reasoning, tool calls, usage) for generate
+                _ => GenerateEvent::Text(String::new()),
+            })
+        });
+
+        Ok(Box::pin(generate_stream))
     }
 }

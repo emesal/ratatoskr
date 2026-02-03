@@ -1,6 +1,6 @@
 //! Model source and download logic.
 
-use crate::error::{Result, RatatoskrError};
+use crate::error::{RatatoskrError, Result};
 use std::path::PathBuf;
 
 /// Source for a model.

@@ -1,9 +1,10 @@
 //! Device configuration for local inference.
 
 /// Compute device for local inference.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Device {
-    /// CPU execution.
+    /// CPU execution (default).
+    #[default]
     Cpu,
 
     /// CUDA GPU execution.
@@ -12,12 +13,6 @@ pub enum Device {
         /// GPU device ID (0-indexed).
         device_id: u32,
     },
-}
-
-impl Default for Device {
-    fn default() -> Self {
-        Self::Cpu
-    }
 }
 
 impl Device {

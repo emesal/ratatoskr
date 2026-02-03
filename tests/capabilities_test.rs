@@ -101,14 +101,23 @@ fn test_capabilities_merge_is_symmetric() {
 fn test_capabilities_local_only() {
     let caps = Capabilities::local_only();
     assert!(!caps.chat, "local_only should not have chat");
-    assert!(!caps.chat_streaming, "local_only should not have chat_streaming");
+    assert!(
+        !caps.chat_streaming,
+        "local_only should not have chat_streaming"
+    );
     assert!(!caps.generate, "local_only should not have generate");
     assert!(!caps.tool_use, "local_only should not have tool_use");
     assert!(caps.embeddings, "local_only should have embeddings");
     assert!(caps.nli, "local_only should have nli");
-    assert!(!caps.classification, "local_only should not have classification");
+    assert!(
+        !caps.classification,
+        "local_only should not have classification"
+    );
     assert!(caps.token_counting, "local_only should have token_counting");
-    assert!(caps.local_inference, "local_only should have local_inference");
+    assert!(
+        caps.local_inference,
+        "local_only should have local_inference"
+    );
 }
 
 #[test]

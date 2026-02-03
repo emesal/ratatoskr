@@ -5,9 +5,8 @@ use futures_util::Stream;
 use std::pin::Pin;
 
 use crate::{
-    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding,
-    GenerateEvent, GenerateOptions, GenerateResponse, Message, NliResult, RatatoskrError, Result,
-    ToolDefinition,
+    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
+    GenerateOptions, GenerateResponse, Message, NliResult, RatatoskrError, Result, ToolDefinition,
 };
 
 /// The core gateway trait that all implementations must provide.
@@ -75,11 +74,7 @@ pub trait ModelGateway: Send + Sync {
     }
 
     /// Batch NLI inference — more efficient for multiple pairs
-    async fn infer_nli_batch(
-        &self,
-        pairs: &[(&str, &str)],
-        model: &str,
-    ) -> Result<Vec<NliResult>> {
+    async fn infer_nli_batch(&self, pairs: &[(&str, &str)], model: &str) -> Result<Vec<NliResult>> {
         // Default: sequential fallback
         let mut results = Vec::with_capacity(pairs.len());
         for (premise, hypothesis) in pairs {

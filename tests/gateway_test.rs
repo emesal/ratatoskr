@@ -55,8 +55,8 @@ fn test_builder_openrouter_and_huggingface() {
 #[test]
 #[cfg(feature = "local-inference")]
 fn test_builder_methods_compile() {
-    use ratatoskr::{Device, LocalEmbeddingModel, LocalNliModel};
     use ratatoskr::tokenizer::TokenizerSource;
+    use ratatoskr::{Device, LocalEmbeddingModel, LocalNliModel};
     use std::path::PathBuf;
 
     // This test just verifies the builder methods compile and chain correctly.
