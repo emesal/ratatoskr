@@ -2,7 +2,7 @@
 
 Ratatoskr is a unified LLM gateway abstraction layer. The core idea: consumers (chibi, orlog) interact only with the `ModelGateway` trait while the `llm` crate is an internal implementation detail.
 
-**Current Status**: Provider Trait Refactor in progress. See `docs/plans/2026-02-03-provider-trait-refactor.md` for details.
+**Current Status**: Phase 5 (service mode) complete. See `docs/plans/2026-02-04-phase5-implementation.md` for details.
 
 ## Principles
 
@@ -38,10 +38,12 @@ just release v0.x      # Squash dev→main, tag release
 consumers (chibi, orlog)
          │ uses
          ▼
-ratatoskr::ModelGateway  ← stable public trait
+ratatoskr::ModelGateway     ← stable public trait
          │ implemented by
-         ▼
-EmbeddedGateway (phase 1) → wraps llm crate internally
+         ├─► EmbeddedGateway    → wraps llm crate internally
+         └─► ServiceClient      → connects to ratd over gRPC
+                │
+             ratd (daemon) → EmbeddedGateway behind gRPC handlers
 ```
 
 ### Project Structure
@@ -65,12 +67,30 @@ src/
 │   ├── huggingface.rs  # HuggingFace Inference API client
 │   ├── fastembed.rs    # Local embeddings via fastembed-rs
 │   └── onnx_nli.rs     # Local NLI via ONNX Runtime
+├── server/             # gRPC server + shared proto types (server/client features)
+│   ├── mod.rs          # Proto re-exports, module gating
+│   ├── convert.rs      # Bidirectional proto ↔ native conversions
+│   ├── service.rs      # RatatoskrService<G> gRPC handler (server feature)
+│   └── config.rs       # Config + Secrets loading from TOML (server feature)
+├── client/             # gRPC client library (client feature)
+│   ├── mod.rs          # ServiceClient re-export
+│   └── service_client.rs  # ServiceClient implementing ModelGateway over gRPC
+├── bin/
+│   ├── ratd.rs         # Daemon entry point — starts gRPC server
+│   └── rat.rs          # CLI client — health, models, chat, embed, nli, tokens
 ├── tokenizer/          # Token counting (local-inference feature)
 │   └── mod.rs          # TokenizerRegistry, HfTokenizer
 ├── model/              # Model management (local-inference feature)
 │   ├── manager.rs      # ModelManager with RAM budget tracking
 │   └── device.rs       # Device enum (CPU, CUDA)
 └── convert/            # ratatoskr ↔ llm type conversions (internal)
+
+proto/
+└── ratatoskr.proto     # gRPC service definition (14 RPCs)
+
+contrib/
+└── systemd/
+    └── ratd.service    # systemd unit with security hardening
 ```
 
 ### Key Types
@@ -82,6 +102,8 @@ src/
 - `RatatoskrError` — comprehensive error enum; `ModelNotAvailable` triggers fallback in registry
 - `StanceResult` — stance detection result (favor/against/neutral scores with label)
 - `ProviderRegistry` — fallback chains per capability (tries providers in priority order)
+- `ServiceClient` — `ModelGateway` impl that forwards to ratd over gRPC (client feature)
+- `RatatoskrService<G>` — wraps any `ModelGateway` behind gRPC handlers (server feature)
 
 ### Builder Pattern
 
@@ -129,6 +151,16 @@ With the `local-inference` feature enabled:
 Supported embedding models: `AllMiniLmL6V2`, `AllMiniLmL12V2`, `BgeSmallEn`, `BgeBaseEn`
 Supported NLI models: `NliDebertaV3Base`, `NliDebertaV3Small`, or custom ONNX models
 
+### Service Mode (Phase 5)
+
+With the `server` and `client` features enabled:
+- `ratd` — daemon binary serving `EmbeddedGateway` over gRPC (default `127.0.0.1:9741`)
+- `rat` — CLI client with subcommands: `health`, `models`, `status`, `chat`, `embed`, `nli`, `tokens`
+- `ServiceClient` — implements `ModelGateway` trait, transparently forwarding all calls over gRPC
+- TOML configuration with provider/routing/limits sections
+- Separate secrets file (`~/.config/ratatoskr/secrets.toml`) with 0600 permission enforcement
+- Proto conversions centralized in `server::convert` (shared by both server and client)
+
 ## Testing Strategy
 
 1. **Unit tests** — types, conversions, builder (fast, no I/O)
@@ -151,10 +183,18 @@ cargo test --test local_inference_live_test --features local-inference -- --igno
 
 Note: First run downloads models (~100MB+ for embeddings, ~500MB+ for NLI).
 
+### Service Mode Tests
+
+```bash
+cargo test --features server,client --test service_test
+```
+
+Live tests require a running ratd instance with valid API keys.
+
 ## Phase Roadmap
 
 - Phase 1: OpenRouter Chat ✓
 - Phase 2: HuggingFace provider (embeddings, NLI, classification) ✓
 - Phase 3-4: Local inference (embeddings, NLI, tokenizers, generate) ✓
-- Phase 5: Service mode (gRPC/socket)
+- Phase 5: Service mode (gRPC daemon + CLI client) ✓
 - Phase 6: Caching, metrics, advanced routing

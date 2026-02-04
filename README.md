@@ -17,6 +17,7 @@ Ratatoskr provides a stable, provider-agnostic interface for interacting with la
 - **Stance detection** — Classify text as favor/against/neutral toward a target
 - **Token counting** — HuggingFace tokenizers with model-appropriate defaults
 - **Fallback chains** — Automatic local→remote fallback when resources constrained
+- **Service mode** — `ratd` daemon + `rat` CLI over gRPC, share a gateway across processes
 - **Type-safe** — Strong Rust types for messages, options, and responses
 
 ## Quick Start
@@ -82,6 +83,7 @@ Available features:
 - Chat providers: `openai`, `anthropic`, `openrouter`, `ollama`, `google` (default)
 - API inference: `huggingface`
 - Local inference: `local-inference`, `cuda`
+- Service mode: `server`, `client`
 
 ## Provider Configuration
 
@@ -231,10 +233,17 @@ match gateway.chat(&messages, None, &options).await {
 Your Application
        │
        ▼
-ModelGateway trait  ← stable public API
+ModelGateway trait      ← stable public API
        │
-       ▼
-EmbeddedGateway     ← delegates to ProviderRegistry
+       ├─► EmbeddedGateway  ← in-process, delegates to ProviderRegistry
+       │
+       └─► ServiceClient    ← connects to ratd over gRPC
+              │
+              ▼
+           ratd (daemon)
+              │
+              ▼
+           EmbeddedGateway  ← delegates to ProviderRegistry
        │
        ▼
 ProviderRegistry    ← fallback chains per capability
@@ -261,6 +270,58 @@ ProviderRegistry    ← fallback chains per capability
 The `ModelGateway` trait is the stability boundary. Your code depends only on this trait, insulating you from provider changes.
 
 **Fallback behaviour:** When a local provider returns `ModelNotAvailable` (wrong model or RAM budget exceeded), the registry automatically tries the next provider in the chain.
+
+## Service Mode
+
+Service mode lets multiple processes share a single gateway instance over gRPC. The daemon (`ratd`) wraps an `EmbeddedGateway` behind gRPC handlers; clients connect via `ServiceClient` which implements `ModelGateway` transparently.
+
+### Server (`ratd`)
+
+```bash
+cargo build --features server
+ratd --config config.toml
+```
+
+Configuration uses TOML files with provider API keys stored separately in a permissions-checked secrets file (`~/.config/ratatoskr/secrets.toml`, mode 0600).
+
+### Client library
+
+```rust
+use ratatoskr::{ServiceClient, ModelGateway, ChatOptions, Message};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let client = ServiceClient::connect("http://127.0.0.1:9741").await?;
+
+    let response = client
+        .chat(
+            &[Message::user("hello!")],
+            None,
+            &ChatOptions::default().model("anthropic/claude-sonnet-4"),
+        )
+        .await?;
+
+    println!("{}", response.content);
+    Ok(())
+}
+```
+
+### CLI (`rat`)
+
+```bash
+cargo build --features client
+
+rat health              # check connectivity
+rat models              # list available models
+rat chat "hello!" -m anthropic/claude-sonnet-4
+rat embed "some text"   # generate embeddings
+rat nli "it rained" "the ground is wet"
+rat tokens "count me"   # token counting
+```
+
+### systemd
+
+A systemd unit file is provided at `contrib/systemd/ratd.service` with security hardening (sandboxing, resource limits, separate service user).
 
 ## Text Generation
 
@@ -368,7 +429,7 @@ Supported NLI models: `NliDebertaV3Base`, `NliDebertaV3Small`, or custom ONNX mo
 - **Phase 2**: HuggingFace provider (embeddings, NLI, classification) ✓
 - **Phase 3-4**: Local inference (embeddings, NLI, tokenizers, generate) ✓
 - **Provider Trait Refactor**: Fallback chains, RAM budget, stance detection ✓
-- **Phase 5**: Service mode (gRPC/socket)
+- **Phase 5**: Service mode (gRPC daemon + CLI client) ✓
 - **Phase 6**: Caching, metrics, decorator patterns
 
 ## Development

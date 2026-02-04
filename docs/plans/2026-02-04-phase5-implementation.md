@@ -18,9 +18,9 @@
 - [x] Task 7: ServiceClient (Client Library)
 - [x] Task 8: rat CLI Binary
 - [x] Task 9: systemd Unit File
-- [ ] Task 10: Integration Tests
-- [ ] Task 11: Update Documentation
-- [ ] Task 12: Final Verification
+- [x] Task 10: Integration Tests
+- [x] Task 11: Update Documentation
+- [x] Task 12: Final Verification
 
 **Implementation Notes:**
 - `tonic-build` added as unconditional build-dep (build-deps can't be feature-gated); usage gated via `#[cfg]` in build.rs instead
