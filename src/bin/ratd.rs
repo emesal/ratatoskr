@@ -9,10 +9,10 @@ use std::sync::Arc;
 use clap::Parser;
 use tonic::transport::Server;
 
+use ratatoskr::Ratatoskr;
+use ratatoskr::server::RatatoskrService;
 use ratatoskr::server::config::{Config, Secrets};
 use ratatoskr::server::proto::ratatoskr_server::RatatoskrServer;
-use ratatoskr::server::RatatoskrService;
-use ratatoskr::Ratatoskr;
 
 /// Ratatoskr daemon — unified model gateway service.
 #[derive(Parser)]
@@ -37,24 +37,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gateway = build_gateway(&config, &secrets)?;
 
     // Parse address
-    let addr: SocketAddr = config.server.address.parse().map_err(|e| {
-        ratatoskr::RatatoskrError::Configuration(format!("Invalid address: {e}"))
-    })?;
+    let addr: SocketAddr =
+        config.server.address.parse().map_err(|e| {
+            ratatoskr::RatatoskrError::Configuration(format!("Invalid address: {e}"))
+        })?;
 
-    eprintln!(
-        "ratd {} starting on {}",
-        ratatoskr::version_string(),
-        addr
-    );
+    eprintln!("ratd {} starting on {}", ratatoskr::version_string(), addr);
 
     // Create gRPC service and start server
     let service = RatatoskrService::new(Arc::new(gateway));
     let server = RatatoskrServer::new(service);
 
-    Server::builder()
-        .add_service(server)
-        .serve(addr)
-        .await?;
+    Server::builder().add_service(server).serve(addr).await?;
 
     Ok(())
 }

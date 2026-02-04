@@ -1,7 +1,8 @@
-//! Conversions between ratatoskr native types and protobuf types.
+//! Bidirectional conversions between ratatoskr native types and protobuf types.
 //!
-//! Server-side conversions: proto → native for requests, native → proto for responses.
-//! Client-side conversions live in `crate::client::service_client`.
+//! All proto ↔ native conversions live here as the single source of truth.
+//! Server uses native→proto for responses and proto→native for requests.
+//! Client uses the inverse directions.
 
 use crate::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason, GenerateEvent,
@@ -68,7 +69,11 @@ impl From<proto::ChatOptions> for ChatOptions {
             temperature: p.temperature,
             max_tokens: p.max_tokens.map(|t| t as usize),
             top_p: p.top_p,
-            stop: if p.stop.is_empty() { None } else { Some(p.stop) },
+            stop: if p.stop.is_empty() {
+                None
+            } else {
+                Some(p.stop)
+            },
             frequency_penalty: p.frequency_penalty,
             presence_penalty: p.presence_penalty,
             seed: p.seed,
@@ -109,14 +114,14 @@ impl From<proto::ResponseFormat> for ResponseFormat {
 impl From<proto::ReasoningConfig> for ReasoningConfig {
     fn from(p: proto::ReasoningConfig) -> Self {
         ReasoningConfig {
-            effort: p.effort.and_then(|e| {
-                match proto::ReasoningEffort::try_from(e).ok()? {
+            effort: p
+                .effort
+                .and_then(|e| match proto::ReasoningEffort::try_from(e).ok()? {
                     proto::ReasoningEffort::Low => Some(ReasoningEffort::Low),
                     proto::ReasoningEffort::Medium => Some(ReasoningEffort::Medium),
                     proto::ReasoningEffort::High => Some(ReasoningEffort::High),
                     proto::ReasoningEffort::Unspecified => None,
-                }
-            }),
+                }),
             max_tokens: p.max_tokens.map(|t| t as usize),
             exclude_from_output: p.exclude_from_output,
         }
@@ -370,5 +375,272 @@ impl From<ModelStatus> for proto::ModelStatusResponse {
                 reason: Some(reason),
             },
         }
+    }
+}
+
+// =============================================================================
+// Proto → Native (incoming responses, used by client)
+// =============================================================================
+
+impl From<proto::ChatResponse> for ChatResponse {
+    fn from(p: proto::ChatResponse) -> Self {
+        ChatResponse {
+            content: p.content,
+            reasoning: p.reasoning,
+            tool_calls: p.tool_calls.into_iter().map(Into::into).collect(),
+            usage: p.usage.map(Into::into),
+            model: p.model,
+            finish_reason: proto_to_finish_reason(p.finish_reason),
+        }
+    }
+}
+
+impl From<proto::ChatEvent> for ChatEvent {
+    fn from(p: proto::ChatEvent) -> Self {
+        match p.event {
+            Some(proto::chat_event::Event::Content(s)) => ChatEvent::Content(s),
+            Some(proto::chat_event::Event::Reasoning(s)) => ChatEvent::Reasoning(s),
+            Some(proto::chat_event::Event::ToolCallStart(t)) => ChatEvent::ToolCallStart {
+                index: t.index as usize,
+                id: t.id,
+                name: t.name,
+            },
+            Some(proto::chat_event::Event::ToolCallDelta(t)) => ChatEvent::ToolCallDelta {
+                index: t.index as usize,
+                arguments: t.arguments,
+            },
+            Some(proto::chat_event::Event::Usage(u)) => ChatEvent::Usage(u.into()),
+            Some(proto::chat_event::Event::Done(_)) | None => ChatEvent::Done,
+        }
+    }
+}
+
+impl From<proto::Usage> for Usage {
+    fn from(u: proto::Usage) -> Self {
+        Usage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+            reasoning_tokens: u.reasoning_tokens,
+        }
+    }
+}
+
+impl From<proto::GenerateResponse> for GenerateResponse {
+    fn from(p: proto::GenerateResponse) -> Self {
+        GenerateResponse {
+            text: p.text,
+            usage: p.usage.map(Into::into),
+            model: p.model,
+            finish_reason: proto_to_finish_reason(p.finish_reason),
+        }
+    }
+}
+
+impl From<proto::GenerateEvent> for GenerateEvent {
+    fn from(p: proto::GenerateEvent) -> Self {
+        match p.event {
+            Some(proto::generate_event::Event::Text(s)) => GenerateEvent::Text(s),
+            Some(proto::generate_event::Event::Done(_)) | None => GenerateEvent::Done,
+        }
+    }
+}
+
+impl From<proto::EmbedResponse> for Embedding {
+    fn from(p: proto::EmbedResponse) -> Self {
+        Embedding {
+            values: p.values,
+            model: p.model,
+            dimensions: p.dimensions as usize,
+        }
+    }
+}
+
+impl From<proto::Embedding> for Embedding {
+    fn from(p: proto::Embedding) -> Self {
+        Embedding {
+            values: p.values,
+            model: p.model,
+            dimensions: p.dimensions as usize,
+        }
+    }
+}
+
+impl From<proto::NliResponse> for NliResult {
+    fn from(p: proto::NliResponse) -> Self {
+        NliResult {
+            entailment: p.entailment,
+            contradiction: p.contradiction,
+            neutral: p.neutral,
+            label: match proto::NliLabel::try_from(p.label) {
+                Ok(proto::NliLabel::Entailment) => NliLabel::Entailment,
+                Ok(proto::NliLabel::Contradiction) => NliLabel::Contradiction,
+                _ => NliLabel::Neutral,
+            },
+        }
+    }
+}
+
+impl From<proto::ClassifyResponse> for ClassifyResult {
+    fn from(p: proto::ClassifyResponse) -> Self {
+        ClassifyResult {
+            scores: p.scores,
+            top_label: p.top_label,
+            confidence: p.confidence,
+        }
+    }
+}
+
+impl From<proto::StanceResponse> for StanceResult {
+    fn from(p: proto::StanceResponse) -> Self {
+        StanceResult {
+            favor: p.favor,
+            against: p.against,
+            neutral: p.neutral,
+            label: match proto::StanceLabel::try_from(p.label) {
+                Ok(proto::StanceLabel::Favor) => StanceLabel::Favor,
+                Ok(proto::StanceLabel::Against) => StanceLabel::Against,
+                _ => StanceLabel::Neutral,
+            },
+            target: p.target,
+        }
+    }
+}
+
+impl From<proto::Token> for Token {
+    fn from(p: proto::Token) -> Self {
+        Token {
+            id: p.id,
+            text: p.text,
+            start: p.start as usize,
+            end: p.end as usize,
+        }
+    }
+}
+
+impl From<proto::ModelInfo> for ModelInfo {
+    fn from(p: proto::ModelInfo) -> Self {
+        ModelInfo {
+            id: p.id,
+            provider: p.provider,
+            capabilities: p
+                .capabilities
+                .into_iter()
+                .filter_map(|c| match proto::ModelCapability::try_from(c).ok()? {
+                    proto::ModelCapability::Chat => Some(ModelCapability::Chat),
+                    proto::ModelCapability::Generate => Some(ModelCapability::Generate),
+                    proto::ModelCapability::Embed => Some(ModelCapability::Embed),
+                    proto::ModelCapability::Nli => Some(ModelCapability::Nli),
+                    proto::ModelCapability::Classify => Some(ModelCapability::Classify),
+                    proto::ModelCapability::Unspecified => None,
+                })
+                .collect(),
+            context_window: p.context_window.map(|w| w as usize),
+            dimensions: p.dimensions.map(|d| d as usize),
+        }
+    }
+}
+
+impl From<proto::ModelStatusResponse> for ModelStatus {
+    fn from(p: proto::ModelStatusResponse) -> Self {
+        match proto::ModelStatus::try_from(p.status) {
+            Ok(proto::ModelStatus::Available) => ModelStatus::Available,
+            Ok(proto::ModelStatus::Loading) => ModelStatus::Loading,
+            Ok(proto::ModelStatus::Ready) => ModelStatus::Ready,
+            _ => ModelStatus::Unavailable {
+                reason: p.reason.unwrap_or_else(|| "Unknown".to_string()),
+            },
+        }
+    }
+}
+
+// =============================================================================
+// Native → Proto (outgoing requests, used by client)
+// =============================================================================
+
+impl From<ToolDefinition> for proto::ToolDefinition {
+    fn from(t: ToolDefinition) -> Self {
+        proto::ToolDefinition {
+            name: t.name,
+            description: t.description,
+            parameters_json: serde_json::to_string(&t.parameters).unwrap_or_default(),
+        }
+    }
+}
+
+impl From<ChatOptions> for proto::ChatOptions {
+    fn from(o: ChatOptions) -> Self {
+        proto::ChatOptions {
+            model: o.model,
+            temperature: o.temperature,
+            max_tokens: o.max_tokens.map(|t| t as u32),
+            top_p: o.top_p,
+            stop: o.stop.unwrap_or_default(),
+            frequency_penalty: o.frequency_penalty,
+            presence_penalty: o.presence_penalty,
+            seed: o.seed,
+            tool_choice: o.tool_choice.map(|tc| {
+                let choice = match tc {
+                    ToolChoice::Auto => proto::tool_choice::Choice::Auto(true),
+                    ToolChoice::None => proto::tool_choice::Choice::None(true),
+                    ToolChoice::Required => proto::tool_choice::Choice::Required(true),
+                    ToolChoice::Function { name } => proto::tool_choice::Choice::Function(name),
+                };
+                proto::ToolChoice {
+                    choice: Some(choice),
+                }
+            }),
+            response_format: o.response_format.map(|rf| {
+                let format = match rf {
+                    ResponseFormat::Text => proto::response_format::Format::Text(true),
+                    ResponseFormat::JsonObject => proto::response_format::Format::JsonObject(true),
+                    ResponseFormat::JsonSchema { schema } => {
+                        proto::response_format::Format::JsonSchema(
+                            serde_json::to_string(&schema).unwrap_or_default(),
+                        )
+                    }
+                };
+                proto::ResponseFormat {
+                    format: Some(format),
+                }
+            }),
+            cache_prompt: o.cache_prompt,
+            reasoning: o.reasoning.map(|r| proto::ReasoningConfig {
+                effort: r.effort.map(|e| match e {
+                    ReasoningEffort::Low => proto::ReasoningEffort::Low as i32,
+                    ReasoningEffort::Medium => proto::ReasoningEffort::Medium as i32,
+                    ReasoningEffort::High => proto::ReasoningEffort::High as i32,
+                }),
+                max_tokens: r.max_tokens.map(|t| t as u32),
+                exclude_from_output: r.exclude_from_output,
+            }),
+        }
+    }
+}
+
+impl From<GenerateOptions> for proto::GenerateOptions {
+    fn from(o: GenerateOptions) -> Self {
+        proto::GenerateOptions {
+            model: o.model,
+            max_tokens: o.max_tokens.map(|t| t as u32),
+            temperature: o.temperature,
+            top_p: o.top_p,
+            stop_sequences: o.stop_sequences,
+        }
+    }
+}
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/// Shared helper: convert proto finish reason i32 to native.
+fn proto_to_finish_reason(raw: i32) -> FinishReason {
+    match proto::FinishReason::try_from(raw) {
+        Ok(proto::FinishReason::Stop) => FinishReason::Stop,
+        Ok(proto::FinishReason::Length) => FinishReason::Length,
+        Ok(proto::FinishReason::ToolCalls) => FinishReason::ToolCalls,
+        Ok(proto::FinishReason::ContentFilter) => FinishReason::ContentFilter,
+        _ => FinishReason::Stop,
     }
 }

@@ -52,6 +52,11 @@ name = "ratd"
 path = "src/bin/ratd.rs"
 required-features = ["server"]
 
+[[bin]]
+name = "rat"
+path = "src/bin/rat.rs"
+required-features = ["client"]
+
 [build-dependencies]
 vergen-gitcl = { version = "10.0.0-beta.5", features = ["build", "cargo"] }
 tonic-build = "0.13"
