@@ -83,6 +83,9 @@ pub mod traits;
 pub mod types;
 pub mod version;
 
+#[cfg(feature = "server")]
+pub mod server;
+
 // Re-export main types at crate root
 pub use error::{RatatoskrError, Result};
 pub use gateway::{EmbeddedGateway, Ratatoskr, RatatoskrBuilder};
