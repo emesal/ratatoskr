@@ -9,6 +9,7 @@
 //! abstracted to allow future addition of Unix socket support for
 //! tighter permission control on multi-user systems.
 
+pub mod config;
 pub mod convert;
 pub mod service;
 
