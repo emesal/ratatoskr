@@ -275,53 +275,23 @@ The `ModelGateway` trait is the stability boundary. Your code depends only on th
 
 Service mode lets multiple processes share a single gateway instance over gRPC. The daemon (`ratd`) wraps an `EmbeddedGateway` behind gRPC handlers; clients connect via `ServiceClient` which implements `ModelGateway` transparently.
 
-### Server (`ratd`)
-
-```bash
-cargo build --features server
-ratd --config config.toml
-```
-
-Configuration uses TOML files with provider API keys stored separately in a permissions-checked secrets file (`~/.config/ratatoskr/secrets.toml`, mode 0600).
-
-### Client library
-
 ```rust
 use ratatoskr::{ServiceClient, ModelGateway, ChatOptions, Message};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let client = ServiceClient::connect("http://127.0.0.1:9741").await?;
-
-    let response = client
-        .chat(
-            &[Message::user("hello!")],
-            None,
-            &ChatOptions::default().model("anthropic/claude-sonnet-4"),
-        )
-        .await?;
-
-    println!("{}", response.content);
-    Ok(())
-}
+let client = ServiceClient::connect("http://127.0.0.1:9741").await?;
+let response = client
+    .chat(&[Message::user("hello!")], None,
+          &ChatOptions::default().model("anthropic/claude-sonnet-4"))
+    .await?;
 ```
 
-### CLI (`rat`)
-
 ```bash
-cargo build --features client
-
 rat health              # check connectivity
 rat models              # list available models
 rat chat "hello!" -m anthropic/claude-sonnet-4
-rat embed "some text"   # generate embeddings
-rat nli "it rained" "the ground is wet"
-rat tokens "count me"   # token counting
 ```
 
-### systemd
-
-A systemd unit file is provided at `contrib/systemd/ratd.service` with security hardening (sandboxing, resource limits, separate service user).
+See **[docs/service-mode.md](./docs/service-mode.md)** for configuration, secrets, systemd setup, and full CLI reference.
 
 ## Text Generation
 
