@@ -1,0 +1,397 @@
+syntax = "proto3";
+package ratatoskr.v1;
+
+// =============================================================================
+// Service Definition
+// =============================================================================
+
+service Ratatoskr {
+    // Chat
+    rpc Chat(ChatRequest) returns (ChatResponse);
+    rpc ChatStream(ChatRequest) returns (stream ChatEvent);
+
+    // Generation
+    rpc Generate(GenerateRequest) returns (GenerateResponse);
+    rpc GenerateStream(GenerateRequest) returns (stream GenerateEvent);
+
+    // Embeddings
+    rpc Embed(EmbedRequest) returns (EmbedResponse);
+    rpc EmbedBatch(EmbedBatchRequest) returns (EmbedBatchResponse);
+
+    // NLI
+    rpc InferNli(NliRequest) returns (NliResponse);
+    rpc InferNliBatch(NliBatchRequest) returns (NliBatchResponse);
+
+    // Classification
+    rpc ClassifyZeroShot(ClassifyRequest) returns (ClassifyResponse);
+    rpc ClassifyStance(StanceRequest) returns (StanceResponse);
+
+    // Tokenization
+    rpc CountTokens(TokenCountRequest) returns (TokenCountResponse);
+    rpc Tokenize(TokenizeRequest) returns (TokenizeResponse);
+
+    // Model management
+    rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+    rpc ModelStatus(ModelStatusRequest) returns (ModelStatusResponse);
+
+    // Service health
+    rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+// =============================================================================
+// Common Types
+// =============================================================================
+
+message Usage {
+    uint32 prompt_tokens = 1;
+    uint32 completion_tokens = 2;
+    uint32 total_tokens = 3;
+    optional uint32 reasoning_tokens = 4;
+}
+
+enum FinishReason {
+    FINISH_REASON_UNSPECIFIED = 0;
+    FINISH_REASON_STOP = 1;
+    FINISH_REASON_LENGTH = 2;
+    FINISH_REASON_TOOL_CALLS = 3;
+    FINISH_REASON_CONTENT_FILTER = 4;
+}
+
+// =============================================================================
+// Message Types
+// =============================================================================
+
+message Message {
+    Role role = 1;
+    string content = 2;
+    repeated ToolCall tool_calls = 3;
+    optional string name = 4;
+    optional string tool_call_id = 5;  // For tool role messages
+}
+
+enum Role {
+    ROLE_UNSPECIFIED = 0;
+    ROLE_SYSTEM = 1;
+    ROLE_USER = 2;
+    ROLE_ASSISTANT = 3;
+    ROLE_TOOL = 4;
+}
+
+message ToolCall {
+    string id = 1;
+    string name = 2;
+    string arguments = 3;  // JSON string
+}
+
+message ToolDefinition {
+    string name = 1;
+    string description = 2;
+    string parameters_json = 3;  // JSON schema as string
+}
+
+// =============================================================================
+// Chat Types
+// =============================================================================
+
+message ChatOptions {
+    string model = 1;
+    optional float temperature = 2;
+    optional uint32 max_tokens = 3;
+    optional float top_p = 4;
+    repeated string stop = 5;
+    optional float frequency_penalty = 6;
+    optional float presence_penalty = 7;
+    optional uint64 seed = 8;
+    optional ToolChoice tool_choice = 9;
+    optional ResponseFormat response_format = 10;
+    optional bool cache_prompt = 11;
+    optional ReasoningConfig reasoning = 12;
+}
+
+message ToolChoice {
+    oneof choice {
+        bool auto = 1;       // true = auto
+        bool none = 2;       // true = none
+        bool required = 3;   // true = required
+        string function = 4; // specific function name
+    }
+}
+
+message ResponseFormat {
+    oneof format {
+        bool text = 1;
+        bool json_object = 2;
+        string json_schema = 3;  // JSON schema as string
+    }
+}
+
+message ReasoningConfig {
+    optional int32 effort = 1;
+    optional uint32 max_tokens = 2;
+    optional bool exclude_from_output = 3;
+}
+
+enum ReasoningEffort {
+    REASONING_EFFORT_UNSPECIFIED = 0;
+    REASONING_EFFORT_LOW = 1;
+    REASONING_EFFORT_MEDIUM = 2;
+    REASONING_EFFORT_HIGH = 3;
+}
+
+message ChatRequest {
+    repeated Message messages = 1;
+    repeated ToolDefinition tools = 2;
+    ChatOptions options = 3;
+}
+
+message ChatResponse {
+    string content = 1;
+    optional string reasoning = 2;
+    repeated ToolCall tool_calls = 3;
+    optional Usage usage = 4;
+    optional string model = 5;
+    FinishReason finish_reason = 6;
+}
+
+message ChatEvent {
+    oneof event {
+        string content = 1;
+        string reasoning = 2;
+        ToolCallStart tool_call_start = 3;
+        ToolCallDelta tool_call_delta = 4;
+        Usage usage = 5;
+        bool done = 6;
+    }
+}
+
+message ToolCallStart {
+    uint32 index = 1;
+    string id = 2;
+    string name = 3;
+}
+
+message ToolCallDelta {
+    uint32 index = 1;
+    string arguments = 2;
+}
+
+// =============================================================================
+// Generation Types
+// =============================================================================
+
+message GenerateRequest {
+    string prompt = 1;
+    GenerateOptions options = 2;
+}
+
+message GenerateOptions {
+    string model = 1;
+    optional uint32 max_tokens = 2;
+    optional float temperature = 3;
+    optional float top_p = 4;
+    repeated string stop_sequences = 5;
+}
+
+message GenerateResponse {
+    string text = 1;
+    optional Usage usage = 2;
+    optional string model = 3;
+    FinishReason finish_reason = 4;
+}
+
+message GenerateEvent {
+    oneof event {
+        string text = 1;
+        bool done = 2;
+    }
+}
+
+// =============================================================================
+// Embedding Types
+// =============================================================================
+
+message EmbedRequest {
+    string text = 1;
+    string model = 2;
+}
+
+message EmbedResponse {
+    repeated float values = 1;
+    string model = 2;
+    uint32 dimensions = 3;
+}
+
+message EmbedBatchRequest {
+    repeated string texts = 1;
+    string model = 2;
+}
+
+message EmbedBatchResponse {
+    repeated Embedding embeddings = 1;
+}
+
+message Embedding {
+    repeated float values = 1;
+    string model = 2;
+    uint32 dimensions = 3;
+}
+
+// =============================================================================
+// NLI Types
+// =============================================================================
+
+message NliRequest {
+    string premise = 1;
+    string hypothesis = 2;
+    string model = 3;
+}
+
+message NliResponse {
+    float entailment = 1;
+    float contradiction = 2;
+    float neutral = 3;
+    NliLabel label = 4;
+}
+
+enum NliLabel {
+    NLI_LABEL_UNSPECIFIED = 0;
+    NLI_LABEL_ENTAILMENT = 1;
+    NLI_LABEL_CONTRADICTION = 2;
+    NLI_LABEL_NEUTRAL = 3;
+}
+
+message NliBatchRequest {
+    repeated NliPair pairs = 1;
+    string model = 2;
+}
+
+message NliPair {
+    string premise = 1;
+    string hypothesis = 2;
+}
+
+message NliBatchResponse {
+    repeated NliResponse results = 1;
+}
+
+// =============================================================================
+// Classification Types
+// =============================================================================
+
+message ClassifyRequest {
+    string text = 1;
+    repeated string labels = 2;
+    string model = 3;
+}
+
+message ClassifyResponse {
+    map<string, float> scores = 1;
+    string top_label = 2;
+    float confidence = 3;
+}
+
+message StanceRequest {
+    string text = 1;
+    string target = 2;
+    string model = 3;
+}
+
+message StanceResponse {
+    float favor = 1;
+    float against = 2;
+    float neutral = 3;
+    StanceLabel label = 4;
+    string target = 5;
+}
+
+enum StanceLabel {
+    STANCE_LABEL_UNSPECIFIED = 0;
+    STANCE_LABEL_FAVOR = 1;
+    STANCE_LABEL_AGAINST = 2;
+    STANCE_LABEL_NEUTRAL = 3;
+}
+
+// =============================================================================
+// Tokenization Types
+// =============================================================================
+
+message TokenCountRequest {
+    string text = 1;
+    string model = 2;
+}
+
+message TokenCountResponse {
+    uint32 count = 1;
+}
+
+message TokenizeRequest {
+    string text = 1;
+    string model = 2;
+}
+
+message TokenizeResponse {
+    repeated Token tokens = 1;
+}
+
+message Token {
+    uint32 id = 1;
+    string text = 2;
+    uint32 start = 3;
+    uint32 end = 4;
+}
+
+// =============================================================================
+// Model Management Types
+// =============================================================================
+
+message ListModelsRequest {}
+
+message ListModelsResponse {
+    repeated ModelInfo models = 1;
+}
+
+message ModelInfo {
+    string id = 1;
+    string provider = 2;
+    repeated ModelCapability capabilities = 3;
+    optional uint32 context_window = 4;
+    optional uint32 dimensions = 5;
+}
+
+enum ModelCapability {
+    MODEL_CAPABILITY_UNSPECIFIED = 0;
+    MODEL_CAPABILITY_CHAT = 1;
+    MODEL_CAPABILITY_GENERATE = 2;
+    MODEL_CAPABILITY_EMBED = 3;
+    MODEL_CAPABILITY_NLI = 4;
+    MODEL_CAPABILITY_CLASSIFY = 5;
+}
+
+message ModelStatusRequest {
+    string model = 1;
+}
+
+message ModelStatusResponse {
+    ModelStatus status = 1;
+    optional string reason = 2;  // For unavailable status
+}
+
+enum ModelStatus {
+    MODEL_STATUS_UNSPECIFIED = 0;
+    MODEL_STATUS_AVAILABLE = 1;
+    MODEL_STATUS_LOADING = 2;
+    MODEL_STATUS_READY = 3;
+    MODEL_STATUS_UNAVAILABLE = 4;
+}
+
+// =============================================================================
+// Health Types
+// =============================================================================
+
+message HealthRequest {}
+
+message HealthResponse {
+    bool healthy = 1;
+    string version = 2;
+    optional string git_sha = 3;
+}
