@@ -15,9 +15,9 @@
 - [x] Task 4: gRPC Service Implementation (83d6712)
 - [x] Task 5: Configuration Types (83d6712)
 - [x] Task 6: ratd Binary (83d6712)
-- [ ] Task 7: ServiceClient (Client Library)
-- [ ] Task 8: rat CLI Binary
-- [ ] Task 9: systemd Unit File
+- [x] Task 7: ServiceClient (Client Library)
+- [x] Task 8: rat CLI Binary
+- [x] Task 9: systemd Unit File
 - [ ] Task 10: Integration Tests
 - [ ] Task 11: Update Documentation
 - [ ] Task 12: Final Verification
@@ -29,6 +29,9 @@
 - `ModelCapability::Stance` maps to `MODEL_CAPABILITY_CLASSIFY` in proto (proto has 5 variants, native has 6)
 - Streaming methods return `GrpcResult<Self::XStream>` not `GrpcResult<Response<Self::XStream>>` — tonic trait already wraps in `Response`
 - `dirs` kept optional (gated by both `server` and `local-inference` features) rather than unconditional as plan suggested
+- Proto↔native conversions centralized in `server::convert` as single source of truth (plan had client-side copies in `service_client.rs`)
+- Client request building uses `From` trait impls instead of freestanding `to_proto_*` functions
+- `server` module gated with `#[cfg(any(feature = "server", feature = "client"))]` — both features share proto types and conversions; `config` and `service` submodules gated to `server` only
 
 ---
 
