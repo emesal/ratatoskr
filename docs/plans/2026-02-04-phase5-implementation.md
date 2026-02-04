@@ -8,6 +8,26 @@
 
 **Tech Stack:** tonic, prost, prost-build, clap, toml, tokio
 
+**Progress:**
+- [x] Task 1: Add gRPC Dependencies (f628cf2)
+- [x] Task 2: Create Protobuf Service Definition (2b735d8)
+- [x] Task 3: Proto Conversion Module (0941da0)
+- [ ] Task 4: gRPC Service Implementation
+- [ ] Task 5: Configuration Types
+- [ ] Task 6: ratd Binary
+- [ ] Task 7: ServiceClient (Client Library)
+- [ ] Task 8: rat CLI Binary
+- [ ] Task 9: systemd Unit File
+- [ ] Task 10: Integration Tests
+- [ ] Task 11: Update Documentation
+- [ ] Task 12: Final Verification
+
+**Implementation Notes:**
+- `tonic-build` added as unconditional build-dep (build-deps can't be feature-gated); usage gated via `#[cfg]` in build.rs instead
+- `server` feature includes `dep:dirs` for config path resolution
+- `protoc` needed at build time — installed locally to `~/.local/bin/`
+- `ModelCapability::Stance` maps to `MODEL_CAPABILITY_CLASSIFY` in proto (proto has 5 variants, native has 6)
+
 ---
 
 ## Task 1: Add gRPC Dependencies
