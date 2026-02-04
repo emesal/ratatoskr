@@ -12,9 +12,9 @@
 - [x] Task 1: Add gRPC Dependencies (f628cf2)
 - [x] Task 2: Create Protobuf Service Definition (2b735d8)
 - [x] Task 3: Proto Conversion Module (0941da0)
-- [ ] Task 4: gRPC Service Implementation
-- [ ] Task 5: Configuration Types
-- [ ] Task 6: ratd Binary
+- [x] Task 4: gRPC Service Implementation (83d6712)
+- [x] Task 5: Configuration Types (83d6712)
+- [x] Task 6: ratd Binary (83d6712)
 - [ ] Task 7: ServiceClient (Client Library)
 - [ ] Task 8: rat CLI Binary
 - [ ] Task 9: systemd Unit File
@@ -27,6 +27,8 @@
 - `server` feature includes `dep:dirs` for config path resolution
 - `protoc` needed at build time — installed locally to `~/.local/bin/`
 - `ModelCapability::Stance` maps to `MODEL_CAPABILITY_CLASSIFY` in proto (proto has 5 variants, native has 6)
+- Streaming methods return `GrpcResult<Self::XStream>` not `GrpcResult<Response<Self::XStream>>` — tonic trait already wraps in `Response`
+- `dirs` kept optional (gated by both `server` and `local-inference` features) rather than unconditional as plan suggested
 
 ---
 
