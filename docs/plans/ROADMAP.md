@@ -1,6 +1,6 @@
 # Ratatoskr Roadmap
 
-> From chibi extraction to unified model gateway.
+> from chibi extraction to unified model gateway — and beyond.
 
 This document sketches the full implementation path for ratatoskr, including significant considerations, open questions, and decision points at each phase.
 
@@ -9,17 +9,19 @@ This document sketches the full implementation path for ratatoskr, including sig
 ## Phase Overview
 
 ```
-Phase 1: OpenRouter Chat          ←── You are here
+Phase 1: OpenRouter Chat                    ✓
     ↓
-Phase 2: Additional Providers
+Phase 2: Additional Providers               ✓
     ↓
-Phase 3: Embeddings & Classification
+Phase 3: Embeddings & Classification        ✓
     ↓
-Phase 4: Local Inference (ONNX)
+Phase 4: Local Inference (ONNX)             ✓
     ↓
-Phase 5: Service Mode
+Phase 5: Service Mode                       ✓
     ↓
-Phase 6: Advanced Features
+Phase 6: Model Intelligence & Parameters    ←── You are here
+    ↓
+Phase 7: Operational Hardening
 ```
 
 ---
@@ -506,28 +508,172 @@ ratatoskr chat "What is 2+2?"
    - Prometheus metrics endpoint
    - OpenTelemetry tracing
    - Structured logging
-   - **Recommendation**: Start with structured logging, add metrics in Phase 6
+   - **Recommendation**: Start with structured logging, add metrics in Phase 7
 
 ---
 
-## Phase 6: Advanced Features
+## Phase 6: Model Intelligence & Parameter Surface
 
-**Goal**: Polish and production-readiness.
+**Goal**: Give consumers (örlög, chibi) full visibility into model capabilities and control over the complete parameter surface.
 
-### 6a: Caching Layer
+**Motivation**: örlög's prompt compilation pipeline needs to jointly optimise token-level controls (temperature, top_p, top_k, penalties) and semantic-level controls (retrieval, compression, viscosity). This requires ratatoskr to expose *what parameters exist*, *whether they're mutable*, and *what ranges they accept* — per model, per provider. Separately, chibi needs model discovery and a sensible registry of known models. Both needs converge on the same infrastructure.
 
-**Response caching**:
-- Cache deterministic responses (embeddings, possibly NLI)
-- Key: hash(model + input)
-- Configurable TTL and size limits
-- Skip for non-deterministic operations (chat with temperature > 0)
+**See also**:
+- [chibi#87](https://github.com/emesal/chibi/issues/87) — model-info CLI command
+- [chibi#88](https://github.com/emesal/chibi/issues/88) — embedded model registry with auto-update
+- [chibi#109](https://github.com/emesal/chibi/issues/109) — missing API parameter passthrough
+- örlög 4th iteration: `prompt-compilation-synthesis.md` §IV (the complete control surface)
 
-**Implementation options**:
-- In-memory LRU cache (embedded mode)
-- Redis/similar (service mode, shared cache)
-- **Recommendation**: In-memory first, external cache later
+### 6a: `GenerateOptions` Parity
 
-### 6b: Retry Logic
+`GenerateOptions` currently has only 5 fields (model, max_tokens, temperature, top_p, stop_sequences). `ChatOptions` has 13. Bring `GenerateOptions` to parity:
+
+```rust
+pub struct GenerateOptions {
+    pub model: String,
+    pub max_tokens: Option<usize>,
+    pub temperature: Option<f32>,
+    pub top_p: Option<f32>,
+    pub top_k: Option<usize>,               // new
+    pub stop_sequences: Vec<String>,
+    pub frequency_penalty: Option<f32>,      // new
+    pub presence_penalty: Option<f32>,       // new
+    pub seed: Option<u64>,                   // new
+    pub reasoning: Option<ReasoningConfig>,  // new
+}
+```
+
+Also add `top_k: Option<usize>` to `ChatOptions`. Update proto definitions and `server::convert` for both.
+
+**Touches**: `types/generate.rs`, `types/options.rs`, `proto/ratatoskr.proto`, `server/convert.rs`, provider implementations, tests.
+
+### 6b: Parameter Metadata & Model Introspection
+
+The core architectural addition. Expose per-model, per-parameter availability as a queryable API.
+
+**Types**:
+```rust
+/// How a parameter is exposed for a given model.
+pub enum ParameterAvailability {
+    /// Consumer can set this freely within range.
+    Mutable { range: ParameterRange },
+    /// Value is fixed by the provider/model.
+    ReadOnly { value: serde_json::Value },
+    /// Parameter exists but availability is unknown.
+    Opaque,
+    /// Parameter is not supported by this model.
+    Unsupported,
+}
+
+pub struct ParameterRange {
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub default: Option<f64>,
+}
+
+/// Extended model metadata beyond ModelInfo.
+pub struct ModelMetadata {
+    pub info: ModelInfo,
+    pub parameters: HashMap<String, ParameterAvailability>,
+    pub pricing: Option<PricingInfo>,
+    pub max_output_tokens: Option<usize>,
+}
+
+pub struct PricingInfo {
+    pub prompt_cost_per_mtok: Option<f64>,
+    pub completion_cost_per_mtok: Option<f64>,
+}
+```
+
+**New trait method on `ModelGateway`**:
+```rust
+async fn model_metadata(&self, model: &str) -> Result<ModelMetadata>;
+```
+
+**Key considerations**:
+
+1. **Parameter naming**: Use canonical string keys matching `ChatOptions`/`GenerateOptions` field names (`"temperature"`, `"top_k"`, `"frequency_penalty"`). This gives consumers a uniform namespace to query.
+
+2. **Provider responsibility**: Each provider reports what it supports. `LlmChatProvider` would report the parameters the `llm` crate exposes; `HuggingFaceProvider` would report what the inference API accepts.
+
+3. **örlög's control surface**: örlög's Weaver uses this to determine which tier 1 (token-level) knobs are available, then combines with tier 2 (semantic-level) controls that are always available. The `Mutable { range }` / `ReadOnly` / `Opaque` distinction maps directly to örlög's needs.
+
+4. **Proto representation**: `ParameterAvailability` as a proto oneof, `ModelMetadata` as a new message, new `ModelMetadata` RPC.
+
+### 6c: Model Registry
+
+Centralised model knowledge, shared across consumers.
+
+**Embedded defaults**: Ship a compiled-in registry of common models (OpenRouter catalogue, HuggingFace popular models) with known parameter ranges, context windows, pricing. This is the fallback when no API is reachable.
+
+**Live refresh**: On startup (and optionally periodically), fetch model metadata from provider APIs:
+- OpenRouter: `GET /api/v1/models` — rich metadata including reasoning support, limits, pricing
+- HuggingFace: model cards for capability detection
+- Ollama: `GET /api/tags` for locally available models
+
+**Merge strategy**: Live data overrides embedded defaults. Embedded defaults cover models the live API doesn't know about (e.g., local ONNX models).
+
+**Consumer benefits**:
+- chibi: `model_metadata()` replaces the need for a chibi-specific registry (chibi#88) and powers model-info display (chibi#87)
+- örlög: Weaver queries parameter availability before constructing Re presets
+
+**Key considerations**:
+
+1. **Staleness**: Embedded registry will lag. Accept this — it's a fallback, not the source of truth.
+
+2. **Scope**: Start with chat/generate models (highest consumer demand), extend to embedding/NLI models as needed.
+
+3. **Storage**: In-memory `HashMap<String, ModelMetadata>` behind an `Arc<RwLock<>>`. Registry refreshes swap atomically.
+
+4. **Feature gating**: The embedded registry is always available. Live refresh is behind a `model-registry` feature flag to avoid pulling in extra HTTP machinery for consumers that don't need it.
+
+### 6d: Parameter Validation
+
+Currently, providers silently ignore unsupported parameters. This is a footgun.
+
+**Approach**: When a request includes a parameter the provider doesn't support, behaviour should be configurable:
+- `Warn` (default): Log a warning, proceed without the parameter
+- `Error`: Return `RatatoskrError::UnsupportedParameter { param, model, provider }`
+- `Ignore`: Current behaviour, for backwards compatibility
+
+**Implementation**: Providers already have `name()`. Add a `supported_parameters()` method to provider traits. The registry checks parameters against support before dispatching.
+
+```rust
+pub trait ChatProvider: Send + Sync {
+    fn name(&self) -> &str;
+    fn supported_chat_parameters(&self) -> &[&str] {
+        &[]  // default: no declaration (legacy behaviour)
+    }
+    // ...
+}
+```
+
+**Key consideration**: This is opt-in. Providers that don't override `supported_chat_parameters()` get legacy (silent ignore) behaviour. As providers are updated to declare support, validation activates.
+
+### 6e: Proto & Escape Hatch Updates
+
+Synchronise proto definitions with all type changes:
+- Add `top_k` to proto `ChatOptions`
+- Add new fields to proto `GenerateOptions`
+- Add `ModelMetadata` message and `ModelMetadata` RPC
+- Add `ParameterAvailability` as proto oneof
+- Add `raw_provider_options` as `optional string` (JSON) to proto `ChatOptions` — the escape hatch currently exists in the Rust type but not in proto, meaning gRPC clients can't use it
+
+### Phase 6 Questions
+
+1. **Registry freshness**: How often should live refresh run? On startup only, or periodic (e.g., hourly)?
+2. **Parameter namespace**: Should we use a `ParameterName` enum or keep string keys for extensibility?
+3. **Embedded registry format**: Compiled-in Rust data or `include_str!` of a TOML/JSON file?
+
+---
+
+## Phase 7: Operational Hardening
+
+**Goal**: Production-readiness — reliability, observability, performance.
+
+**Prerequisite**: Phase 6 provides the model metadata that caching and routing need to make intelligent decisions.
+
+### 7a: Retry Logic
 
 **Smart retry for transient failures**:
 ```rust
@@ -549,28 +695,9 @@ pub struct RetryConfig {
 - Authentication failures
 - Model not found
 
-### 6c: Request Routing
+**Note**: Independent of Phase 6 — can be implemented early or in parallel.
 
-**Multi-provider routing**:
-```rust
-pub struct Router {
-    routes: HashMap<Capability, Vec<ProviderConfig>>,
-}
-
-impl Router {
-    pub fn select(&self, capability: Capability) -> &ProviderConfig {
-        // Try primary, fall back to alternatives
-    }
-}
-```
-
-**Routing strategies**:
-- Priority-based (try in order until success)
-- Cost-based (prefer cheaper providers)
-- Latency-based (prefer faster providers)
-- Load-balanced (distribute across providers)
-
-### 6d: Streaming Backpressure
+### 7b: Streaming Backpressure
 
 **Current**: Stream produces events as fast as provider sends them.
 
@@ -582,19 +709,59 @@ let (tx, rx) = tokio::sync::mpsc::channel(100);  // Bounded
 // Producer blocks when channel full
 ```
 
-### 6e: Telemetry
+**Note**: Independent of Phase 6 — can be implemented early or in parallel.
+
+### 7c: Caching Layer
+
+**Response caching** — now with parameter awareness from Phase 6:
+- Cache deterministic responses (embeddings, NLI, chat with temperature = 0)
+- Key: `hash(model + input + determinism-relevant-params)`
+- Use `ModelMetadata.parameters` to determine which params affect determinism
+- Configurable TTL and size limits
+
+**Implementation options**:
+- In-memory LRU cache (embedded mode)
+- Redis/similar (service mode, shared cache)
+- **Recommendation**: In-memory first, external cache later
+
+**Depends on**: Phase 6b (parameter metadata) for correct cache key construction.
+
+### 7d: Advanced Request Routing
+
+**Multi-provider routing** — now with model metadata from Phase 6:
+```rust
+pub struct Router {
+    routes: HashMap<Capability, Vec<ProviderConfig>>,
+}
+```
+
+**Routing strategies** (require Phase 6 metadata):
+- Cost-based (use `PricingInfo` from model metadata)
+- Capability-based (route based on parameter support)
+- Priority-based (try in order until success — already works via `ProviderRegistry`)
+
+**Routing strategies** (independent):
+- Latency-based (measure and prefer faster providers)
+- Load-balanced (distribute across providers)
+
+**Depends on**: Phase 6b–6c (model metadata, registry) for cost-based and capability-based routing.
+
+### 7e: Telemetry
 
 **Metrics** (Prometheus-style):
 - `ratatoskr_requests_total{provider, operation, status}`
 - `ratatoskr_request_duration_seconds{provider, operation}`
 - `ratatoskr_tokens_total{provider, direction}`  // prompt vs completion
 - `ratatoskr_model_memory_bytes{model}`
+- `ratatoskr_registry_models_total{provider}` — model registry size
 
 **Tracing** (OpenTelemetry):
 - Trace IDs propagated through requests
 - Spans for provider calls, model inference
 
-### Phase 6 Questions
+**Note**: Basic telemetry is independent. Model-enriched metrics benefit from Phase 6.
+
+### Phase 7 Questions
 
 1. **Caching scope**: Should cache be per-gateway or shared (service mode)?
 2. **Retry configuration**: Per-provider or global?
@@ -608,13 +775,13 @@ let (tx, rx) = tokio::sync::mpsc::channel(100);  // Bounded
 
 **Unit tests**: Type conversions, builder logic, error handling
 
-**Integration tests** (recorded responses): Provider-specific parsing, streaming behavior
+**Integration tests** (recorded responses): Provider-specific parsing, streaming behaviour
 
 **Contract tests**: Verify provider responses match expected schema
 
 **Live tests** (manual/CI-excluded): Actual API calls for smoke testing
 
-**Load tests** (Phase 5+): Service mode performance characterization
+**Load tests** (Phase 5+): Service mode performance characterisation
 
 ### Documentation
 
@@ -636,7 +803,7 @@ Follow semver. The `ModelGateway` trait is the stability boundary:
 ### Security Considerations
 
 1. **API key handling**: Never log keys, clear from memory when possible
-2. **Input validation**: Sanitize before sending to providers
+2. **Input validation**: Sanitise before sending to providers
 3. **TLS**: Always use HTTPS for remote providers
 4. **Socket permissions**: Unix socket should have appropriate permissions
 
@@ -650,7 +817,7 @@ Follow semver. The `ModelGateway` trait is the stability boundary:
 |-------|---------|-------|
 | `tokio` | Async runtime | Features vary by phase |
 | `reqwest` | HTTP client | `rustls-tls` for portability |
-| `serde` / `serde_json` | Serialization | |
+| `serde` / `serde_json` | Serialisation | |
 | `thiserror` | Error types | |
 | `async-trait` | Async trait support | |
 | `futures-util` | Stream utilities | |
@@ -662,9 +829,9 @@ Follow semver. The `ModelGateway` trait is the stability boundary:
 | 4 | `ort` | ONNX Runtime |
 | 4 | `tokenizers` | HF tokenizers |
 | 4 | `hf-hub` | Model downloading |
-| 5 | `tonic` + `prost` | gRPC (if chosen) |
-| 6 | `metrics` | Prometheus metrics |
-| 6 | `tracing` | Distributed tracing |
+| 5 | `tonic` + `prost` | gRPC |
+| 7 | `metrics` | Prometheus metrics |
+| 7 | `tracing` | Distributed tracing |
 
 ### Dependency Concerns
 
@@ -681,28 +848,26 @@ Follow semver. The `ModelGateway` trait is the stability boundary:
 
 ## Open Questions Summary
 
-### Architectural
+### Resolved
 
-1. **Protocol**: JSON or gRPC for service mode?
-2. **Provider selection**: Compile-time features, runtime config, or both?
-3. **Embedded + ONNX**: Support local inference in embedded mode?
+| # | Question | Resolution | Phase |
+|---|----------|------------|-------|
+| 1 | Protocol: JSON or gRPC? | gRPC (tonic + prost) | 5 |
+| 2 | Provider selection: compile-time or runtime? | Compile-time features + runtime registry | 2–5 |
+| 3 | Embedded + ONNX? | Yes, behind `local-inference` feature | 3–4 |
+| 4 | Model defaults? | Explicit selection required | 3 |
+| 5 | LLM fallback for embed/NLI? | Explicit opt-in via provider priority | 3–4 |
+| 10 | örlög coordination? | Yes — Phase 6 addresses örlög's control surface needs | 6 |
+| 11 | chibi compatibility? | Yes — Phase 6 addresses chibi#87, #88, #109 | 6 |
 
-### Design
+### Open
 
-4. **Model defaults**: Built-in defaults or require explicit selection?
-5. **LLM fallback**: Auto-fallback for embed/NLI when no dedicated model?
 6. **Caching scope**: Per-gateway, per-process, or external (Redis)?
-
-### Operational
-
 7. **Multi-tenancy**: One service supporting multiple API keys?
 8. **Hot reload**: Config changes without restart?
 9. **Memory budget**: Automatic model eviction or manual management?
-
-### Integration
-
-10. **örlög coordination**: Does örlög need features beyond what's planned?
-11. **chibi compatibility**: Any chibi features that need special ratatoskr support?
+12. **Registry freshness**: How often should live model metadata refresh run?
+13. **Parameter namespace**: Enum or string keys for parameter names?
 
 ---
 
@@ -710,24 +875,12 @@ Follow semver. The `ModelGateway` trait is the stability boundary:
 
 | Milestone | Phase | Key Deliverable |
 |-----------|-------|-----------------|
-| M1 | 1 | Chibi using ratatoskr for chat |
-| M2 | 2 | Second provider working (HF or Ollama) |
-| M3 | 3 | Embeddings via API |
-| M4 | 4 | Local ONNX embeddings |
+| M1 | 1 | chibi using ratatoskr for chat |
+| M2 | 2 | Second provider working (HF) |
+| M3 | 3 | Embeddings & NLI via API |
+| M4 | 4 | Local ONNX embeddings & NLI |
 | M5 | 5 | Service mode operational |
-| M6 | 5 | örlög integration complete |
-| M7 | 6 | Production-ready with metrics/caching |
-
----
-
-## Notes for Collaborator Discussion
-
-Key decisions that benefit from early alignment:
-
-1. **Phase 2 priority**: Hugging Face or Ollama first? HF has more capabilities, Ollama is simpler.
-
-2. **Service mode protocol**: JSON (simpler) or gRPC (more structured)?
-
-3. **örlög requirements**: Any capabilities needed that aren't in this roadmap?
-
-4. **Timeline dependencies**: Does örlög development block on any specific ratatoskr phase?
+| M6 | 6 | Model metadata API, parameter surface complete |
+| M7 | 6 | chibi integration (model-info, registry, full passthrough) |
+| M8 | 6 | örlög control surface enabled (parameter introspection) |
+| M9 | 7 | Production-ready with caching, routing, telemetry |

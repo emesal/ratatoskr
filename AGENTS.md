@@ -197,4 +197,5 @@ Live tests require a running ratd instance with valid API keys.
 - Phase 2: HuggingFace provider (embeddings, NLI, classification) ✓
 - Phase 3-4: Local inference (embeddings, NLI, tokenizers, generate) ✓
 - Phase 5: Service mode (gRPC daemon + CLI client) ✓
-- Phase 6: Caching, metrics, advanced routing
+- Phase 6: Model intelligence & parameter surface (metadata, registry, validation)
+- Phase 7: Operational hardening (caching, retry, routing, telemetry)
