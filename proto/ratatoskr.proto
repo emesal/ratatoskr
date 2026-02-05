@@ -33,6 +33,7 @@ service Ratatoskr {
     // Model management
     rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
     rpc ModelStatus(ModelStatusRequest) returns (ModelStatusResponse);
+    rpc GetModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
 
     // Service health
     rpc Health(HealthRequest) returns (HealthResponse);
@@ -106,6 +107,9 @@ message ChatOptions {
     optional ResponseFormat response_format = 10;
     optional bool cache_prompt = 11;
     optional ReasoningConfig reasoning = 12;
+    optional uint32 top_k = 13;
+    // Escape hatch: provider-specific options as JSON string.
+    optional string raw_provider_options = 14;
 }
 
 message ToolChoice {
@@ -190,6 +194,11 @@ message GenerateOptions {
     optional float temperature = 3;
     optional float top_p = 4;
     repeated string stop_sequences = 5;
+    optional uint32 top_k = 6;
+    optional float frequency_penalty = 7;
+    optional float presence_penalty = 8;
+    optional uint64 seed = 9;
+    optional ReasoningConfig reasoning = 10;
 }
 
 message GenerateResponse {
@@ -382,6 +391,85 @@ enum ModelStatus {
     MODEL_STATUS_LOADING = 2;
     MODEL_STATUS_READY = 3;
     MODEL_STATUS_UNAVAILABLE = 4;
+}
+
+// =============================================================================
+// Model Metadata Types (Phase 6)
+// =============================================================================
+//
+// These types support querying model capabilities, parameter availability,
+// and pricing information. The registry merges embedded seed data with
+// live provider data to provide comprehensive model intelligence.
+
+// Request model metadata by model ID.
+message ModelMetadataRequest {
+    // The model identifier (e.g., "claude-sonnet-4", "gpt-4o").
+    string model = 1;
+}
+
+// Response containing model metadata if found.
+message ModelMetadataResponse {
+    // True if the model is known to the registry.
+    bool found = 1;
+    // The model metadata, present only if found is true.
+    optional ProtoModelMetadata metadata = 2;
+}
+
+// Extended model information including parameters, pricing, and limits.
+message ProtoModelMetadata {
+    // Basic model info (id, capabilities, context window).
+    ModelInfo info = 1;
+    // Parameter availability map (which params are mutable, read-only, etc.).
+    repeated ParameterEntry parameters = 2;
+    // Pricing information (cost per million tokens).
+    optional ProtoPricingInfo pricing = 3;
+    // Maximum output tokens the model can generate.
+    optional uint32 max_output_tokens = 4;
+}
+
+// A single parameter name and its availability.
+message ParameterEntry {
+    // Parameter name (e.g., "temperature", "max_tokens", or custom "x-provider-foo").
+    string name = 1;
+    // How this parameter can be used with the model.
+    ProtoParameterAvailability availability = 2;
+}
+
+// Describes how a parameter can be used with a model.
+//
+// - mutable_range: Parameter can be set, optionally with min/max/default bounds.
+// - read_only_json: Parameter has a fixed value (JSON-encoded) that cannot be changed.
+// - opaque: Parameter exists but its constraints are unknown.
+// - unsupported: Parameter is explicitly not supported by this model.
+message ProtoParameterAvailability {
+    oneof kind {
+        // Parameter can be set, with optional numeric constraints.
+        ProtoParameterRange mutable_range = 1;
+        // Parameter has a fixed value (JSON-encoded string).
+        string read_only_json = 2;
+        // Parameter exists but constraints are unknown.
+        bool opaque = 3;
+        // Parameter is explicitly unsupported.
+        bool unsupported = 4;
+    }
+}
+
+// Numeric constraints for a mutable parameter.
+message ProtoParameterRange {
+    // Minimum allowed value (inclusive).
+    optional double min = 1;
+    // Maximum allowed value (inclusive).
+    optional double max = 2;
+    // Default value if not specified.
+    optional double default_value = 3;
+}
+
+// Pricing information for API usage.
+message ProtoPricingInfo {
+    // Cost per million input (prompt) tokens in USD.
+    optional double prompt_cost_per_mtok = 1;
+    // Cost per million output (completion) tokens in USD.
+    optional double completion_cost_per_mtok = 2;
 }
 
 // =============================================================================

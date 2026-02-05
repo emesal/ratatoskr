@@ -50,6 +50,17 @@ pub enum RatatoskrError {
     #[error("provider does not support this operation")]
     Unsupported,
 
+    /// Parameter is not supported by the target model/provider.
+    ///
+    /// Returned when validation policy is `Error` and a request contains
+    /// parameters the provider doesn't support.
+    #[error("unsupported parameter '{param}' for model '{model}' (provider: {provider})")]
+    UnsupportedParameter {
+        param: String,
+        model: String,
+        provider: String,
+    },
+
     // Data processing errors
     #[error("data error: {0}")]
     DataError(String),

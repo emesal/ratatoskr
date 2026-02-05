@@ -15,7 +15,7 @@ use llm::completion::CompletionRequest;
 use crate::convert::{from_llm_tool_calls, from_llm_usage, to_llm_messages};
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, FinishReason, GenerateEvent, GenerateOptions,
-    GenerateResponse, Message, ToolDefinition,
+    GenerateResponse, Message, ParameterName, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
 
@@ -259,6 +259,16 @@ impl ChatProvider for LlmChatProvider {
 
         Ok(Box::pin(converted))
     }
+
+    fn supported_chat_parameters(&self) -> Vec<ParameterName> {
+        vec![
+            ParameterName::Temperature,
+            ParameterName::MaxTokens,
+            ParameterName::TopP,
+            ParameterName::Reasoning,
+            ParameterName::Stop,
+        ]
+    }
 }
 
 #[async_trait]
@@ -276,6 +286,11 @@ impl GenerateProvider for LlmChatProvider {
         if let Some(max) = options.max_tokens {
             chat_options = chat_options.max_tokens(max);
         }
+        if let Some(p) = options.top_p {
+            chat_options = chat_options.top_p(p);
+        }
+        // top_k, frequency_penalty, presence_penalty, seed, reasoning
+        // are not yet passed to llm crate — tracked for future provider updates
 
         // Build provider without tools
         let provider = self.build_provider(&chat_options, None, None)?;
@@ -318,6 +333,9 @@ impl GenerateProvider for LlmChatProvider {
         if let Some(max) = options.max_tokens {
             chat_options = chat_options.max_tokens(max);
         }
+        if let Some(p) = options.top_p {
+            chat_options = chat_options.top_p(p);
+        }
 
         // Get streaming chat response
         let chat_stream = self.chat_stream(&messages, None, &chat_options).await?;
@@ -333,6 +351,15 @@ impl GenerateProvider for LlmChatProvider {
         });
 
         Ok(Box::pin(generate_stream))
+    }
+
+    fn supported_generate_parameters(&self) -> Vec<ParameterName> {
+        vec![
+            ParameterName::Temperature,
+            ParameterName::MaxTokens,
+            ParameterName::TopP,
+            ParameterName::Stop,
+        ]
     }
 }
 

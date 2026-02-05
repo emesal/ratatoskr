@@ -5,7 +5,10 @@
 //! OPENROUTER_API_KEY=sk-or-xxx cargo test --test generate_test -- --ignored
 //! ```
 
-use ratatoskr::{FinishReason, GenerateEvent, GenerateOptions, GenerateResponse};
+use ratatoskr::{
+    FinishReason, GenerateEvent, GenerateOptions, GenerateResponse, ReasoningConfig,
+    ReasoningEffort,
+};
 
 // ============================================================================
 // GenerateOptions Tests
@@ -66,6 +69,63 @@ fn test_generate_options_serialization() {
     assert!(json.contains("\"model\":\"model\""));
     assert!(json.contains("\"max_tokens\":50"));
     assert!(json.contains("\"temperature\":0.5"));
+}
+
+#[test]
+fn test_generate_options_new_fields() {
+    let opts = GenerateOptions::new("llama3")
+        .top_k(40)
+        .frequency_penalty(0.5)
+        .presence_penalty(0.3)
+        .seed(42)
+        .reasoning(ReasoningConfig {
+            effort: Some(ReasoningEffort::High),
+            max_tokens: None,
+            exclude_from_output: None,
+        });
+
+    assert_eq!(opts.top_k, Some(40));
+    assert_eq!(opts.frequency_penalty, Some(0.5));
+    assert_eq!(opts.presence_penalty, Some(0.3));
+    assert_eq!(opts.seed, Some(42));
+    assert!(opts.reasoning.is_some());
+}
+
+#[test]
+fn test_generate_options_serde_with_new_fields() {
+    let opts = GenerateOptions::new("test")
+        .top_k(50)
+        .frequency_penalty(0.1)
+        .seed(123);
+
+    let json = serde_json::to_string(&opts).unwrap();
+    let parsed: GenerateOptions = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(parsed.top_k, Some(50));
+    assert_eq!(parsed.frequency_penalty, Some(0.1));
+    assert_eq!(parsed.seed, Some(123));
+}
+
+#[test]
+fn test_generate_options_backwards_compatible() {
+    // existing fields still work
+    let opts = GenerateOptions::new("model")
+        .max_tokens(100)
+        .temperature(0.7)
+        .top_p(0.9)
+        .stop_sequence("END");
+
+    assert_eq!(opts.max_tokens, Some(100));
+    assert_eq!(opts.temperature, Some(0.7));
+    assert_eq!(opts.top_p, Some(0.9));
+    assert_eq!(opts.stop_sequences, vec!["END".to_string()]);
+
+    // new fields default to None
+    assert!(opts.top_k.is_none());
+    assert!(opts.frequency_penalty.is_none());
+    assert!(opts.presence_penalty.is_none());
+    assert!(opts.seed.is_none());
+    assert!(opts.reasoning.is_none());
 }
 
 // ============================================================================

@@ -4,10 +4,13 @@
 //! Server uses native→proto for responses and proto→native for requests.
 //! Client uses the inverse directions.
 
+use std::collections::HashMap;
+
 use crate::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason, GenerateEvent,
     GenerateOptions, GenerateResponse, Message, MessageContent, ModelCapability, ModelInfo,
-    ModelStatus, NliLabel, NliResult, ReasoningConfig, ReasoningEffort, ResponseFormat, Role,
+    ModelMetadata, ModelStatus, NliLabel, NliResult, ParameterAvailability, ParameterName,
+    ParameterRange, PricingInfo, ReasoningConfig, ReasoningEffort, ResponseFormat, Role,
     StanceLabel, StanceResult, Token, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 
@@ -69,6 +72,7 @@ impl From<proto::ChatOptions> for ChatOptions {
             temperature: p.temperature,
             max_tokens: p.max_tokens.map(|t| t as usize),
             top_p: p.top_p,
+            top_k: p.top_k.map(|k| k as usize),
             stop: if p.stop.is_empty() {
                 None
             } else {
@@ -81,7 +85,9 @@ impl From<proto::ChatOptions> for ChatOptions {
             response_format: p.response_format.map(Into::into),
             cache_prompt: p.cache_prompt,
             reasoning: p.reasoning.map(Into::into),
-            raw_provider_options: None,
+            raw_provider_options: p
+                .raw_provider_options
+                .and_then(|s| serde_json::from_str(&s).ok()),
         }
     }
 }
@@ -136,6 +142,11 @@ impl From<proto::GenerateOptions> for GenerateOptions {
             temperature: p.temperature,
             top_p: p.top_p,
             stop_sequences: p.stop_sequences,
+            top_k: p.top_k.map(|k| k as usize),
+            frequency_penalty: p.frequency_penalty,
+            presence_penalty: p.presence_penalty,
+            seed: p.seed,
+            reasoning: p.reasoning.map(Into::into),
         }
     }
 }
@@ -379,6 +390,69 @@ impl From<ModelStatus> for proto::ModelStatusResponse {
 }
 
 // =============================================================================
+// Native → Proto: Model Metadata (Phase 6)
+// =============================================================================
+
+impl From<ModelMetadata> for proto::ProtoModelMetadata {
+    fn from(m: ModelMetadata) -> Self {
+        proto::ProtoModelMetadata {
+            info: Some(m.info.into()),
+            parameters: m
+                .parameters
+                .into_iter()
+                .map(|(name, avail)| proto::ParameterEntry {
+                    name: name.to_string(),
+                    availability: Some(avail.into()),
+                })
+                .collect(),
+            pricing: m.pricing.map(Into::into),
+            max_output_tokens: m.max_output_tokens.map(|t| t as u32),
+        }
+    }
+}
+
+impl From<ParameterAvailability> for proto::ProtoParameterAvailability {
+    fn from(a: ParameterAvailability) -> Self {
+        let kind = match a {
+            ParameterAvailability::Mutable { range } => {
+                proto::proto_parameter_availability::Kind::MutableRange(range.into())
+            }
+            ParameterAvailability::ReadOnly { value } => {
+                proto::proto_parameter_availability::Kind::ReadOnlyJson(
+                    serde_json::to_string(&value).unwrap_or_default(),
+                )
+            }
+            ParameterAvailability::Opaque => {
+                proto::proto_parameter_availability::Kind::Opaque(true)
+            }
+            ParameterAvailability::Unsupported => {
+                proto::proto_parameter_availability::Kind::Unsupported(true)
+            }
+        };
+        proto::ProtoParameterAvailability { kind: Some(kind) }
+    }
+}
+
+impl From<ParameterRange> for proto::ProtoParameterRange {
+    fn from(r: ParameterRange) -> Self {
+        proto::ProtoParameterRange {
+            min: r.min,
+            max: r.max,
+            default_value: r.default,
+        }
+    }
+}
+
+impl From<PricingInfo> for proto::ProtoPricingInfo {
+    fn from(p: PricingInfo) -> Self {
+        proto::ProtoPricingInfo {
+            prompt_cost_per_mtok: p.prompt_cost_per_mtok,
+            completion_cost_per_mtok: p.completion_cost_per_mtok,
+        }
+    }
+}
+
+// =============================================================================
 // Proto → Native (incoming responses, used by client)
 // =============================================================================
 
@@ -555,6 +629,85 @@ impl From<proto::ModelStatusResponse> for ModelStatus {
 }
 
 // =============================================================================
+// Proto → Native: Model Metadata (Phase 6)
+// =============================================================================
+
+impl From<proto::ProtoModelMetadata> for ModelMetadata {
+    fn from(p: proto::ProtoModelMetadata) -> Self {
+        let info = p.info.map(Into::into).unwrap_or_else(|| ModelInfo {
+            id: String::new(),
+            provider: String::new(),
+            capabilities: vec![],
+            context_window: None,
+            dimensions: None,
+        });
+
+        let parameters: HashMap<ParameterName, ParameterAvailability> = p
+            .parameters
+            .into_iter()
+            .map(|entry| {
+                let name: ParameterName = entry
+                    .name
+                    .parse()
+                    .unwrap_or(ParameterName::Custom(entry.name));
+                let avail = entry
+                    .availability
+                    .map(Into::into)
+                    .unwrap_or(ParameterAvailability::Opaque);
+                (name, avail)
+            })
+            .collect();
+
+        ModelMetadata {
+            info,
+            parameters,
+            pricing: p.pricing.map(Into::into),
+            max_output_tokens: p.max_output_tokens.map(|t| t as usize),
+        }
+    }
+}
+
+impl From<proto::ProtoParameterAvailability> for ParameterAvailability {
+    fn from(p: proto::ProtoParameterAvailability) -> Self {
+        match p.kind {
+            Some(proto::proto_parameter_availability::Kind::MutableRange(r)) => {
+                ParameterAvailability::Mutable { range: r.into() }
+            }
+            Some(proto::proto_parameter_availability::Kind::ReadOnlyJson(s)) => {
+                ParameterAvailability::ReadOnly {
+                    value: serde_json::from_str(&s).unwrap_or(serde_json::Value::Null),
+                }
+            }
+            Some(proto::proto_parameter_availability::Kind::Opaque(_)) => {
+                ParameterAvailability::Opaque
+            }
+            Some(proto::proto_parameter_availability::Kind::Unsupported(_)) | None => {
+                ParameterAvailability::Unsupported
+            }
+        }
+    }
+}
+
+impl From<proto::ProtoParameterRange> for ParameterRange {
+    fn from(p: proto::ProtoParameterRange) -> Self {
+        ParameterRange {
+            min: p.min,
+            max: p.max,
+            default: p.default_value,
+        }
+    }
+}
+
+impl From<proto::ProtoPricingInfo> for PricingInfo {
+    fn from(p: proto::ProtoPricingInfo) -> Self {
+        PricingInfo {
+            prompt_cost_per_mtok: p.prompt_cost_per_mtok,
+            completion_cost_per_mtok: p.completion_cost_per_mtok,
+        }
+    }
+}
+
+// =============================================================================
 // Native → Proto (outgoing requests, used by client)
 // =============================================================================
 
@@ -575,6 +728,7 @@ impl From<ChatOptions> for proto::ChatOptions {
             temperature: o.temperature,
             max_tokens: o.max_tokens.map(|t| t as u32),
             top_p: o.top_p,
+            top_k: o.top_k.map(|k| k as u32),
             stop: o.stop.unwrap_or_default(),
             frequency_penalty: o.frequency_penalty,
             presence_penalty: o.presence_penalty,
@@ -614,6 +768,9 @@ impl From<ChatOptions> for proto::ChatOptions {
                 max_tokens: r.max_tokens.map(|t| t as u32),
                 exclude_from_output: r.exclude_from_output,
             }),
+            raw_provider_options: o
+                .raw_provider_options
+                .and_then(|v| serde_json::to_string(&v).ok()),
         }
     }
 }
@@ -626,6 +783,19 @@ impl From<GenerateOptions> for proto::GenerateOptions {
             temperature: o.temperature,
             top_p: o.top_p,
             stop_sequences: o.stop_sequences,
+            top_k: o.top_k.map(|k| k as u32),
+            frequency_penalty: o.frequency_penalty,
+            presence_penalty: o.presence_penalty,
+            seed: o.seed,
+            reasoning: o.reasoning.map(|r| proto::ReasoningConfig {
+                effort: r.effort.map(|e| match e {
+                    ReasoningEffort::Low => proto::ReasoningEffort::Low as i32,
+                    ReasoningEffort::Medium => proto::ReasoningEffort::Medium as i32,
+                    ReasoningEffort::High => proto::ReasoningEffort::High as i32,
+                }),
+                max_tokens: r.max_tokens.map(|t| t as u32),
+                exclude_from_output: r.exclude_from_output,
+            }),
         }
     }
 }

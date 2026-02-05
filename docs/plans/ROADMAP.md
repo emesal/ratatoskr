@@ -19,9 +19,9 @@ Phase 4: Local Inference (ONNX)             ✓
     ↓
 Phase 5: Service Mode                       ✓
     ↓
-Phase 6: Model Intelligence & Parameters    ←── You are here
+Phase 6: Model Intelligence & Parameters    ✓  (see 2026-02-05-phase6-model-intelligence.md)
     ↓
-Phase 7: Operational Hardening
+Phase 7: Operational Hardening              ←── Next
 ```
 
 ---
@@ -866,8 +866,13 @@ Follow semver. The `ModelGateway` trait is the stability boundary:
 7. **Multi-tenancy**: One service supporting multiple API keys?
 8. **Hot reload**: Config changes without restart?
 9. **Memory budget**: Automatic model eviction or manual management?
-12. **Registry freshness**: How often should live model metadata refresh run?
-13. **Parameter namespace**: Enum or string keys for parameter names?
+
+### Resolved in Phase 6
+
+| # | Question | Resolution |
+|---|----------|------------|
+| 12 | Registry freshness | Startup only (live); periodic deferred to future issue |
+| 13 | Parameter namespace | Hybrid enum: `ParameterName` with well-known variants + `Custom(String)` escape hatch |
 
 ---
 

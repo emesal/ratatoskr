@@ -13,10 +13,11 @@ use futures_util::Stream;
 #[cfg(feature = "local-inference")]
 use crate::Token;
 use crate::providers::ProviderRegistry;
+use crate::registry::ModelRegistry;
 use crate::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, GenerateEvent, GenerateOptions,
-    GenerateResponse, Message, ModelCapability, ModelGateway, ModelInfo, ModelStatus, Result,
-    StanceResult, ToolDefinition,
+    GenerateResponse, Message, ModelCapability, ModelGateway, ModelInfo, ModelMetadata,
+    ModelStatus, Result, StanceResult, ToolDefinition,
 };
 
 #[cfg(feature = "local-inference")]
@@ -30,6 +31,7 @@ use crate::tokenizer::TokenizerRegistry;
 /// the fallback chain (local providers → API providers) automatically.
 pub struct EmbeddedGateway {
     registry: ProviderRegistry,
+    model_registry: ModelRegistry,
     #[cfg(feature = "local-inference")]
     #[allow(dead_code)] // used for model status queries
     model_manager: Arc<ModelManager>,
@@ -38,14 +40,16 @@ pub struct EmbeddedGateway {
 }
 
 impl EmbeddedGateway {
-    /// Create a new EmbeddedGateway with the given registry.
+    /// Create a new EmbeddedGateway with the given registries.
     pub(crate) fn new(
         registry: ProviderRegistry,
+        model_registry: ModelRegistry,
         #[cfg(feature = "local-inference")] model_manager: Arc<ModelManager>,
         #[cfg(feature = "local-inference")] tokenizer_registry: Arc<TokenizerRegistry>,
     ) -> Self {
         Self {
             registry,
+            model_registry,
             #[cfg(feature = "local-inference")]
             model_manager,
             #[cfg(feature = "local-inference")]
@@ -242,5 +246,9 @@ impl ModelGateway for EmbeddedGateway {
             // For API-only mode, always "ready" if provider exists
             ModelStatus::Ready
         }
+    }
+
+    fn model_metadata(&self, model: &str) -> Option<ModelMetadata> {
+        self.model_registry.get(model).cloned()
     }
 }

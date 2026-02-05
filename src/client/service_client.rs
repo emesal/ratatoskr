@@ -1,19 +1,27 @@
 //! [`ServiceClient`] — [`ModelGateway`] implementation that connects to ratd over gRPC.
 //!
 //! All proto ↔ native type conversions are centralized in [`crate::server::convert`].
+//!
+//! # Synchronous Methods
+//!
+//! Several [`ModelGateway`] trait methods are synchronous (`count_tokens`, `tokenize`,
+//! `list_models`, `model_status`, `model_metadata`). Since the underlying gRPC calls
+//! are async, these methods use [`tokio::task::block_in_place`] to safely block
+//! without risking deadlocks when called from within an async context.
 
 use std::pin::Pin;
 
 use async_trait::async_trait;
 use futures_util::{Stream, StreamExt};
+use tokio::task::block_in_place;
 use tonic::transport::Channel;
 
 use crate::server::proto;
 use crate::server::proto::ratatoskr_client::RatatoskrClient;
 use crate::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, ModelGateway, ModelInfo, ModelStatus, NliResult,
-    RatatoskrError, Result, StanceResult, Token, ToolDefinition,
+    GenerateOptions, GenerateResponse, Message, ModelGateway, ModelInfo, ModelMetadata,
+    ModelStatus, NliResult, RatatoskrError, Result, StanceResult, Token, ToolDefinition,
 };
 
 /// A [`ModelGateway`] client that connects to a remote ratd server.
@@ -222,7 +230,7 @@ impl ModelGateway for ServiceClient {
     }
 
     fn count_tokens(&self, text: &str, model: &str) -> Result<usize> {
-        // Synchronous trait method — must block on async gRPC call.
+        // Synchronous trait method — use block_in_place to safely block on async gRPC.
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| RatatoskrError::Configuration("no tokio runtime".into()))?;
 
@@ -231,8 +239,7 @@ impl ModelGateway for ServiceClient {
             model: model.to_string(),
         };
         let mut client = self.inner.clone();
-        let result = rt
-            .block_on(async { client.count_tokens(request).await })
+        let result = block_in_place(|| rt.block_on(async { client.count_tokens(request).await }))
             .map_err(from_status)?;
         Ok(result.into_inner().count as usize)
     }
@@ -246,8 +253,7 @@ impl ModelGateway for ServiceClient {
             model: model.to_string(),
         };
         let mut client = self.inner.clone();
-        let result = rt
-            .block_on(async { client.tokenize(request).await })
+        let result = block_in_place(|| rt.block_on(async { client.tokenize(request).await }))
             .map_err(from_status)?;
         Ok(result
             .into_inner()
@@ -299,7 +305,9 @@ impl ModelGateway for ServiceClient {
         };
 
         let mut client = self.inner.clone();
-        match rt.block_on(async { client.list_models(proto::ListModelsRequest {}).await }) {
+        match block_in_place(|| {
+            rt.block_on(async { client.list_models(proto::ListModelsRequest {}).await })
+        }) {
             Ok(response) => response
                 .into_inner()
                 .models
@@ -324,11 +332,29 @@ impl ModelGateway for ServiceClient {
             model: model.to_string(),
         };
         let mut client = self.inner.clone();
-        match rt.block_on(async { client.model_status(request).await }) {
+        match block_in_place(|| rt.block_on(async { client.model_status(request).await })) {
             Ok(response) => response.into_inner().into(),
             Err(e) => ModelStatus::Unavailable {
                 reason: e.message().to_string(),
             },
+        }
+    }
+
+    fn model_metadata(&self, model: &str) -> Option<ModelMetadata> {
+        let rt = tokio::runtime::Handle::try_current().ok()?;
+
+        let request = proto::ModelMetadataRequest {
+            model: model.to_string(),
+        };
+        let mut client = self.inner.clone();
+        let response =
+            block_in_place(|| rt.block_on(async { client.get_model_metadata(request).await }))
+                .ok()?;
+        let resp = response.into_inner();
+        if resp.found {
+            resp.metadata.map(Into::into)
+        } else {
+            None
         }
     }
 }

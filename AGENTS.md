@@ -2,7 +2,7 @@
 
 Ratatoskr is a unified LLM gateway abstraction layer. The core idea: consumers (chibi, orlog) interact only with the `ModelGateway` trait while the `llm` crate is an internal implementation detail.
 
-**Current Status**: Phase 5 (service mode) complete. See `docs/plans/2026-02-04-phase5-implementation.md` for details.
+**Current Status**: Phase 6 (model intelligence) complete. See `docs/plans/2026-02-05-phase6-model-intelligence.md` for details.
 
 ## Principles
 
@@ -55,8 +55,13 @@ src/
 ├── traits.rs           # ModelGateway trait
 ├── types/              # Message, Tool, ChatOptions, ChatEvent, GenerateOptions, etc.
 │   ├── stance.rs       # StanceResult, StanceLabel
-│   ├── model.rs        # ModelInfo, ModelStatus, ModelCapability
+│   ├── model.rs        # ModelInfo, ModelStatus, ModelCapability, ModelMetadata, PricingInfo
+│   ├── parameter.rs    # ParameterName, ParameterAvailability, ParameterRange
+│   ├── validation.rs   # ParameterValidationPolicy
 │   └── token.rs        # Token (detailed tokenization)
+├── registry/           # Model metadata registry (Phase 6)
+│   ├── mod.rs          # ModelRegistry with layered merge
+│   └── seed.json       # Embedded model metadata (compiled-in fallback)
 ├── gateway/
 │   ├── embedded.rs     # EmbeddedGateway delegating to ProviderRegistry
 │   └── builder.rs      # Ratatoskr::builder()
@@ -95,13 +100,19 @@ contrib/
 
 ### Key Types
 
-- `ModelGateway` — async trait with `chat()`, `chat_stream()`, `embed()`, `infer_nli()`, `classify_stance()`, etc.
+- `ModelGateway` — async trait with `chat()`, `chat_stream()`, `embed()`, `infer_nli()`, `classify_stance()`, `model_metadata()`, etc.
 - `Message` — role (System/User/Assistant/Tool) + content + optional tool_calls
 - `ChatEvent` — streaming events: Content, Reasoning, ToolCallStart, ToolCallDelta, Usage, Done
-- `ChatOptions` — model, temperature, max_tokens, reasoning config, tool_choice, etc.
-- `RatatoskrError` — comprehensive error enum; `ModelNotAvailable` triggers fallback in registry
+- `ChatOptions` — model, temperature, max_tokens, top_k, reasoning config, tool_choice, etc.
+- `GenerateOptions` — model, temperature, max_tokens, top_k, frequency/presence penalty, seed, reasoning
+- `RatatoskrError` — comprehensive error enum; `ModelNotAvailable` triggers fallback, `UnsupportedParameter` for validation errors
 - `StanceResult` — stance detection result (favor/against/neutral scores with label)
-- `ProviderRegistry` — fallback chains per capability (tries providers in priority order)
+- `ProviderRegistry` — fallback chains per capability with opt-in parameter validation
+- `ModelRegistry` — centralized model metadata with layered merge (embedded seed + live data)
+- `ModelMetadata` — extended model info: capabilities, parameters, pricing, max output tokens
+- `ParameterName` — hybrid enum (well-known params + `Custom(String)` escape hatch)
+- `ParameterAvailability` — mutable/read-only/opaque/unsupported per parameter
+- `ParameterValidationPolicy` — warn/error/ignore for unsupported parameters
 - `ServiceClient` — `ModelGateway` impl that forwards to ratd over gRPC (client feature)
 - `RatatoskrService<G>` — wraps any `ModelGateway` behind gRPC handlers (server feature)
 
@@ -161,6 +172,17 @@ With the `server` and `client` features enabled:
 - Separate secrets file (`~/.config/ratatoskr/secrets.toml`) with 0600 permission enforcement
 - Proto conversions centralized in `server::convert` (shared by both server and client)
 
+### Model Intelligence (Phase 6)
+
+- `ModelRegistry` — centralized model metadata with three-layer merge (embedded seed → live → future remote)
+- `model_metadata(model)` — query parameter availability, pricing, context window, max output tokens
+- `ParameterName` — hybrid enum with well-known params + `Custom(String)` for provider-specific options
+- `ParameterAvailability` — mutable (with range), read-only, opaque, or unsupported per parameter
+- `ParameterValidationPolicy` — opt-in validation (warn/error/ignore) when providers declare their supported params
+- `ChatOptions` and `GenerateOptions` at full parity: temperature, top_p, top_k, max_tokens, frequency/presence penalty, seed, reasoning
+- `raw_provider_options` escape hatch for provider-specific JSON options
+- Proto `GetModelMetadata` RPC for remote metadata queries via `ServiceClient`
+
 ## Testing Strategy
 
 1. **Unit tests** — types, conversions, builder (fast, no I/O)
@@ -197,5 +219,5 @@ Live tests require a running ratd instance with valid API keys.
 - Phase 2: HuggingFace provider (embeddings, NLI, classification) ✓
 - Phase 3-4: Local inference (embeddings, NLI, tokenizers, generate) ✓
 - Phase 5: Service mode (gRPC daemon + CLI client) ✓
-- Phase 6: Model intelligence & parameter surface (metadata, registry, validation)
+- Phase 6: Model intelligence & parameter surface (metadata, registry, validation) ✓
 - Phase 7: Operational hardening (caching, retry, routing, telemetry)

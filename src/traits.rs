@@ -6,8 +6,8 @@ use std::pin::Pin;
 
 use crate::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, ModelInfo, ModelStatus, NliResult, RatatoskrError,
-    Result, StanceResult, Token, ToolDefinition,
+    GenerateOptions, GenerateResponse, Message, ModelInfo, ModelMetadata, ModelStatus, NliResult,
+    RatatoskrError, Result, StanceResult, Token, ToolDefinition,
 };
 
 /// The core gateway trait that all implementations must provide.
@@ -132,5 +132,14 @@ pub trait ModelGateway: Send + Sync {
         ModelStatus::Unavailable {
             reason: "Not implemented".into(),
         }
+    }
+
+    // ===== Phase 6: Model intelligence =====
+
+    /// Get extended metadata for a model, including parameter availability.
+    ///
+    /// Returns `None` if the model is not known to the registry.
+    fn model_metadata(&self, _model: &str) -> Option<ModelMetadata> {
+        None
     }
 }
