@@ -15,7 +15,7 @@ use llm::completion::CompletionRequest;
 use crate::convert::{from_llm_tool_calls, from_llm_usage, to_llm_messages};
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, FinishReason, GenerateEvent, GenerateOptions,
-    GenerateResponse, Message, ToolDefinition,
+    GenerateResponse, Message, ParameterName, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
 
@@ -259,6 +259,16 @@ impl ChatProvider for LlmChatProvider {
 
         Ok(Box::pin(converted))
     }
+
+    fn supported_chat_parameters(&self) -> Vec<ParameterName> {
+        vec![
+            ParameterName::Temperature,
+            ParameterName::MaxTokens,
+            ParameterName::TopP,
+            ParameterName::Reasoning,
+            ParameterName::Stop,
+        ]
+    }
 }
 
 #[async_trait]
@@ -341,6 +351,15 @@ impl GenerateProvider for LlmChatProvider {
         });
 
         Ok(Box::pin(generate_stream))
+    }
+
+    fn supported_generate_parameters(&self) -> Vec<ParameterName> {
+        vec![
+            ParameterName::Temperature,
+            ParameterName::MaxTokens,
+            ParameterName::TopP,
+            ParameterName::Stop,
+        ]
     }
 }
 

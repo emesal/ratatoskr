@@ -107,6 +107,8 @@ message ChatOptions {
     optional bool cache_prompt = 11;
     optional ReasoningConfig reasoning = 12;
     optional uint32 top_k = 13;
+    // Escape hatch: provider-specific options as JSON string.
+    optional string raw_provider_options = 14;
 }
 
 message ToolChoice {

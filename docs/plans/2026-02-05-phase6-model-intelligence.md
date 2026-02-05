@@ -26,10 +26,10 @@ task 1:  ParameterName enum + ParameterAvailability + ParameterRange types     �
 task 2:  ModelMetadata + PricingInfo types                                      ✓
 task 3:  add top_k to ChatOptions (+ proto + convert)                          ✓
 task 4:  bring GenerateOptions to parity (+ proto + convert)                   ✓
-task 5:  raw_provider_options in proto ChatOptions (escape hatch)
-task 6:  provider parameter declaration (supported_parameters on traits)
-task 7:  model registry core (ModelRegistry struct, merge logic)
-task 8:  embedded JSON seed file + registry loading
+task 5:  raw_provider_options in proto ChatOptions (escape hatch)              ✓
+task 6:  provider parameter declaration (supported_parameters on traits)       ✓
+task 7:  model registry core (ModelRegistry struct, merge logic)               ✓
+task 8:  embedded JSON seed file + registry loading                            ✓
 task 9:  model_metadata() on ModelGateway trait
 task 10: EmbeddedGateway + ServiceClient integration
 task 11: proto ModelMetadata RPC + messages
@@ -45,6 +45,7 @@ Dependencies: task 1 → 2 → 7 → 8 → 9 → 10. task 3, 4, 5 are independen
 - **Task 1 deviation:** `ParameterRange::default()` builder renamed to `default_value()` to avoid shadowing `Default::default()`.
 - **Task 1 deviation:** `ParameterName` uses custom `Serialize`/`Deserialize` impls (flat string) instead of `#[serde(rename_all)]` — required for use as `HashMap` keys in JSON.
 - **Tasks 1-4 verified:** `just pre-push` passes (105 tests, 0 clippy warnings).
+- **Tasks 5-8 verified:** `just pre-push` passes (124 tests, 0 clippy warnings).
 
 ---
 

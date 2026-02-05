@@ -77,6 +77,7 @@ pub mod gateway;
 #[cfg(feature = "local-inference")]
 pub mod model;
 pub mod providers;
+pub mod registry;
 #[cfg(feature = "local-inference")]
 pub mod tokenizer;
 pub mod traits;
@@ -112,6 +113,9 @@ pub use providers::{
     EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel, LocalNliModel, NliModelInfo,
     OnnxNliProvider,
 };
+
+// Re-export registry
+pub use registry::ModelRegistry;
 
 // Re-export version info
 pub use version::{GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};

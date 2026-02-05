@@ -33,7 +33,8 @@ use futures_util::Stream;
 use crate::Result;
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, NliResult, StanceResult, ToolDefinition,
+    GenerateOptions, GenerateResponse, Message, NliResult, ParameterName, StanceResult,
+    ToolDefinition,
 };
 
 // ============================================================================
@@ -203,6 +204,14 @@ pub trait ChatProvider: Send + Sync {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>>;
+
+    /// Parameters this provider supports for chat requests.
+    ///
+    /// Providers that override this enable parameter validation in the registry.
+    /// Default: empty (legacy behaviour — no validation).
+    fn supported_chat_parameters(&self) -> Vec<ParameterName> {
+        vec![]
+    }
 }
 
 // ============================================================================
@@ -224,6 +233,14 @@ pub trait GenerateProvider: Send + Sync {
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>>;
+
+    /// Parameters this provider supports for generate requests.
+    ///
+    /// Providers that override this enable parameter validation in the registry.
+    /// Default: empty (legacy behaviour — no validation).
+    fn supported_generate_parameters(&self) -> Vec<ParameterName> {
+        vec![]
+    }
 }
 
 // ============================================================================
