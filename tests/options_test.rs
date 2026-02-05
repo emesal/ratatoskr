@@ -1,6 +1,20 @@
 use ratatoskr::{ChatOptions, ReasoningConfig, ReasoningEffort, ResponseFormat};
 
 #[test]
+fn test_chat_options_top_k() {
+    let opts = ChatOptions::default().model("gpt-4").top_k(40);
+    assert_eq!(opts.top_k, Some(40));
+}
+
+#[test]
+fn test_chat_options_top_k_serde() {
+    let opts = ChatOptions::default().model("test").top_k(50);
+    let json = serde_json::to_string(&opts).unwrap();
+    let parsed: ChatOptions = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.top_k, Some(50));
+}
+
+#[test]
 fn test_chat_options_default() {
     let opts = ChatOptions::default();
     assert!(opts.model.is_empty());

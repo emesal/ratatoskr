@@ -318,7 +318,7 @@ update-deps:
   cargo build
   cargo test
   git add Cargo.lock
-  git commit -m "chore: update dependencies post-release"
+  git commit -m "chore: update dependencies post-release" -a
   git push origin dev
   echo "✓ Dependencies updated on dev"
 

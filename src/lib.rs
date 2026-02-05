@@ -77,11 +77,22 @@ pub mod gateway;
 #[cfg(feature = "local-inference")]
 pub mod model;
 pub mod providers;
+pub mod registry;
 #[cfg(feature = "local-inference")]
 pub mod tokenizer;
 pub mod traits;
 pub mod types;
 pub mod version;
+
+#[cfg(any(feature = "server", feature = "client"))]
+pub mod server;
+
+#[cfg(feature = "client")]
+pub mod client;
+
+// Re-export client types
+#[cfg(feature = "client")]
+pub use client::ServiceClient;
 
 // Re-export main types at crate root
 pub use error::{RatatoskrError, Result};
@@ -103,6 +114,9 @@ pub use providers::{
     OnnxNliProvider,
 };
 
+// Re-export registry
+pub use registry::ModelRegistry;
+
 // Re-export version info
 pub use version::{GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};
 
@@ -110,6 +124,8 @@ pub use version::{GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};
 pub use types::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason,
     GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent, ModelCapability,
-    ModelInfo, ModelStatus, NliLabel, NliResult, ReasoningConfig, ReasoningEffort, ResponseFormat,
-    Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice, ToolDefinition, Usage,
+    ModelInfo, ModelMetadata, ModelStatus, NliLabel, NliResult, ParameterAvailability,
+    ParameterName, ParameterRange, ParameterValidationPolicy, PricingInfo, ReasoningConfig,
+    ReasoningEffort, ResponseFormat, Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice,
+    ToolDefinition, Usage,
 };

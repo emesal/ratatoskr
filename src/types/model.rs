@@ -2,7 +2,11 @@
 //!
 //! Types for describing available models, their capabilities, and runtime status.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
+
+use super::parameter::{ParameterAvailability, ParameterName};
 
 /// A capability that a model may support.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -96,6 +100,85 @@ impl ModelStatus {
     /// Check if the model is usable (ready or available).
     pub fn is_usable(&self) -> bool {
         matches!(self, Self::Available | Self::Ready)
+    }
+}
+
+/// Pricing information for a model (cost per million tokens).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PricingInfo {
+    /// Cost per million prompt/input tokens (USD).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_cost_per_mtok: Option<f64>,
+    /// Cost per million completion/output tokens (USD).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_cost_per_mtok: Option<f64>,
+}
+
+/// Extended model metadata including parameter availability and pricing.
+///
+/// This is the primary type returned by the model registry. It extends
+/// [`ModelInfo`] with parameter constraints and cost information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelMetadata {
+    /// Basic model information.
+    pub info: ModelInfo,
+    /// Per-parameter availability and constraints.
+    #[serde(default)]
+    pub parameters: HashMap<ParameterName, ParameterAvailability>,
+    /// Pricing information.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pricing: Option<PricingInfo>,
+    /// Maximum output tokens (distinct from context window).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<usize>,
+}
+
+impl ModelMetadata {
+    /// Create metadata from a [`ModelInfo`] with empty parameter map.
+    pub fn from_info(info: ModelInfo) -> Self {
+        Self {
+            info,
+            parameters: HashMap::new(),
+            pricing: None,
+            max_output_tokens: None,
+        }
+    }
+
+    /// Add a parameter declaration.
+    pub fn with_parameter(
+        mut self,
+        name: ParameterName,
+        availability: ParameterAvailability,
+    ) -> Self {
+        self.parameters.insert(name, availability);
+        self
+    }
+
+    /// Set pricing information.
+    pub fn with_pricing(mut self, pricing: PricingInfo) -> Self {
+        self.pricing = Some(pricing);
+        self
+    }
+
+    /// Set maximum output tokens.
+    pub fn with_max_output_tokens(mut self, max: usize) -> Self {
+        self.max_output_tokens = Some(max);
+        self
+    }
+
+    /// Merge parameter overrides into this metadata.
+    ///
+    /// Override values replace existing entries; base entries not present
+    /// in the override are preserved. Used for the registry merge strategy
+    /// (live data overrides embedded defaults).
+    pub fn merge_parameters(
+        mut self,
+        overrides: HashMap<ParameterName, ParameterAvailability>,
+    ) -> Self {
+        for (name, avail) in overrides {
+            self.parameters.insert(name, avail);
+        }
+        self
     }
 }
 

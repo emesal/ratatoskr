@@ -9,6 +9,7 @@ Ratatoskr is a unified LLM gateway abstraction layer for Rust. It provides a sta
 - **[Tool Calling](./tools.md)** — Function calling with LLMs
 - **[Providers](./providers.md)** — Multi-provider configuration
 - **[Error Handling](./errors.md)** — Handling failures gracefully
+- **[Service Mode](./service-mode.md)** — Running ratd as a shared gateway daemon
 
 ## Reference
 
@@ -20,18 +21,20 @@ Ratatoskr is a unified LLM gateway abstraction layer for Rust. It provides a sta
 Your Application
        │
        ▼
-ModelGateway trait  ← stable public API
+ModelGateway trait        ← stable public API
        │
-       ▼
-EmbeddedGateway     ← delegates to ProviderRegistry
+       ├─► EmbeddedGateway   ← in-process, delegates to ProviderRegistry
        │
-       ▼
-ProviderRegistry    ← fallback chains per capability
-       │
-       ├─► Embeddings: LocalEmbedding → HuggingFace
-       ├─► NLI: LocalNli → HuggingFace
-       ├─► Stance: ZeroShotStanceProvider
-       └─► Chat: OpenRouter, Anthropic, OpenAI, Google, Ollama
+       └─► ServiceClient     ← connects to ratd over gRPC
+              │
+           ratd (daemon)
+              │
+           EmbeddedGateway → ProviderRegistry
+              │
+              ├─► Embeddings: LocalEmbedding → HuggingFace
+              ├─► NLI: LocalNli → HuggingFace
+              ├─► Stance: ZeroShotStanceProvider
+              └─► Chat: OpenRouter, Anthropic, OpenAI, Google, Ollama
 ```
 
 ## Quick Example
@@ -62,14 +65,14 @@ async fn main() -> ratatoskr::Result<()> {
 
 ## Project Status
 
-Ratatoskr is in active development. Current phase: **Pre-alpha (Phases 1-4 complete)**.
+Ratatoskr is in active development. Current phase: **Pre-alpha (Phases 1-5 complete)**.
 
 | Phase | Status | Features |
 |-------|--------|----------|
 | 1 | ✓ Complete | Chat, streaming, tools |
 | 2 | ✓ Complete | HuggingFace API (embeddings, NLI, classification) |
 | 3-4 | ✓ Complete | Local inference, tokenizers, stance detection |
-| 5 | Planned | Service mode (gRPC/socket) |
+| 5 | ✓ Complete | Service mode (gRPC daemon + CLI client) |
 | 6 | Planned | Caching, metrics, decorator patterns |
 
 ## Links
