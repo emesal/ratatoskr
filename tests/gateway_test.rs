@@ -1,4 +1,4 @@
-use ratatoskr::{Capabilities, ModelGateway, Ratatoskr};
+use ratatoskr::{Capabilities, ModelGateway, ParameterName, Ratatoskr};
 
 #[test]
 fn test_builder_no_provider_error() {
@@ -49,6 +49,35 @@ fn test_builder_openrouter_and_huggingface() {
     let caps = gateway.capabilities();
     assert!(caps.chat);
     assert!(caps.embeddings);
+}
+
+// ===== Phase 6: model_metadata tests =====
+
+#[test]
+fn test_embedded_gateway_model_metadata() {
+    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+
+    // the embedded seed should provide metadata
+    let metadata = gateway.model_metadata("anthropic/claude-sonnet-4");
+    assert!(
+        metadata.is_some(),
+        "should find claude-sonnet-4 in registry"
+    );
+
+    let metadata = metadata.unwrap();
+    assert!(
+        metadata
+            .parameters
+            .contains_key(&ParameterName::Temperature)
+    );
+    assert!(metadata.info.context_window.is_some());
+}
+
+#[test]
+fn test_embedded_gateway_model_metadata_unknown() {
+    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+
+    assert!(gateway.model_metadata("totally-fake-model-xyz").is_none());
 }
 
 // Local inference builder tests

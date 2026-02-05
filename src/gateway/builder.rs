@@ -332,8 +332,11 @@ impl RatatoskrBuilder {
             Arc::new(registry)
         };
 
+        let model_registry = crate::registry::ModelRegistry::with_embedded_seed();
+
         Ok(EmbeddedGateway::new(
             registry,
+            model_registry,
             #[cfg(feature = "local-inference")]
             model_manager,
             #[cfg(feature = "local-inference")]

@@ -33,6 +33,7 @@ service Ratatoskr {
     // Model management
     rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
     rpc ModelStatus(ModelStatusRequest) returns (ModelStatusResponse);
+    rpc GetModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
 
     // Service health
     rpc Health(HealthRequest) returns (HealthResponse);
@@ -390,6 +391,49 @@ enum ModelStatus {
     MODEL_STATUS_LOADING = 2;
     MODEL_STATUS_READY = 3;
     MODEL_STATUS_UNAVAILABLE = 4;
+}
+
+// Model metadata (Phase 6)
+
+message ModelMetadataRequest {
+    string model = 1;
+}
+
+message ModelMetadataResponse {
+    bool found = 1;
+    optional ProtoModelMetadata metadata = 2;
+}
+
+message ProtoModelMetadata {
+    ModelInfo info = 1;
+    repeated ParameterEntry parameters = 2;
+    optional ProtoPricingInfo pricing = 3;
+    optional uint32 max_output_tokens = 4;
+}
+
+message ParameterEntry {
+    string name = 1;
+    ProtoParameterAvailability availability = 2;
+}
+
+message ProtoParameterAvailability {
+    oneof kind {
+        ProtoParameterRange mutable_range = 1;
+        string read_only_json = 2;
+        bool opaque = 3;
+        bool unsupported = 4;
+    }
+}
+
+message ProtoParameterRange {
+    optional double min = 1;
+    optional double max = 2;
+    optional double default_value = 3;
+}
+
+message ProtoPricingInfo {
+    optional double prompt_cost_per_mtok = 1;
+    optional double completion_cost_per_mtok = 2;
 }
 
 // =============================================================================

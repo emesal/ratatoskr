@@ -12,8 +12,8 @@ use crate::server::proto;
 use crate::server::proto::ratatoskr_client::RatatoskrClient;
 use crate::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, ModelGateway, ModelInfo, ModelStatus, NliResult,
-    RatatoskrError, Result, StanceResult, Token, ToolDefinition,
+    GenerateOptions, GenerateResponse, Message, ModelGateway, ModelInfo, ModelMetadata,
+    ModelStatus, NliResult, RatatoskrError, Result, StanceResult, Token, ToolDefinition,
 };
 
 /// A [`ModelGateway`] client that connects to a remote ratd server.
@@ -329,6 +329,24 @@ impl ModelGateway for ServiceClient {
             Err(e) => ModelStatus::Unavailable {
                 reason: e.message().to_string(),
             },
+        }
+    }
+
+    fn model_metadata(&self, model: &str) -> Option<ModelMetadata> {
+        let rt = tokio::runtime::Handle::try_current().ok()?;
+
+        let request = proto::ModelMetadataRequest {
+            model: model.to_string(),
+        };
+        let mut client = self.inner.clone();
+        let response = rt
+            .block_on(async { client.get_model_metadata(request).await })
+            .ok()?;
+        let resp = response.into_inner();
+        if resp.found {
+            resp.metadata.map(Into::into)
+        } else {
+            None
         }
     }
 }
