@@ -1,0 +1,49 @@
+# Ratatoskr Model Gateway Daemon
+#
+# Installation:
+#   sudo cp contrib/systemd/ratd.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ratd
+#
+# Logs:
+#   journalctl -u ratd -f
+
+[Unit]
+Description=Ratatoskr Model Gateway
+Documentation=https://github.com/emesal/ratatoskr
+After=network.target
+
+[Service]
+Type=simple
+User=ratatoskr
+Group=ratatoskr
+
+# Binary location (adjust if installed elsewhere)
+ExecStart=/usr/local/bin/ratd
+
+# Restart on failure
+Restart=on-failure
+RestartSec=5
+
+# Environment
+Environment=RUST_LOG=info
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+
+# Allow reading config from home and /etc
+ReadOnlyPaths=/etc/ratatoskr
+ReadOnlyPaths=/home
+
+# Allow writing to cache directory
+ReadWritePaths=/var/cache/ratatoskr
+
+# Resource limits
+LimitNOFILE=65535
+MemoryMax=4G
+
+[Install]
+WantedBy=multi-user.target

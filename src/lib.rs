@@ -83,6 +83,16 @@ pub mod traits;
 pub mod types;
 pub mod version;
 
+#[cfg(any(feature = "server", feature = "client"))]
+pub mod server;
+
+#[cfg(feature = "client")]
+pub mod client;
+
+// Re-export client types
+#[cfg(feature = "client")]
+pub use client::ServiceClient;
+
 // Re-export main types at crate root
 pub use error::{RatatoskrError, Result};
 pub use gateway::{EmbeddedGateway, Ratatoskr, RatatoskrBuilder};
