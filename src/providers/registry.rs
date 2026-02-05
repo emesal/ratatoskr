@@ -32,6 +32,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use futures_util::Stream;
+use tracing::warn;
 
 use super::traits::{
     ChatProvider, ClassifyProvider, EmbeddingProvider, GenerateProvider, NliProvider,
@@ -391,11 +392,11 @@ impl ProviderRegistry {
             ParameterValidationPolicy::Ignore => Ok(()),
             ParameterValidationPolicy::Warn => {
                 for param in &unsupported {
-                    eprintln!(
-                        "warning: unsupported parameter '{}' for model '{}' (provider: {})",
-                        param,
-                        options.model,
-                        provider.name()
+                    warn!(
+                        param = %param,
+                        model = %options.model,
+                        provider = provider.name(),
+                        "unsupported parameter"
                     );
                 }
                 Ok(())
@@ -438,11 +439,11 @@ impl ProviderRegistry {
             ParameterValidationPolicy::Ignore => Ok(()),
             ParameterValidationPolicy::Warn => {
                 for param in &unsupported {
-                    eprintln!(
-                        "warning: unsupported parameter '{}' for model '{}' (provider: {})",
-                        param,
-                        options.model,
-                        provider.name()
+                    warn!(
+                        param = %param,
+                        model = %options.model,
+                        provider = provider.name(),
+                        "unsupported parameter"
                     );
                 }
                 Ok(())

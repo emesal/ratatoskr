@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use tonic::transport::Server;
+use tracing::info;
 
 use ratatoskr::Ratatoskr;
 use ratatoskr::server::RatatoskrService;
@@ -42,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ratatoskr::RatatoskrError::Configuration(format!("Invalid address: {e}"))
         })?;
 
-    eprintln!("ratd {} starting on {}", ratatoskr::version_string(), addr);
+    info!(version = ratatoskr::version_string(), %addr, "ratd starting");
 
     // Create gRPC service and start server
     let service = RatatoskrService::new(Arc::new(gateway));

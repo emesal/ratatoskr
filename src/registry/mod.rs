@@ -10,6 +10,8 @@
 
 use std::collections::HashMap;
 
+use tracing::warn;
+
 use crate::{ModelCapability, ModelMetadata};
 
 /// Centralised model metadata registry.
@@ -117,7 +119,7 @@ impl ModelRegistry {
             Err(e) => {
                 // This should never happen — seed is compiled in and tested.
                 // Log the error but don't panic; an empty registry is usable.
-                eprintln!("warning: failed to parse embedded model seed: {e}");
+                warn!(error = %e, "failed to parse embedded model seed");
             }
         }
         registry

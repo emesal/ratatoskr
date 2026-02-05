@@ -1,6 +1,7 @@
 //! Builder for configuring gateway instances
 
 use super::EmbeddedGateway;
+use crate::ParameterValidationPolicy;
 use crate::{RatatoskrError, Result};
 
 #[cfg(feature = "local-inference")]
@@ -31,6 +32,7 @@ pub struct RatatoskrBuilder {
     google_key: Option<String>,
     ollama_url: Option<String>,
     default_timeout_secs: Option<u64>,
+    validation_policy: ParameterValidationPolicy,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -56,6 +58,7 @@ impl RatatoskrBuilder {
             google_key: None,
             ollama_url: None,
             default_timeout_secs: None,
+            validation_policy: ParameterValidationPolicy::default(),
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -166,6 +169,19 @@ impl RatatoskrBuilder {
         self
     }
 
+    /// Set the parameter validation policy.
+    ///
+    /// Controls how the registry handles requests containing parameters
+    /// not declared as supported by the provider:
+    ///
+    /// - [`ParameterValidationPolicy::Warn`] — log a warning, proceed with request (default)
+    /// - [`ParameterValidationPolicy::Error`] — return `UnsupportedParameter` error
+    /// - [`ParameterValidationPolicy::Ignore`] — silently proceed
+    pub fn validation_policy(mut self, policy: ParameterValidationPolicy) -> Self {
+        self.validation_policy = policy;
+        self
+    }
+
     /// Check if at least one chat provider is configured.
     fn has_chat_provider(&self) -> bool {
         self.openrouter_key.is_some()
@@ -224,6 +240,7 @@ impl RatatoskrBuilder {
 
         // Build provider registry with fallback chain
         let mut registry = ProviderRegistry::new();
+        registry.set_validation_policy(self.validation_policy);
 
         // =====================================================================
         // Register LOCAL providers FIRST (higher priority)
