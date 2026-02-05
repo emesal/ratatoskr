@@ -33,9 +33,9 @@ task 8:  embedded JSON seed file + registry loading                            �
 task 9:  model_metadata() on ModelGateway trait                              ✓
 task 10: EmbeddedGateway + ServiceClient integration                         ✓
 task 11: proto ModelMetadata RPC + messages                                  ✓
-task 12: parameter validation in ProviderRegistry
-task 13: UnsupportedParameter error variant
-task 14: update AGENTS.md and docs
+task 12: parameter validation in ProviderRegistry                            ✓
+task 13: UnsupportedParameter error variant                                  ✓
+task 14: update AGENTS.md and docs                                           ✓
 ```
 
 Dependencies: task 1 → 2 → 7 → 8 → 9 → 10. task 3, 4, 5 are independent. task 6 → 12. task 11 depends on 2 and 9. task 13 depends on 12.
@@ -50,6 +50,11 @@ Dependencies: task 1 → 2 → 7 → 8 → 9 → 10. task 3, 4, 5 are independen
 - **Task 11 deviation:** proto field `ProtoParameterRange.default_value` (not `default`) to avoid proto3 reserved word.
 - **Task 11 addition:** proto roundtrip test added to `convert_test.rs` (cfg-gated behind server/client features).
 - **Tasks 9-11 verified:** `just pre-push` passes (126 tests, 0 clippy warnings). Proto roundtrip verified with `--features server,client`.
+- **Task 12 additions:** `set_parameters()` helper methods added to `ChatOptions` and `GenerateOptions` for extracting set params. `ParameterValidationPolicy` enum in `src/types/validation.rs`.
+- **Task 12 deviation:** `UnsupportedParameter` error variant added to `src/error.rs` as part of task 12 (not task 13 as originally outlined).
+- **Task 13:** Re-exports already handled in task 12. Added test for error variant accessibility.
+- **Tasks 12-14 verified:** `just pre-push` passes (134 tests, 0 clippy warnings).
+- **Phase 6 complete.**
 
 ---
 

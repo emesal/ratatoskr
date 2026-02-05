@@ -39,7 +39,8 @@ use super::traits::{
 };
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, NliResult, StanceResult, ToolDefinition,
+    GenerateOptions, GenerateResponse, Message, NliResult, ParameterValidationPolicy, StanceResult,
+    ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
 
@@ -48,6 +49,12 @@ use crate::{RatatoskrError, Result};
 /// Providers are stored in priority order (index 0 = highest priority).
 /// When a capability is requested, the registry tries providers in order
 /// until one succeeds or returns a non-`ModelNotAvailable` error.
+///
+/// # Parameter Validation
+///
+/// When a provider declares its supported parameters via `supported_chat_parameters()`
+/// or `supported_generate_parameters()`, the registry can validate incoming requests.
+/// Set `validation_policy` to control behaviour when unsupported parameters are found.
 #[derive(Default)]
 pub struct ProviderRegistry {
     embedding: Vec<Arc<dyn EmbeddingProvider>>,
@@ -56,12 +63,26 @@ pub struct ProviderRegistry {
     stance: Vec<Arc<dyn StanceProvider>>,
     chat: Vec<Arc<dyn ChatProvider>>,
     generate: Vec<Arc<dyn GenerateProvider>>,
+    validation_policy: ParameterValidationPolicy,
 }
 
 impl ProviderRegistry {
     /// Create a new empty registry.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the parameter validation policy.
+    ///
+    /// Controls how the registry handles requests containing parameters
+    /// not declared as supported by the provider.
+    pub fn set_validation_policy(&mut self, policy: ParameterValidationPolicy) {
+        self.validation_policy = policy;
+    }
+
+    /// Get the current validation policy.
+    pub fn validation_policy(&self) -> ParameterValidationPolicy {
+        self.validation_policy
     }
 
     // ========================================================================
@@ -196,6 +217,9 @@ impl ProviderRegistry {
     }
 
     /// Chat completion using the fallback chain.
+    ///
+    /// If a provider declares `supported_chat_parameters()`, the registry validates
+    /// the request against that list according to the `validation_policy`.
     pub async fn chat(
         &self,
         messages: &[Message],
@@ -203,6 +227,9 @@ impl ProviderRegistry {
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
         for provider in &self.chat {
+            // Validate parameters before calling provider
+            self.validate_chat_params(provider.as_ref(), options)?;
+
             match provider.chat(messages, tools, options).await {
                 Ok(result) => return Ok(result),
                 Err(RatatoskrError::ModelNotAvailable) => continue,
@@ -213,6 +240,9 @@ impl ProviderRegistry {
     }
 
     /// Streaming chat using the fallback chain.
+    ///
+    /// If a provider declares `supported_chat_parameters()`, the registry validates
+    /// the request against that list according to the `validation_policy`.
     pub async fn chat_stream(
         &self,
         messages: &[Message],
@@ -220,6 +250,9 @@ impl ProviderRegistry {
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
         for provider in &self.chat {
+            // Validate parameters before calling provider
+            self.validate_chat_params(provider.as_ref(), options)?;
+
             match provider.chat_stream(messages, tools, options).await {
                 Ok(result) => return Ok(result),
                 Err(RatatoskrError::ModelNotAvailable) => continue,
@@ -230,12 +263,18 @@ impl ProviderRegistry {
     }
 
     /// Text generation using the fallback chain.
+    ///
+    /// If a provider declares `supported_generate_parameters()`, the registry validates
+    /// the request against that list according to the `validation_policy`.
     pub async fn generate(
         &self,
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<GenerateResponse> {
         for provider in &self.generate {
+            // Validate parameters before calling provider
+            self.validate_generate_params(provider.as_ref(), options)?;
+
             match provider.generate(prompt, options).await {
                 Ok(result) => return Ok(result),
                 Err(RatatoskrError::ModelNotAvailable) => continue,
@@ -246,12 +285,18 @@ impl ProviderRegistry {
     }
 
     /// Streaming text generation using the fallback chain.
+    ///
+    /// If a provider declares `supported_generate_parameters()`, the registry validates
+    /// the request against that list according to the `validation_policy`.
     pub async fn generate_stream(
         &self,
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
         for provider in &self.generate {
+            // Validate parameters before calling provider
+            self.validate_generate_params(provider.as_ref(), options)?;
+
             match provider.generate_stream(prompt, options).await {
                 Ok(result) => return Ok(result),
                 Err(RatatoskrError::ModelNotAvailable) => continue,
@@ -308,6 +353,105 @@ impl ProviderRegistry {
             stance: self.stance.iter().map(|p| p.name().to_string()).collect(),
             chat: self.chat.iter().map(|p| p.name().to_string()).collect(),
             generate: self.generate.iter().map(|p| p.name().to_string()).collect(),
+        }
+    }
+
+    // ========================================================================
+    // Parameter validation
+    // ========================================================================
+
+    /// Validate parameters for a chat request against provider-declared support.
+    ///
+    /// Returns `Ok(())` if validation passes or if the policy is `Ignore`.
+    /// Returns `Err(UnsupportedParameter)` if policy is `Error` and unsupported params found.
+    /// Logs warnings if policy is `Warn` and returns `Ok(())`.
+    fn validate_chat_params(
+        &self,
+        provider: &dyn ChatProvider,
+        options: &ChatOptions,
+    ) -> Result<()> {
+        let supported = provider.supported_chat_parameters();
+
+        // If provider doesn't declare parameters, skip validation (legacy)
+        if supported.is_empty() {
+            return Ok(());
+        }
+
+        let requested = options.set_parameters();
+        let unsupported: Vec<_> = requested
+            .iter()
+            .filter(|p| !supported.contains(p))
+            .collect();
+
+        if unsupported.is_empty() {
+            return Ok(());
+        }
+
+        match self.validation_policy {
+            ParameterValidationPolicy::Ignore => Ok(()),
+            ParameterValidationPolicy::Warn => {
+                for param in &unsupported {
+                    eprintln!(
+                        "warning: unsupported parameter '{}' for model '{}' (provider: {})",
+                        param,
+                        options.model,
+                        provider.name()
+                    );
+                }
+                Ok(())
+            }
+            ParameterValidationPolicy::Error => {
+                // Report first unsupported param in error
+                Err(RatatoskrError::UnsupportedParameter {
+                    param: unsupported[0].to_string(),
+                    model: options.model.clone(),
+                    provider: provider.name().to_string(),
+                })
+            }
+        }
+    }
+
+    /// Validate parameters for a generate request against provider-declared support.
+    fn validate_generate_params(
+        &self,
+        provider: &dyn GenerateProvider,
+        options: &GenerateOptions,
+    ) -> Result<()> {
+        let supported = provider.supported_generate_parameters();
+
+        // If provider doesn't declare parameters, skip validation (legacy)
+        if supported.is_empty() {
+            return Ok(());
+        }
+
+        let requested = options.set_parameters();
+        let unsupported: Vec<_> = requested
+            .iter()
+            .filter(|p| !supported.contains(p))
+            .collect();
+
+        if unsupported.is_empty() {
+            return Ok(());
+        }
+
+        match self.validation_policy {
+            ParameterValidationPolicy::Ignore => Ok(()),
+            ParameterValidationPolicy::Warn => {
+                for param in &unsupported {
+                    eprintln!(
+                        "warning: unsupported parameter '{}' for model '{}' (provider: {})",
+                        param,
+                        options.model,
+                        provider.name()
+                    );
+                }
+                Ok(())
+            }
+            ParameterValidationPolicy::Error => Err(RatatoskrError::UnsupportedParameter {
+                param: unsupported[0].to_string(),
+                model: options.model.clone(),
+                provider: provider.name().to_string(),
+            }),
         }
     }
 }

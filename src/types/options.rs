@@ -1,5 +1,6 @@
 //! Chat options and configuration types
 
+use super::parameter::ParameterName;
 use super::tool::ToolChoice;
 use serde::{Deserialize, Serialize};
 
@@ -93,6 +94,50 @@ impl ChatOptions {
     pub fn cache_prompt(mut self, cache: bool) -> Self {
         self.cache_prompt = Some(cache);
         self
+    }
+
+    /// Returns the list of parameters that are set (not None) in these options.
+    ///
+    /// Used by the registry for validation against provider-declared parameters.
+    pub fn set_parameters(&self) -> Vec<ParameterName> {
+        let mut params = Vec::new();
+        if self.temperature.is_some() {
+            params.push(ParameterName::Temperature);
+        }
+        if self.max_tokens.is_some() {
+            params.push(ParameterName::MaxTokens);
+        }
+        if self.top_p.is_some() {
+            params.push(ParameterName::TopP);
+        }
+        if self.top_k.is_some() {
+            params.push(ParameterName::TopK);
+        }
+        if self.stop.is_some() {
+            params.push(ParameterName::Stop);
+        }
+        if self.frequency_penalty.is_some() {
+            params.push(ParameterName::FrequencyPenalty);
+        }
+        if self.presence_penalty.is_some() {
+            params.push(ParameterName::PresencePenalty);
+        }
+        if self.seed.is_some() {
+            params.push(ParameterName::Seed);
+        }
+        if self.tool_choice.is_some() {
+            params.push(ParameterName::ToolChoice);
+        }
+        if self.response_format.is_some() {
+            params.push(ParameterName::ResponseFormat);
+        }
+        if self.cache_prompt.is_some() {
+            params.push(ParameterName::CachePrompt);
+        }
+        if self.reasoning.is_some() {
+            params.push(ParameterName::Reasoning);
+        }
+        params
     }
 }
 

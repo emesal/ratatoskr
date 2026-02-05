@@ -11,6 +11,7 @@ pub mod response;
 mod stance;
 mod token;
 mod tool;
+mod validation;
 
 pub use capabilities::Capabilities;
 pub use future::{ClassifyResult, Embedding, NliLabel, NliResult};
@@ -23,3 +24,4 @@ pub use response::{ChatEvent, ChatResponse, FinishReason, Usage};
 pub use stance::{StanceLabel, StanceResult};
 pub use token::Token;
 pub use tool::{ToolCall, ToolChoice, ToolDefinition};
+pub use validation::ParameterValidationPolicy;

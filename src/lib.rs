@@ -125,6 +125,7 @@ pub use types::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason,
     GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent, ModelCapability,
     ModelInfo, ModelMetadata, ModelStatus, NliLabel, NliResult, ParameterAvailability,
-    ParameterName, ParameterRange, PricingInfo, ReasoningConfig, ReasoningEffort, ResponseFormat,
-    Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice, ToolDefinition, Usage,
+    ParameterName, ParameterRange, ParameterValidationPolicy, PricingInfo, ReasoningConfig,
+    ReasoningEffort, ResponseFormat, Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice,
+    ToolDefinition, Usage,
 };

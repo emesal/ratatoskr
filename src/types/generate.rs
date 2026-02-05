@@ -1,6 +1,7 @@
 //! Types for text generation (non-chat) operations.
 
 use crate::types::options::ReasoningConfig;
+use crate::types::parameter::ParameterName;
 use crate::types::{FinishReason, Usage};
 use serde::{Deserialize, Serialize};
 
@@ -123,6 +124,41 @@ impl GenerateOptions {
     pub fn reasoning(mut self, config: ReasoningConfig) -> Self {
         self.reasoning = Some(config);
         self
+    }
+
+    /// Returns the list of parameters that are set (not None) in these options.
+    ///
+    /// Used by the registry for validation against provider-declared parameters.
+    pub fn set_parameters(&self) -> Vec<ParameterName> {
+        let mut params = Vec::new();
+        if self.max_tokens.is_some() {
+            params.push(ParameterName::MaxTokens);
+        }
+        if self.temperature.is_some() {
+            params.push(ParameterName::Temperature);
+        }
+        if self.top_p.is_some() {
+            params.push(ParameterName::TopP);
+        }
+        if !self.stop_sequences.is_empty() {
+            params.push(ParameterName::Stop);
+        }
+        if self.top_k.is_some() {
+            params.push(ParameterName::TopK);
+        }
+        if self.frequency_penalty.is_some() {
+            params.push(ParameterName::FrequencyPenalty);
+        }
+        if self.presence_penalty.is_some() {
+            params.push(ParameterName::PresencePenalty);
+        }
+        if self.seed.is_some() {
+            params.push(ParameterName::Seed);
+        }
+        if self.reasoning.is_some() {
+            params.push(ParameterName::Reasoning);
+        }
+        params
     }
 }
 
