@@ -69,6 +69,7 @@ impl From<proto::ChatOptions> for ChatOptions {
             temperature: p.temperature,
             max_tokens: p.max_tokens.map(|t| t as usize),
             top_p: p.top_p,
+            top_k: p.top_k.map(|k| k as usize),
             stop: if p.stop.is_empty() {
                 None
             } else {
@@ -136,6 +137,11 @@ impl From<proto::GenerateOptions> for GenerateOptions {
             temperature: p.temperature,
             top_p: p.top_p,
             stop_sequences: p.stop_sequences,
+            top_k: p.top_k.map(|k| k as usize),
+            frequency_penalty: p.frequency_penalty,
+            presence_penalty: p.presence_penalty,
+            seed: p.seed,
+            reasoning: p.reasoning.map(Into::into),
         }
     }
 }
@@ -575,6 +581,7 @@ impl From<ChatOptions> for proto::ChatOptions {
             temperature: o.temperature,
             max_tokens: o.max_tokens.map(|t| t as u32),
             top_p: o.top_p,
+            top_k: o.top_k.map(|k| k as u32),
             stop: o.stop.unwrap_or_default(),
             frequency_penalty: o.frequency_penalty,
             presence_penalty: o.presence_penalty,
@@ -626,6 +633,19 @@ impl From<GenerateOptions> for proto::GenerateOptions {
             temperature: o.temperature,
             top_p: o.top_p,
             stop_sequences: o.stop_sequences,
+            top_k: o.top_k.map(|k| k as u32),
+            frequency_penalty: o.frequency_penalty,
+            presence_penalty: o.presence_penalty,
+            seed: o.seed,
+            reasoning: o.reasoning.map(|r| proto::ReasoningConfig {
+                effort: r.effort.map(|e| match e {
+                    ReasoningEffort::Low => proto::ReasoningEffort::Low as i32,
+                    ReasoningEffort::Medium => proto::ReasoningEffort::Medium as i32,
+                    ReasoningEffort::High => proto::ReasoningEffort::High as i32,
+                }),
+                max_tokens: r.max_tokens.map(|t| t as u32),
+                exclude_from_output: r.exclude_from_output,
+            }),
         }
     }
 }

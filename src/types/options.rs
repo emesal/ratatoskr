@@ -14,6 +14,8 @@ pub struct ChatOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_k: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stop: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frequency_penalty: Option<f32>,
@@ -55,6 +57,11 @@ impl ChatOptions {
 
     pub fn top_p(mut self, p: f32) -> Self {
         self.top_p = Some(p);
+        self
+    }
+
+    pub fn top_k(mut self, k: usize) -> Self {
+        self.top_k = Some(k);
         self
     }
 

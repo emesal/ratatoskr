@@ -120,6 +120,7 @@ pub use version::{GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};
 pub use types::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason,
     GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent, ModelCapability,
-    ModelInfo, ModelStatus, NliLabel, NliResult, ReasoningConfig, ReasoningEffort, ResponseFormat,
+    ModelInfo, ModelMetadata, ModelStatus, NliLabel, NliResult, ParameterAvailability,
+    ParameterName, ParameterRange, PricingInfo, ReasoningConfig, ReasoningEffort, ResponseFormat,
     Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice, ToolDefinition, Usage,
 };

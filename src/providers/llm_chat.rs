@@ -276,6 +276,11 @@ impl GenerateProvider for LlmChatProvider {
         if let Some(max) = options.max_tokens {
             chat_options = chat_options.max_tokens(max);
         }
+        if let Some(p) = options.top_p {
+            chat_options = chat_options.top_p(p);
+        }
+        // top_k, frequency_penalty, presence_penalty, seed, reasoning
+        // are not yet passed to llm crate — tracked for future provider updates
 
         // Build provider without tools
         let provider = self.build_provider(&chat_options, None, None)?;
@@ -317,6 +322,9 @@ impl GenerateProvider for LlmChatProvider {
         }
         if let Some(max) = options.max_tokens {
             chat_options = chat_options.max_tokens(max);
+        }
+        if let Some(p) = options.top_p {
+            chat_options = chat_options.top_p(p);
         }
 
         // Get streaming chat response

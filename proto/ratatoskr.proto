@@ -106,6 +106,7 @@ message ChatOptions {
     optional ResponseFormat response_format = 10;
     optional bool cache_prompt = 11;
     optional ReasoningConfig reasoning = 12;
+    optional uint32 top_k = 13;
 }
 
 message ToolChoice {
@@ -190,6 +191,11 @@ message GenerateOptions {
     optional float temperature = 3;
     optional float top_p = 4;
     repeated string stop_sequences = 5;
+    optional uint32 top_k = 6;
+    optional float frequency_penalty = 7;
+    optional float presence_penalty = 8;
+    optional uint64 seed = 9;
+    optional ReasoningConfig reasoning = 10;
 }
 
 message GenerateResponse {
