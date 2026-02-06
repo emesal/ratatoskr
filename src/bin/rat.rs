@@ -3,8 +3,8 @@
 //! Control and test interface for ratd.
 
 use clap::{Parser, Subcommand};
-use ratatoskr::ModelGateway;
 use ratatoskr::client::ServiceClient;
+use ratatoskr::{ModelGateway, ModelMetadata, ParameterAvailability};
 
 /// Ratatoskr CLI client
 #[derive(Parser)]
@@ -74,6 +74,12 @@ enum Command {
         text: String,
         /// Model for tokenizer
         #[arg(short, long, default_value = "claude-sonnet")]
+        model: String,
+    },
+
+    /// Fetch and display model metadata
+    Metadata {
+        /// Model identifier (e.g., "anthropic/claude-sonnet-4")
         model: String,
     },
 }
@@ -150,7 +156,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let count = client.count_tokens(&text, &model)?;
             println!("{count} tokens");
         }
+
+        Command::Metadata { model } => {
+            // Fetch first (ensures cache is populated), then read from cache/registry.
+            let metadata = client.fetch_model_metadata(&model).await?;
+            print_metadata(&metadata);
+        }
     }
 
     Ok(())
+}
+
+/// Display model metadata in a readable format.
+fn print_metadata(m: &ModelMetadata) {
+    println!("model:          {}", m.info.id);
+    println!("provider:       {}", m.info.provider);
+    println!(
+        "capabilities:   {}",
+        m.info
+            .capabilities
+            .iter()
+            .map(|c| format!("{c:?}").to_lowercase())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    if let Some(ctx) = m.info.context_window {
+        println!("context window: {ctx}");
+    }
+    if let Some(max) = m.max_output_tokens {
+        println!("max output:     {max}");
+    }
+
+    if let Some(ref pricing) = m.pricing {
+        if let Some(prompt) = pricing.prompt_cost_per_mtok {
+            println!("input cost:     ${prompt}/Mtok");
+        }
+        if let Some(completion) = pricing.completion_cost_per_mtok {
+            println!("output cost:    ${completion}/Mtok");
+        }
+    }
+
+    if !m.parameters.is_empty() {
+        println!("\nparameters:");
+        let mut params: Vec<_> = m.parameters.iter().collect();
+        params.sort_by_key(|(name, _)| name.as_str().to_string());
+        for (name, avail) in params {
+            let desc = match avail {
+                ParameterAvailability::Mutable { range } => {
+                    let parts: Vec<String> = [
+                        range.min.map(|v| format!("min={v}")),
+                        range.max.map(|v| format!("max={v}")),
+                        range.default.map(|v| format!("default={v}")),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                    if parts.is_empty() {
+                        "mutable".to_string()
+                    } else {
+                        format!("mutable ({})", parts.join(", "))
+                    }
+                }
+                ParameterAvailability::ReadOnly { value } => format!("read-only = {value}"),
+                ParameterAvailability::Opaque => "opaque".to_string(),
+                ParameterAvailability::Unsupported => "unsupported".to_string(),
+            };
+            println!("  {name}: {desc}");
+        }
+    }
 }

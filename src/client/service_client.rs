@@ -357,6 +357,26 @@ impl ModelGateway for ServiceClient {
             None
         }
     }
+
+    async fn fetch_model_metadata(&self, model: &str) -> Result<ModelMetadata> {
+        let request = proto::ModelMetadataRequest {
+            model: model.to_string(),
+        };
+        let response = self
+            .inner
+            .clone()
+            .fetch_model_metadata(request)
+            .await
+            .map_err(from_status)?;
+        let resp = response.into_inner();
+        if resp.found {
+            resp.metadata
+                .map(Into::into)
+                .ok_or_else(|| RatatoskrError::ModelNotAvailable)
+        } else {
+            Err(RatatoskrError::ModelNotAvailable)
+        }
+    }
 }
 
 // =============================================================================

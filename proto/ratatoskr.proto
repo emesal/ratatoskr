@@ -34,6 +34,7 @@ service Ratatoskr {
     rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
     rpc ModelStatus(ModelStatusRequest) returns (ModelStatusResponse);
     rpc GetModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
+    rpc FetchModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
 
     // Service health
     rpc Health(HealthRequest) returns (HealthResponse);

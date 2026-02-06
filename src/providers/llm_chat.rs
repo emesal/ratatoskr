@@ -2,7 +2,8 @@
 //!
 //! This module provides [`LlmChatProvider`], which stores LLM configuration and
 //! builds providers per-request because the llm crate requires tools to be
-//! specified at build time.
+//! specified at build time. Also implements [`ChatProvider::fetch_metadata()`]
+//! for OpenRouter (fetches `/api/v1/models` and converts to [`ModelMetadata`](crate::ModelMetadata)).
 
 use std::pin::Pin;
 
@@ -43,6 +44,10 @@ pub struct LlmChatProvider {
     ollama_url: Option<String>,
     /// Default timeout in seconds
     timeout_secs: u64,
+    /// Shared HTTP client for metadata fetches.
+    http_client: reqwest::Client,
+    /// Override base URL for model metadata endpoint (testing).
+    models_base_url: Option<String>,
 }
 
 impl LlmChatProvider {
@@ -54,12 +59,27 @@ impl LlmChatProvider {
     /// * `api_key` - API key for the backend
     /// * `name` - Human-readable name for logging/debugging (e.g., "openrouter", "anthropic")
     pub fn new(backend: LLMBackend, api_key: impl Into<String>, name: impl Into<String>) -> Self {
+        Self::with_http_client(backend, api_key, name, reqwest::Client::new())
+    }
+
+    /// Create a new LlmChatProvider with a shared HTTP client.
+    ///
+    /// Prefer this over [`new`](Self::new) when multiple providers should
+    /// share a connection pool (e.g. from the builder).
+    pub fn with_http_client(
+        backend: LLMBackend,
+        api_key: impl Into<String>,
+        name: impl Into<String>,
+        http_client: reqwest::Client,
+    ) -> Self {
         Self {
             backend,
             api_key: api_key.into(),
             name: name.into(),
             ollama_url: None,
             timeout_secs: 120,
+            http_client,
+            models_base_url: None,
         }
     }
 
@@ -72,6 +92,14 @@ impl LlmChatProvider {
     /// Set the timeout in seconds.
     pub fn timeout_secs(mut self, secs: u64) -> Self {
         self.timeout_secs = secs;
+        self
+    }
+
+    /// Override the base URL for the models metadata endpoint.
+    ///
+    /// Used for testing with wiremock. The full URL is `{base}/api/v1/models`.
+    pub fn models_base_url(mut self, url: impl Into<String>) -> Self {
+        self.models_base_url = Some(url.into());
         self
     }
 
@@ -282,6 +310,51 @@ impl ChatProvider for LlmChatProvider {
             ParameterName::Reasoning,
             ParameterName::Stop,
         ]
+    }
+
+    async fn fetch_metadata(&self, model: &str) -> Result<crate::types::ModelMetadata> {
+        use super::openrouter_models::{ModelsResponse, into_model_metadata};
+
+        // Only OpenRouter supports metadata fetch for now
+        if self.backend != LLMBackend::OpenRouter {
+            return Err(RatatoskrError::ModelNotAvailable);
+        }
+
+        let base = self
+            .models_base_url
+            .as_deref()
+            .unwrap_or("https://openrouter.ai");
+        let url = format!("{base}/api/v1/models");
+        let response = self
+            .http_client
+            .get(url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await
+            .map_err(|e| RatatoskrError::Http(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(RatatoskrError::Api {
+                status: response.status().as_u16(),
+                message: response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "unknown error".into()),
+            });
+        }
+
+        let models: ModelsResponse = response
+            .json()
+            .await
+            .map_err(|e| RatatoskrError::Http(e.to_string()))?;
+
+        let entry = models
+            .data
+            .into_iter()
+            .find(|m| m.id == model)
+            .ok_or(RatatoskrError::ModelNotAvailable)?;
+
+        Ok(into_model_metadata(entry))
     }
 }
 

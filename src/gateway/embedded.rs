@@ -4,7 +4,6 @@
 //! by delegating to a [`ProviderRegistry`] fallback chain.
 
 use std::pin::Pin;
-#[cfg(feature = "local-inference")]
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -12,6 +11,7 @@ use futures_util::Stream;
 
 #[cfg(feature = "local-inference")]
 use crate::Token;
+use crate::cache::ModelCache;
 use crate::providers::ProviderRegistry;
 use crate::registry::ModelRegistry;
 use crate::{
@@ -32,6 +32,7 @@ use crate::tokenizer::TokenizerRegistry;
 pub struct EmbeddedGateway {
     registry: ProviderRegistry,
     model_registry: ModelRegistry,
+    model_cache: Arc<ModelCache>,
     #[cfg(feature = "local-inference")]
     #[allow(dead_code)] // used for model status queries
     model_manager: Arc<ModelManager>,
@@ -44,12 +45,14 @@ impl EmbeddedGateway {
     pub(crate) fn new(
         registry: ProviderRegistry,
         model_registry: ModelRegistry,
+        model_cache: Arc<ModelCache>,
         #[cfg(feature = "local-inference")] model_manager: Arc<ModelManager>,
         #[cfg(feature = "local-inference")] tokenizer_registry: Arc<TokenizerRegistry>,
     ) -> Self {
         Self {
             registry,
             model_registry,
+            model_cache,
             #[cfg(feature = "local-inference")]
             model_manager,
             #[cfg(feature = "local-inference")]
@@ -249,6 +252,16 @@ impl ModelGateway for EmbeddedGateway {
     }
 
     fn model_metadata(&self, model: &str) -> Option<ModelMetadata> {
-        self.model_registry.get(model).cloned()
+        // Registry (curated) takes priority over cache (ephemeral)
+        self.model_registry
+            .get(model)
+            .cloned()
+            .or_else(|| self.model_cache.get(model))
+    }
+
+    async fn fetch_model_metadata(&self, model: &str) -> Result<ModelMetadata> {
+        let metadata = self.registry.fetch_chat_metadata(model).await?;
+        self.model_cache.insert(metadata.clone());
+        Ok(metadata)
     }
 }

@@ -6,6 +6,7 @@
 //! - Concrete provider implementations (HuggingFace, FastEmbed, ONNX, etc.)
 
 pub mod llm_chat;
+pub(crate) mod openrouter_models;
 pub mod registry;
 pub mod traits;
 

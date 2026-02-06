@@ -33,8 +33,8 @@ use futures_util::Stream;
 use crate::Result;
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, NliResult, ParameterName, StanceResult,
-    ToolDefinition,
+    GenerateOptions, GenerateResponse, Message, ModelMetadata, NliResult, ParameterName,
+    StanceResult, ToolDefinition,
 };
 
 // ============================================================================
@@ -211,6 +211,15 @@ pub trait ChatProvider: Send + Sync {
     /// Default: empty (legacy behaviour — no validation).
     fn supported_chat_parameters(&self) -> Vec<ParameterName> {
         vec![]
+    }
+
+    /// Fetch metadata for a model from this provider's upstream API.
+    ///
+    /// Returns `ModelNotAvailable` if the provider doesn't recognise the model,
+    /// or `NotImplemented` if the provider doesn't support metadata fetching.
+    /// The registry walks the fallback chain on either of these.
+    async fn fetch_metadata(&self, _model: &str) -> Result<ModelMetadata> {
+        Err(crate::RatatoskrError::NotImplemented("fetch_metadata"))
     }
 }
 
