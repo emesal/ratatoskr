@@ -85,6 +85,7 @@ impl From<proto::ChatOptions> for ChatOptions {
             response_format: p.response_format.map(Into::into),
             cache_prompt: p.cache_prompt,
             reasoning: p.reasoning.map(Into::into),
+            parallel_tool_calls: p.parallel_tool_calls,
             raw_provider_options: p
                 .raw_provider_options
                 .and_then(|s| serde_json::from_str(&s).ok()),
@@ -774,6 +775,7 @@ impl From<ChatOptions> for proto::ChatOptions {
                 max_tokens: r.max_tokens.map(|t| t as u32),
                 exclude_from_output: r.exclude_from_output,
             }),
+            parallel_tool_calls: o.parallel_tool_calls,
             raw_provider_options: o
                 .raw_provider_options
                 .and_then(|v| serde_json::to_string(&v).ok()),

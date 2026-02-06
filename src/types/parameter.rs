@@ -30,6 +30,7 @@ pub enum ParameterName {
     CachePrompt,
     ResponseFormat,
     ToolChoice,
+    ParallelToolCalls,
     /// Provider-specific parameter not in the well-known set.
     Custom(String),
 }
@@ -50,6 +51,7 @@ impl ParameterName {
             Self::CachePrompt => "cache_prompt",
             Self::ResponseFormat => "response_format",
             Self::ToolChoice => "tool_choice",
+            Self::ParallelToolCalls => "parallel_tool_calls",
             Self::Custom(s) => s.as_str(),
         }
     }
@@ -78,6 +80,7 @@ impl FromStr for ParameterName {
             "cache_prompt" => Self::CachePrompt,
             "response_format" => Self::ResponseFormat,
             "tool_choice" => Self::ToolChoice,
+            "parallel_tool_calls" => Self::ParallelToolCalls,
             other => Self::Custom(other.to_string()),
         })
     }
