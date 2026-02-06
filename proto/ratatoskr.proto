@@ -34,6 +34,7 @@ service Ratatoskr {
     rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
     rpc ModelStatus(ModelStatusRequest) returns (ModelStatusResponse);
     rpc GetModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
+    rpc FetchModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
 
     // Service health
     rpc Health(HealthRequest) returns (HealthResponse);
@@ -110,6 +111,7 @@ message ChatOptions {
     optional uint32 top_k = 13;
     // Escape hatch: provider-specific options as JSON string.
     optional string raw_provider_options = 14;
+    optional bool parallel_tool_calls = 15;
 }
 
 message ToolChoice {
@@ -168,6 +170,7 @@ message ChatEvent {
         ToolCallDelta tool_call_delta = 4;
         Usage usage = 5;
         bool done = 6;
+        ToolCallEnd tool_call_end = 7;
     }
 }
 
@@ -180,6 +183,10 @@ message ToolCallStart {
 message ToolCallDelta {
     uint32 index = 1;
     string arguments = 2;
+}
+
+message ToolCallEnd {
+    uint32 index = 1;
 }
 
 // =============================================================================

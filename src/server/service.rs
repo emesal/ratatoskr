@@ -344,6 +344,20 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
         }
     }
 
+    async fn fetch_model_metadata(
+        &self,
+        request: Request<proto::ModelMetadataRequest>,
+    ) -> GrpcResult<proto::ModelMetadataResponse> {
+        let req = request.into_inner();
+        match self.gateway.fetch_model_metadata(&req.model).await {
+            Ok(metadata) => Ok(Response::new(proto::ModelMetadataResponse {
+                found: true,
+                metadata: Some(metadata.into()),
+            })),
+            Err(e) => Err(to_status(e)),
+        }
+    }
+
     // =========================================================================
     // Health
     // =========================================================================

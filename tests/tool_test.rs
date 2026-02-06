@@ -51,3 +51,34 @@ fn test_tool_choice_default() {
     let choice = ToolChoice::default();
     assert!(matches!(choice, ToolChoice::Auto));
 }
+
+#[test]
+fn test_tool_choice_variants_serde() {
+    let variants = vec![
+        (ToolChoice::Auto, "\"auto\""),
+        (ToolChoice::None, "\"none\""),
+        (ToolChoice::Required, "\"required\""),
+    ];
+    for (variant, expected) in variants {
+        let json = serde_json::to_string(&variant).unwrap();
+        assert_eq!(json, expected);
+        let parsed: ToolChoice = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            std::mem::discriminant(&parsed),
+            std::mem::discriminant(&variant)
+        );
+    }
+}
+
+#[test]
+fn test_tool_choice_function_serde() {
+    let tc = ToolChoice::Function {
+        name: "get_weather".into(),
+    };
+    let json = serde_json::to_string(&tc).unwrap();
+    let parsed: ToolChoice = serde_json::from_str(&json).unwrap();
+    match parsed {
+        ToolChoice::Function { name } => assert_eq!(name, "get_weather"),
+        other => panic!("expected Function, got {other:?}"),
+    }
+}

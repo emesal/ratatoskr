@@ -6,8 +6,10 @@
 //! - Concrete provider implementations (HuggingFace, FastEmbed, ONNX, etc.)
 
 pub mod llm_chat;
+pub(crate) mod openrouter_models;
 pub mod registry;
 pub mod traits;
+pub(crate) mod workarounds;
 
 #[cfg(feature = "local-inference")]
 pub mod fastembed;

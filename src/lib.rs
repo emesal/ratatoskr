@@ -71,6 +71,7 @@
 //! }
 //! ```
 
+pub mod cache;
 mod convert;
 pub mod error;
 pub mod gateway;
@@ -113,6 +114,9 @@ pub use providers::{
     EmbeddingModelInfo, FastEmbedProvider, LocalEmbeddingModel, LocalNliModel, NliModelInfo,
     OnnxNliProvider,
 };
+
+// Re-export cache
+pub use cache::ModelCache;
 
 // Re-export registry
 pub use registry::ModelRegistry;

@@ -85,6 +85,7 @@ impl From<proto::ChatOptions> for ChatOptions {
             response_format: p.response_format.map(Into::into),
             cache_prompt: p.cache_prompt,
             reasoning: p.reasoning.map(Into::into),
+            parallel_tool_calls: p.parallel_tool_calls,
             raw_provider_options: p
                 .raw_provider_options
                 .and_then(|s| serde_json::from_str(&s).ok()),
@@ -243,6 +244,11 @@ impl From<ChatEvent> for proto::ChatEvent {
                 proto::chat_event::Event::ToolCallDelta(proto::ToolCallDelta {
                     index: index as u32,
                     arguments,
+                })
+            }
+            ChatEvent::ToolCallEnd { index } => {
+                proto::chat_event::Event::ToolCallEnd(proto::ToolCallEnd {
+                    index: index as u32,
                 })
             }
             ChatEvent::Usage(u) => proto::chat_event::Event::Usage(u.into()),
@@ -485,6 +491,9 @@ impl From<proto::ChatEvent> for ChatEvent {
             Some(proto::chat_event::Event::ToolCallDelta(t)) => ChatEvent::ToolCallDelta {
                 index: t.index as usize,
                 arguments: t.arguments,
+            },
+            Some(proto::chat_event::Event::ToolCallEnd(t)) => ChatEvent::ToolCallEnd {
+                index: t.index as usize,
             },
             Some(proto::chat_event::Event::Usage(u)) => ChatEvent::Usage(u.into()),
             Some(proto::chat_event::Event::Done(_)) | None => ChatEvent::Done,
@@ -774,6 +783,7 @@ impl From<ChatOptions> for proto::ChatOptions {
                 max_tokens: r.max_tokens.map(|t| t as u32),
                 exclude_from_output: r.exclude_from_output,
             }),
+            parallel_tool_calls: o.parallel_tool_calls,
             raw_provider_options: o
                 .raw_provider_options
                 .and_then(|v| serde_json::to_string(&v).ok()),

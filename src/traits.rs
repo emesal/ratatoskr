@@ -138,8 +138,19 @@ pub trait ModelGateway: Send + Sync {
 
     /// Get extended metadata for a model, including parameter availability.
     ///
-    /// Returns `None` if the model is not known to the registry.
+    /// Returns `None` if the model is not known to the registry or cache.
+    /// This is a synchronous lookup — see [`fetch_model_metadata`](Self::fetch_model_metadata)
+    /// for the async variant that can reach out to provider APIs.
     fn model_metadata(&self, _model: &str) -> Option<ModelMetadata> {
         None
+    }
+
+    /// Fetch metadata from the provider that would serve this model.
+    ///
+    /// Walks the chat provider fallback chain, populates the cache on success,
+    /// and returns the result. Use [`model_metadata`](Self::model_metadata) for
+    /// cached/registry lookups without network I/O.
+    async fn fetch_model_metadata(&self, _model: &str) -> Result<ModelMetadata> {
+        Err(RatatoskrError::NotImplemented("fetch_model_metadata"))
     }
 }

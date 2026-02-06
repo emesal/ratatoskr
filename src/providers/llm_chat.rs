@@ -2,7 +2,8 @@
 //!
 //! This module provides [`LlmChatProvider`], which stores LLM configuration and
 //! builds providers per-request because the llm crate requires tools to be
-//! specified at build time.
+//! specified at build time. Also implements [`ChatProvider::fetch_metadata()`]
+//! for OpenRouter (fetches `/api/v1/models` and converts to [`ModelMetadata`](crate::ModelMetadata)).
 
 use std::pin::Pin;
 
@@ -13,9 +14,10 @@ use llm::builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder};
 use llm::completion::CompletionRequest;
 
 use crate::convert::{from_llm_tool_calls, from_llm_usage, to_llm_messages};
+use crate::providers::workarounds;
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, FinishReason, GenerateEvent, GenerateOptions,
-    GenerateResponse, Message, ParameterName, ToolDefinition,
+    GenerateResponse, Message, ParameterName, ToolChoice, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
 
@@ -43,6 +45,10 @@ pub struct LlmChatProvider {
     ollama_url: Option<String>,
     /// Default timeout in seconds
     timeout_secs: u64,
+    /// Shared HTTP client for metadata fetches.
+    http_client: reqwest::Client,
+    /// Override base URL for model metadata endpoint (testing).
+    models_base_url: Option<String>,
 }
 
 impl LlmChatProvider {
@@ -54,12 +60,27 @@ impl LlmChatProvider {
     /// * `api_key` - API key for the backend
     /// * `name` - Human-readable name for logging/debugging (e.g., "openrouter", "anthropic")
     pub fn new(backend: LLMBackend, api_key: impl Into<String>, name: impl Into<String>) -> Self {
+        Self::with_http_client(backend, api_key, name, reqwest::Client::new())
+    }
+
+    /// Create a new LlmChatProvider with a shared HTTP client.
+    ///
+    /// Prefer this over [`new`](Self::new) when multiple providers should
+    /// share a connection pool (e.g. from the builder).
+    pub fn with_http_client(
+        backend: LLMBackend,
+        api_key: impl Into<String>,
+        name: impl Into<String>,
+        http_client: reqwest::Client,
+    ) -> Self {
         Self {
             backend,
             api_key: api_key.into(),
             name: name.into(),
             ollama_url: None,
             timeout_secs: 120,
+            http_client,
+            models_base_url: None,
         }
     }
 
@@ -75,6 +96,14 @@ impl LlmChatProvider {
         self
     }
 
+    /// Override the base URL for the models metadata endpoint.
+    ///
+    /// Used for testing with wiremock. The full URL is `{base}/api/v1/models`.
+    pub fn models_base_url(mut self, url: impl Into<String>) -> Self {
+        self.models_base_url = Some(url.into());
+        self
+    }
+
     /// Build an llm provider configured for the given options and tools.
     fn build_provider(
         &self,
@@ -82,6 +111,9 @@ impl LlmChatProvider {
         system_prompt: Option<&str>,
         tools: Option<&[ToolDefinition]>,
     ) -> Result<Box<dyn LLMProvider>> {
+        // compute provider-specific adjustments (parallel_tool_calls, raw_provider_options)
+        let adjustments = workarounds::compute_adjustments(&self.backend, options)?;
+
         let mut builder = LLMBuilder::new()
             .backend(self.backend.clone())
             .api_key(&self.api_key)
@@ -131,6 +163,25 @@ impl LlmChatProvider {
                 builder = builder.reasoning_budget_tokens(max_tokens as u32);
                 builder = builder.reasoning(true);
             }
+        }
+
+        // Handle tool_choice passthrough
+        if let Some(ref tc) = options.tool_choice {
+            let llm_tc = match tc {
+                ToolChoice::Auto => llm::chat::ToolChoice::Auto,
+                ToolChoice::None => llm::chat::ToolChoice::None,
+                ToolChoice::Required => llm::chat::ToolChoice::Any,
+                ToolChoice::Function { name } => llm::chat::ToolChoice::Tool(name.clone()),
+            };
+            builder = builder.tool_choice(llm_tc);
+        }
+
+        // Apply workaround adjustments
+        if let Some(extra) = adjustments.extra_body {
+            builder = builder.extra_body(extra);
+        }
+        if let Some(ptc) = adjustments.native_parallel_tool_calls {
+            builder = builder.enable_parallel_tool_use(ptc);
         }
 
         // Handle Ollama URL
@@ -262,9 +313,8 @@ impl ChatProvider for LlmChatProvider {
                         index,
                         arguments: partial_json,
                     },
-                    llm::chat::StreamChunk::ToolUseComplete { .. } => {
-                        // Emit Done to signal tool completion
-                        ChatEvent::Done
+                    llm::chat::StreamChunk::ToolUseComplete { index, .. } => {
+                        ChatEvent::ToolCallEnd { index }
                     }
                     llm::chat::StreamChunk::Done { .. } => ChatEvent::Done,
                 })
@@ -281,7 +331,54 @@ impl ChatProvider for LlmChatProvider {
             ParameterName::TopP,
             ParameterName::Reasoning,
             ParameterName::Stop,
+            ParameterName::ToolChoice,
+            ParameterName::ParallelToolCalls,
         ]
+    }
+
+    async fn fetch_metadata(&self, model: &str) -> Result<crate::types::ModelMetadata> {
+        use super::openrouter_models::{ModelsResponse, into_model_metadata};
+
+        // Only OpenRouter supports metadata fetch for now
+        if self.backend != LLMBackend::OpenRouter {
+            return Err(RatatoskrError::ModelNotAvailable);
+        }
+
+        let base = self
+            .models_base_url
+            .as_deref()
+            .unwrap_or("https://openrouter.ai");
+        let url = format!("{base}/api/v1/models");
+        let response = self
+            .http_client
+            .get(url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await
+            .map_err(|e| RatatoskrError::Http(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(RatatoskrError::Api {
+                status: response.status().as_u16(),
+                message: response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "unknown error".into()),
+            });
+        }
+
+        let models: ModelsResponse = response
+            .json()
+            .await
+            .map_err(|e| RatatoskrError::Http(e.to_string()))?;
+
+        let entry = models
+            .data
+            .into_iter()
+            .find(|m| m.id == model)
+            .ok_or(RatatoskrError::ModelNotAvailable)?;
+
+        Ok(into_model_metadata(entry))
     }
 }
 

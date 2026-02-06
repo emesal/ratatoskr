@@ -206,6 +206,7 @@ impl RatatoskrBuilder {
 
     /// Build the gateway.
     pub fn build(self) -> Result<EmbeddedGateway> {
+        use crate::cache::ModelCache;
         use crate::providers::{LlmChatProvider, ProviderRegistry};
         use llm::builder::LLMBackend;
         use std::sync::Arc;
@@ -286,55 +287,59 @@ impl RatatoskrBuilder {
         }
 
         // =====================================================================
-        // Register CHAT providers
+        // Register CHAT providers (shared HTTP client for metadata fetches)
         // =====================================================================
+
+        let http_client = reqwest::Client::new();
+
+        // Helper: build an LlmChatProvider with the shared http client
+        let make_provider = |backend, key: String, name: &str| -> Arc<LlmChatProvider> {
+            Arc::new(
+                LlmChatProvider::with_http_client(backend, key, name, http_client.clone())
+                    .timeout_secs(timeout_secs),
+            )
+        };
 
         // OpenRouter (routes to many models, good default)
         if let Some(ref key) = self.openrouter_key {
-            let provider = Arc::new(
-                LlmChatProvider::new(LLMBackend::OpenRouter, key.clone(), "openrouter")
-                    .timeout_secs(timeout_secs),
-            );
+            let provider = make_provider(LLMBackend::OpenRouter, key.clone(), "openrouter");
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
 
         // Direct Anthropic
         if let Some(ref key) = self.anthropic_key {
-            let provider = Arc::new(
-                LlmChatProvider::new(LLMBackend::Anthropic, key.clone(), "anthropic")
-                    .timeout_secs(timeout_secs),
-            );
+            let provider = make_provider(LLMBackend::Anthropic, key.clone(), "anthropic");
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
 
         // Direct OpenAI
         if let Some(ref key) = self.openai_key {
-            let provider = Arc::new(
-                LlmChatProvider::new(LLMBackend::OpenAI, key.clone(), "openai")
-                    .timeout_secs(timeout_secs),
-            );
+            let provider = make_provider(LLMBackend::OpenAI, key.clone(), "openai");
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
 
         // Google (Gemini)
         if let Some(ref key) = self.google_key {
-            let provider = Arc::new(
-                LlmChatProvider::new(LLMBackend::Google, key.clone(), "google")
-                    .timeout_secs(timeout_secs),
-            );
+            let provider = make_provider(LLMBackend::Google, key.clone(), "google");
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
 
         // Ollama
         if let Some(ref url) = self.ollama_url {
-            let mut provider = LlmChatProvider::new(LLMBackend::Ollama, "ollama", "ollama")
-                .timeout_secs(timeout_secs);
-            provider = provider.ollama_url(url.clone());
-            let provider = Arc::new(provider);
+            let provider = Arc::new(
+                LlmChatProvider::with_http_client(
+                    LLMBackend::Ollama,
+                    "ollama",
+                    "ollama",
+                    http_client.clone(),
+                )
+                .timeout_secs(timeout_secs)
+                .ollama_url(url.clone()),
+            );
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
@@ -350,10 +355,12 @@ impl RatatoskrBuilder {
         };
 
         let model_registry = crate::registry::ModelRegistry::with_embedded_seed();
+        let model_cache = Arc::new(ModelCache::new());
 
         Ok(EmbeddedGateway::new(
             registry,
             model_registry,
+            model_cache,
             #[cfg(feature = "local-inference")]
             model_manager,
             #[cfg(feature = "local-inference")]
