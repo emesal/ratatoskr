@@ -33,7 +33,11 @@ impl ModelCache {
     /// Returns `None` on cache miss. Clones the entry to release the
     /// read lock immediately.
     pub fn get(&self, model: &str) -> Option<ModelMetadata> {
-        self.entries.read().expect("cache lock poisoned").get(model).cloned()
+        self.entries
+            .read()
+            .expect("cache lock poisoned")
+            .get(model)
+            .cloned()
     }
 
     /// Insert (or overwrite) metadata, keyed on `metadata.info.id`.

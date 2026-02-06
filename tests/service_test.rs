@@ -125,6 +125,40 @@ async fn test_health_rpc() {
 }
 
 // =============================================================================
+// FetchModelMetadata RPC
+// =============================================================================
+
+#[tokio::test]
+async fn test_fetch_model_metadata_rpc() {
+    let addr = start_test_server().await;
+    let client = ServiceClient::connect(&addr).await.unwrap();
+
+    // fetch_model_metadata makes a real HTTP call to OpenRouter (with fake key),
+    // so it should fail — but the RPC roundtrip itself should work without panicking.
+    let result = client.fetch_model_metadata("some-model").await;
+    assert!(result.is_err(), "should fail with fake API key");
+}
+
+#[tokio::test]
+async fn test_get_model_metadata_rpc() {
+    let addr = start_test_server().await;
+    let client = Arc::new(ServiceClient::connect(&addr).await.unwrap());
+
+    // get_model_metadata (sync) should return seed data for known models
+    let metadata =
+        tokio::task::spawn_blocking(move || client.model_metadata("anthropic/claude-sonnet-4"))
+            .await
+            .unwrap();
+
+    assert!(
+        metadata.is_some(),
+        "should find claude-sonnet-4 in registry via RPC"
+    );
+    let m = metadata.unwrap();
+    assert_eq!(m.info.id, "anthropic/claude-sonnet-4");
+}
+
+// =============================================================================
 // Live tests — require ratd running with valid API keys
 // =============================================================================
 

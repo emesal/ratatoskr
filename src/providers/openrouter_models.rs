@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use serde::Deserialize;
 
 use crate::types::{
-    ModelCapability, ModelInfo, ModelMetadata, ParameterAvailability, ParameterName, ParameterRange,
-    PricingInfo,
+    ModelCapability, ModelInfo, ModelMetadata, ParameterAvailability, ParameterName,
+    ParameterRange, PricingInfo,
 };
 
 /// OpenRouter `/api/v1/models` list response.
@@ -64,8 +64,7 @@ pub(crate) struct Architecture {
 
 /// Convert an OpenRouter model entry into our [`ModelMetadata`].
 pub(crate) fn into_model_metadata(entry: ModelEntry) -> ModelMetadata {
-    let mut info = ModelInfo::new(&entry.id, "openrouter")
-        .with_capability(ModelCapability::Chat);
+    let mut info = ModelInfo::new(&entry.id, "openrouter").with_capability(ModelCapability::Chat);
 
     if let Some(ctx) = entry.context_length {
         info = info.with_context_window(ctx);
@@ -80,9 +79,7 @@ pub(crate) fn into_model_metadata(entry: ModelEntry) -> ModelMetadata {
         })
     });
 
-    let max_output_tokens = entry
-        .top_provider
-        .and_then(|tp| tp.max_completion_tokens);
+    let max_output_tokens = entry.top_provider.and_then(|tp| tp.max_completion_tokens);
 
     let parameters = build_parameter_map(&entry.supported_parameters);
 
@@ -109,7 +106,10 @@ fn build_parameter_map(params: &[String]) -> HashMap<ParameterName, ParameterAva
         ("temperature", ParameterRange::new().min(0.0).max(2.0)),
         ("top_p", ParameterRange::new().min(0.0).max(1.0)),
         ("top_k", ParameterRange::new().min(0.0)),
-        ("frequency_penalty", ParameterRange::new().min(-2.0).max(2.0)),
+        (
+            "frequency_penalty",
+            ParameterRange::new().min(-2.0).max(2.0),
+        ),
         ("presence_penalty", ParameterRange::new().min(-2.0).max(2.0)),
     ];
     let range_map: HashMap<&str, &ParameterRange> =

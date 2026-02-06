@@ -2,7 +2,8 @@
 //!
 //! This module provides [`LlmChatProvider`], which stores LLM configuration and
 //! builds providers per-request because the llm crate requires tools to be
-//! specified at build time.
+//! specified at build time. Also implements [`ChatProvider::fetch_metadata()`]
+//! for OpenRouter (fetches `/api/v1/models` and converts to [`ModelMetadata`](crate::ModelMetadata)).
 
 use std::pin::Pin;
 
@@ -45,6 +46,8 @@ pub struct LlmChatProvider {
     timeout_secs: u64,
     /// Shared HTTP client for metadata fetches.
     http_client: reqwest::Client,
+    /// Override base URL for model metadata endpoint (testing).
+    models_base_url: Option<String>,
 }
 
 impl LlmChatProvider {
@@ -76,6 +79,7 @@ impl LlmChatProvider {
             ollama_url: None,
             timeout_secs: 120,
             http_client,
+            models_base_url: None,
         }
     }
 
@@ -88,6 +92,14 @@ impl LlmChatProvider {
     /// Set the timeout in seconds.
     pub fn timeout_secs(mut self, secs: u64) -> Self {
         self.timeout_secs = secs;
+        self
+    }
+
+    /// Override the base URL for the models metadata endpoint.
+    ///
+    /// Used for testing with wiremock. The full URL is `{base}/api/v1/models`.
+    pub fn models_base_url(mut self, url: impl Into<String>) -> Self {
+        self.models_base_url = Some(url.into());
         self
     }
 
@@ -308,7 +320,11 @@ impl ChatProvider for LlmChatProvider {
             return Err(RatatoskrError::ModelNotAvailable);
         }
 
-        let url = "https://openrouter.ai/api/v1/models";
+        let base = self
+            .models_base_url
+            .as_deref()
+            .unwrap_or("https://openrouter.ai");
+        let url = format!("{base}/api/v1/models");
         let response = self
             .http_client
             .get(url)

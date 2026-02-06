@@ -293,18 +293,12 @@ impl RatatoskrBuilder {
         let http_client = reqwest::Client::new();
 
         // Helper: build an LlmChatProvider with the shared http client
-        let make_provider =
-            |backend, key: String, name: &str| -> Arc<LlmChatProvider> {
-                Arc::new(
-                    LlmChatProvider::with_http_client(
-                        backend,
-                        key,
-                        name,
-                        http_client.clone(),
-                    )
+        let make_provider = |backend, key: String, name: &str| -> Arc<LlmChatProvider> {
+            Arc::new(
+                LlmChatProvider::with_http_client(backend, key, name, http_client.clone())
                     .timeout_secs(timeout_secs),
-                )
-            };
+            )
+        };
 
         // OpenRouter (routes to many models, good default)
         if let Some(ref key) = self.openrouter_key {

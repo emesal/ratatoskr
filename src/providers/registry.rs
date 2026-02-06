@@ -320,7 +320,7 @@ impl ProviderRegistry {
             match provider.fetch_metadata(model).await {
                 Ok(metadata) => return Ok(metadata),
                 Err(RatatoskrError::ModelNotAvailable) | Err(RatatoskrError::NotImplemented(_)) => {
-                    continue
+                    continue;
                 }
                 Err(e) => return Err(e),
             }
