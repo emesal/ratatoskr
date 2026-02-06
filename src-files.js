@@ -1,0 +1,2 @@
+createSrcSidebar('[["ratatoskr",["",[["cache",[],["mod.rs"]],["convert",[],["mod.rs"]],["gateway",[],["builder.rs","embedded.rs","mod.rs"]],["providers",[],["huggingface.rs","llm_chat.rs","mod.rs","openrouter_models.rs","registry.rs","traits.rs","workarounds.rs"]],["registry",[],["mod.rs"]],["types",[],["capabilities.rs","future.rs","generate.rs","message.rs","mod.rs","model.rs","options.rs","parameter.rs","response.rs","stance.rs","token.rs","tool.rs","validation.rs"]]],["error.rs","lib.rs","traits.rs","version.rs"]]]]');
+//{"start":19,"fragment_lengths":[505]}

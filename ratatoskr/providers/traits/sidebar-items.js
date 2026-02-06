@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ZeroShotStanceProvider"],"trait":["ChatProvider","ClassifyProvider","EmbeddingProvider","GenerateProvider","NliProvider","StanceProvider"]};
