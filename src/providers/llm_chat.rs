@@ -106,17 +106,31 @@ impl LlmChatProvider {
         // Handle reasoning config
         if let Some(ref reasoning) = options.reasoning {
             if let Some(ref effort) = reasoning.effort {
-                let llm_effort = match effort {
-                    crate::ReasoningEffort::Low => llm::chat::ReasoningEffort::Low,
-                    crate::ReasoningEffort::Medium => llm::chat::ReasoningEffort::Medium,
-                    crate::ReasoningEffort::High => llm::chat::ReasoningEffort::High,
-                };
-                builder = builder.reasoning_effort(llm_effort);
+                // Map extended effort levels to llm crate's Low/Medium/High
+                match effort {
+                    crate::ReasoningEffort::None => {
+                        // Don't enable reasoning at all
+                    }
+                    _ => {
+                        let llm_effort = match effort {
+                            crate::ReasoningEffort::Minimal | crate::ReasoningEffort::Low => {
+                                llm::chat::ReasoningEffort::Low
+                            }
+                            crate::ReasoningEffort::Medium => llm::chat::ReasoningEffort::Medium,
+                            crate::ReasoningEffort::High | crate::ReasoningEffort::XHigh => {
+                                llm::chat::ReasoningEffort::High
+                            }
+                            crate::ReasoningEffort::None => unreachable!(),
+                        };
+                        builder = builder.reasoning_effort(llm_effort);
+                        builder = builder.reasoning(true);
+                    }
+                }
             }
             if let Some(max_tokens) = reasoning.max_tokens {
                 builder = builder.reasoning_budget_tokens(max_tokens as u32);
+                builder = builder.reasoning(true);
             }
-            builder = builder.reasoning(true);
         }
 
         // Handle Ollama URL
