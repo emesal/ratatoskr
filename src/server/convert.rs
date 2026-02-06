@@ -246,6 +246,11 @@ impl From<ChatEvent> for proto::ChatEvent {
                     arguments,
                 })
             }
+            ChatEvent::ToolCallEnd { index } => {
+                proto::chat_event::Event::ToolCallEnd(proto::ToolCallEnd {
+                    index: index as u32,
+                })
+            }
             ChatEvent::Usage(u) => proto::chat_event::Event::Usage(u.into()),
             ChatEvent::Done => proto::chat_event::Event::Done(true),
         };
@@ -486,6 +491,9 @@ impl From<proto::ChatEvent> for ChatEvent {
             Some(proto::chat_event::Event::ToolCallDelta(t)) => ChatEvent::ToolCallDelta {
                 index: t.index as usize,
                 arguments: t.arguments,
+            },
+            Some(proto::chat_event::Event::ToolCallEnd(t)) => ChatEvent::ToolCallEnd {
+                index: t.index as usize,
             },
             Some(proto::chat_event::Event::Usage(u)) => ChatEvent::Usage(u.into()),
             Some(proto::chat_event::Event::Done(_)) | None => ChatEvent::Done,

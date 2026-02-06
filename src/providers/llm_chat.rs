@@ -313,9 +313,8 @@ impl ChatProvider for LlmChatProvider {
                         index,
                         arguments: partial_json,
                     },
-                    llm::chat::StreamChunk::ToolUseComplete { .. } => {
-                        // Emit Done to signal tool completion
-                        ChatEvent::Done
+                    llm::chat::StreamChunk::ToolUseComplete { index, .. } => {
+                        ChatEvent::ToolCallEnd { index }
                     }
                     llm::chat::StreamChunk::Done { .. } => ChatEvent::Done,
                 })

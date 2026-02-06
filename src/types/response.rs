@@ -38,6 +38,9 @@ pub enum ChatEvent {
     /// Incremental tool call arguments
     ToolCallDelta { index: usize, arguments: String },
 
+    /// A tool call's arguments are complete (does NOT end the stream)
+    ToolCallEnd { index: usize },
+
     /// Usage statistics (typically at end of stream)
     Usage(Usage),
 
