@@ -123,10 +123,13 @@ impl From<proto::ReasoningConfig> for ReasoningConfig {
             effort: p
                 .effort
                 .and_then(|e| match proto::ReasoningEffort::try_from(e).ok()? {
+                    proto::ReasoningEffort::None => Some(ReasoningEffort::None),
+                    proto::ReasoningEffort::Minimal => Some(ReasoningEffort::Minimal),
                     proto::ReasoningEffort::Low => Some(ReasoningEffort::Low),
                     proto::ReasoningEffort::Medium => Some(ReasoningEffort::Medium),
                     proto::ReasoningEffort::High => Some(ReasoningEffort::High),
-                    proto::ReasoningEffort::Unspecified => None,
+                    proto::ReasoningEffort::Xhigh => Some(ReasoningEffort::XHigh),
+                    proto::ReasoningEffort::Unspecified => Option::None,
                 }),
             max_tokens: p.max_tokens.map(|t| t as usize),
             exclude_from_output: p.exclude_from_output,
@@ -761,9 +764,12 @@ impl From<ChatOptions> for proto::ChatOptions {
             cache_prompt: o.cache_prompt,
             reasoning: o.reasoning.map(|r| proto::ReasoningConfig {
                 effort: r.effort.map(|e| match e {
+                    ReasoningEffort::None => proto::ReasoningEffort::None as i32,
+                    ReasoningEffort::Minimal => proto::ReasoningEffort::Minimal as i32,
                     ReasoningEffort::Low => proto::ReasoningEffort::Low as i32,
                     ReasoningEffort::Medium => proto::ReasoningEffort::Medium as i32,
                     ReasoningEffort::High => proto::ReasoningEffort::High as i32,
+                    ReasoningEffort::XHigh => proto::ReasoningEffort::Xhigh as i32,
                 }),
                 max_tokens: r.max_tokens.map(|t| t as u32),
                 exclude_from_output: r.exclude_from_output,
@@ -789,9 +795,12 @@ impl From<GenerateOptions> for proto::GenerateOptions {
             seed: o.seed,
             reasoning: o.reasoning.map(|r| proto::ReasoningConfig {
                 effort: r.effort.map(|e| match e {
+                    ReasoningEffort::None => proto::ReasoningEffort::None as i32,
+                    ReasoningEffort::Minimal => proto::ReasoningEffort::Minimal as i32,
                     ReasoningEffort::Low => proto::ReasoningEffort::Low as i32,
                     ReasoningEffort::Medium => proto::ReasoningEffort::Medium as i32,
                     ReasoningEffort::High => proto::ReasoningEffort::High as i32,
+                    ReasoningEffort::XHigh => proto::ReasoningEffort::Xhigh as i32,
                 }),
                 max_tokens: r.max_tokens.map(|t| t as u32),
                 exclude_from_output: r.exclude_from_output,

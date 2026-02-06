@@ -71,6 +71,16 @@ impl ChatOptions {
         self
     }
 
+    pub fn frequency_penalty(mut self, penalty: f32) -> Self {
+        self.frequency_penalty = Some(penalty);
+        self
+    }
+
+    pub fn presence_penalty(mut self, penalty: f32) -> Self {
+        self.presence_penalty = Some(penalty);
+        self
+    }
+
     pub fn seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
@@ -153,12 +163,18 @@ pub struct ReasoningConfig {
 }
 
 /// Reasoning effort level
+///
+/// Matches OpenRouter's reasoning effort levels. Providers that support fewer
+/// levels (e.g. only low/medium/high) should map to the nearest equivalent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningEffort {
+    None,
+    Minimal,
     Low,
     Medium,
     High,
+    XHigh,
 }
 
 /// Response format configuration
