@@ -40,8 +40,8 @@ use super::traits::{
 };
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, NliResult, ParameterValidationPolicy, StanceResult,
-    ToolDefinition,
+    GenerateOptions, GenerateResponse, Message, ModelMetadata, NliResult,
+    ParameterValidationPolicy, StanceResult, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
 
@@ -301,6 +301,27 @@ impl ProviderRegistry {
             match provider.generate_stream(prompt, options).await {
                 Ok(result) => return Ok(result),
                 Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        Err(RatatoskrError::NoProvider)
+    }
+
+    // ========================================================================
+    // Metadata fetch (walks chat provider fallback chain)
+    // ========================================================================
+
+    /// Fetch model metadata from the chat provider fallback chain.
+    ///
+    /// Walks providers in priority order. `ModelNotAvailable` and `NotImplemented`
+    /// trigger fallback to the next provider; other errors are terminal.
+    pub async fn fetch_chat_metadata(&self, model: &str) -> Result<ModelMetadata> {
+        for provider in &self.chat {
+            match provider.fetch_metadata(model).await {
+                Ok(metadata) => return Ok(metadata),
+                Err(RatatoskrError::ModelNotAvailable) | Err(RatatoskrError::NotImplemented(_)) => {
+                    continue
+                }
                 Err(e) => return Err(e),
             }
         }

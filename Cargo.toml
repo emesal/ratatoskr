@@ -17,7 +17,7 @@ anthropic = ["llm/anthropic"]
 openrouter = ["llm/openrouter"]
 ollama = ["llm/ollama"]
 google = ["llm/google"]
-huggingface = ["dep:reqwest"]
+huggingface = []
 local-inference = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:hf-hub", "dep:dirs"]
 cuda = ["ort/cuda"]
 server = ["dep:tonic", "dep:prost", "dep:clap", "dep:toml", "dep:dirs"]
@@ -33,7 +33,7 @@ serde_json = "1.0"
 thiserror = "2.0"
 tokio = { version = "1", features = ["rt", "sync"] }
 tracing = "0.1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Local inference (optional)
 fastembed = { version = "5", optional = true }
