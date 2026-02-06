@@ -28,13 +28,17 @@ fn test_tool_definition_roundtrip() {
 
 #[test]
 fn test_chat_options_roundtrip() {
-    let opts = ChatOptions::default().model("gpt-4").temperature(0.7);
+    let opts = ChatOptions::default()
+        .model("gpt-4")
+        .temperature(0.7)
+        .parallel_tool_calls(false);
 
     let json = serde_json::to_string(&opts).unwrap();
     let parsed: ChatOptions = serde_json::from_str(&json).unwrap();
 
     assert_eq!(parsed.model, "gpt-4");
     assert_eq!(parsed.temperature, Some(0.7));
+    assert_eq!(parsed.parallel_tool_calls, Some(false));
 }
 
 // ===== Phase 6: ModelMetadata proto roundtrip =====

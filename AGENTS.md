@@ -71,6 +71,7 @@ src/
 │   ├── traits.rs       # EmbeddingProvider, NliProvider, StanceProvider, etc.
 │   ├── registry.rs     # ProviderRegistry (fallback chains per capability)
 │   ├── llm_chat.rs     # LlmChatProvider wrapping llm crate (+ fetch_metadata for OpenRouter)
+│   ├── workarounds.rs  # Provider-specific parameter translation (parallel_tool_calls, extra_body)
 │   ├── openrouter_models.rs  # OpenRouter /api/v1/models response types + conversion
 │   ├── huggingface.rs  # HuggingFace Inference API client
 │   ├── fastembed.rs    # Local embeddings via fastembed-rs
@@ -106,7 +107,7 @@ contrib/
 - `ModelGateway` — async trait with `chat()`, `chat_stream()`, `embed()`, `infer_nli()`, `classify_stance()`, `model_metadata()`, `fetch_model_metadata()`, etc.
 - `Message` — role (System/User/Assistant/Tool) + content + optional tool_calls
 - `ChatEvent` — streaming events: Content, Reasoning, ToolCallStart, ToolCallDelta, Usage, Done
-- `ChatOptions` — model, temperature, max_tokens, top_k, reasoning config, tool_choice, etc.
+- `ChatOptions` — model, temperature, max_tokens, top_k, reasoning config, tool_choice, parallel_tool_calls, etc.
 - `GenerateOptions` — model, temperature, max_tokens, top_k, frequency/presence penalty, seed, reasoning
 - `RatatoskrError` — comprehensive error enum; `ModelNotAvailable` triggers fallback, `UnsupportedParameter` for validation errors
 - `StanceResult` — stance detection result (favor/against/neutral scores with label)
@@ -185,8 +186,9 @@ With the `server` and `client` features enabled:
 - `ParameterName` — hybrid enum with well-known params + `Custom(String)` for provider-specific options
 - `ParameterAvailability` — mutable (with range), read-only, opaque, or unsupported per parameter
 - `ParameterValidationPolicy` — opt-in validation (warn/error/ignore) when providers declare their supported params
-- `ChatOptions` and `GenerateOptions` at full parity: temperature, top_p, top_k, max_tokens, frequency/presence penalty, seed, reasoning
+- `ChatOptions` and `GenerateOptions` at full parity: temperature, top_p, top_k, max_tokens, frequency/presence penalty, seed, reasoning, parallel_tool_calls
 - `raw_provider_options` escape hatch for provider-specific JSON options
+- `workarounds` module isolates provider-specific parameter translation (e.g. `parallel_tool_calls` via `extra_body` for OpenAI-compatible backends, native flag for Mistral, `UnsupportedParameter` for Anthropic direct)
 - Proto `GetModelMetadata` + `FetchModelMetadata` RPCs for remote metadata queries via `ServiceClient`
 
 ## Testing Strategy

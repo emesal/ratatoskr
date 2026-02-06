@@ -17,6 +17,10 @@ fn well_known_parameter_names() {
     assert_eq!(ParameterName::CachePrompt.as_str(), "cache_prompt");
     assert_eq!(ParameterName::ResponseFormat.as_str(), "response_format");
     assert_eq!(ParameterName::ToolChoice.as_str(), "tool_choice");
+    assert_eq!(
+        ParameterName::ParallelToolCalls.as_str(),
+        "parallel_tool_calls"
+    );
 }
 
 #[test]
@@ -39,12 +43,17 @@ fn parameter_name_from_str() {
         "logit_bias".parse::<ParameterName>().unwrap(),
         ParameterName::Custom("logit_bias".into())
     );
+    assert_eq!(
+        "parallel_tool_calls".parse::<ParameterName>().unwrap(),
+        ParameterName::ParallelToolCalls
+    );
 }
 
 #[test]
 fn parameter_name_serde_roundtrip() {
     let names = vec![
         ParameterName::Temperature,
+        ParameterName::ParallelToolCalls,
         ParameterName::Custom("logit_bias".into()),
     ];
     let json = serde_json::to_string(&names).unwrap();

@@ -27,6 +27,8 @@ pub struct ChatOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<ToolChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub parallel_tool_calls: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<ResponseFormat>,
 
     // Normalized cross-provider options
@@ -91,6 +93,11 @@ impl ChatOptions {
         self
     }
 
+    pub fn parallel_tool_calls(mut self, enabled: bool) -> Self {
+        self.parallel_tool_calls = Some(enabled);
+        self
+    }
+
     pub fn response_format(mut self, format: ResponseFormat) -> Self {
         self.response_format = Some(format);
         self
@@ -137,6 +144,9 @@ impl ChatOptions {
         }
         if self.tool_choice.is_some() {
             params.push(ParameterName::ToolChoice);
+        }
+        if self.parallel_tool_calls.is_some() {
+            params.push(ParameterName::ParallelToolCalls);
         }
         if self.response_format.is_some() {
             params.push(ParameterName::ResponseFormat);

@@ -13,7 +13,8 @@
       "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
       "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 16384.0 } },
       "stop": { "availability": "mutable", "range": {} },
-      "reasoning": { "availability": "mutable", "range": {} }
+      "reasoning": { "availability": "mutable", "range": {} },
+      "parallel_tool_calls": { "availability": "mutable", "range": {} }
     },
     "pricing": { "prompt_cost_per_mtok": 3.0, "completion_cost_per_mtok": 15.0 },
     "max_output_tokens": 16384
@@ -30,7 +31,8 @@
       "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
       "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
       "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } }
+      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
+      "parallel_tool_calls": { "availability": "mutable", "range": {} }
     },
     "pricing": { "prompt_cost_per_mtok": 0.80, "completion_cost_per_mtok": 4.0 },
     "max_output_tokens": 8192
@@ -49,7 +51,8 @@
       "frequency_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
       "presence_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
       "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 16384.0 } },
-      "seed": { "availability": "mutable", "range": {} }
+      "seed": { "availability": "mutable", "range": {} },
+      "parallel_tool_calls": { "availability": "mutable", "range": {} }
     },
     "pricing": { "prompt_cost_per_mtok": 2.50, "completion_cost_per_mtok": 10.0 },
     "max_output_tokens": 16384

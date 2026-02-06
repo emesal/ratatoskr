@@ -14,9 +14,10 @@ use llm::builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder};
 use llm::completion::CompletionRequest;
 
 use crate::convert::{from_llm_tool_calls, from_llm_usage, to_llm_messages};
+use crate::providers::workarounds;
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, FinishReason, GenerateEvent, GenerateOptions,
-    GenerateResponse, Message, ParameterName, ToolDefinition,
+    GenerateResponse, Message, ParameterName, ToolChoice, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
 
@@ -110,6 +111,9 @@ impl LlmChatProvider {
         system_prompt: Option<&str>,
         tools: Option<&[ToolDefinition]>,
     ) -> Result<Box<dyn LLMProvider>> {
+        // compute provider-specific adjustments (parallel_tool_calls, raw_provider_options)
+        let adjustments = workarounds::compute_adjustments(&self.backend, options)?;
+
         let mut builder = LLMBuilder::new()
             .backend(self.backend.clone())
             .api_key(&self.api_key)
@@ -159,6 +163,25 @@ impl LlmChatProvider {
                 builder = builder.reasoning_budget_tokens(max_tokens as u32);
                 builder = builder.reasoning(true);
             }
+        }
+
+        // Handle tool_choice passthrough
+        if let Some(ref tc) = options.tool_choice {
+            let llm_tc = match tc {
+                ToolChoice::Auto => llm::chat::ToolChoice::Auto,
+                ToolChoice::None => llm::chat::ToolChoice::None,
+                ToolChoice::Required => llm::chat::ToolChoice::Any,
+                ToolChoice::Function { name } => llm::chat::ToolChoice::Tool(name.clone()),
+            };
+            builder = builder.tool_choice(llm_tc);
+        }
+
+        // Apply workaround adjustments
+        if let Some(extra) = adjustments.extra_body {
+            builder = builder.extra_body(extra);
+        }
+        if let Some(ptc) = adjustments.native_parallel_tool_calls {
+            builder = builder.enable_parallel_tool_use(ptc);
         }
 
         // Handle Ollama URL
@@ -309,6 +332,8 @@ impl ChatProvider for LlmChatProvider {
             ParameterName::TopP,
             ParameterName::Reasoning,
             ParameterName::Stop,
+            ParameterName::ToolChoice,
+            ParameterName::ParallelToolCalls,
         ]
     }
 

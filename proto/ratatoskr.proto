@@ -111,6 +111,7 @@ message ChatOptions {
     optional uint32 top_k = 13;
     // Escape hatch: provider-specific options as JSON string.
     optional string raw_provider_options = 14;
+    optional bool parallel_tool_calls = 15;
 }
 
 message ToolChoice {
