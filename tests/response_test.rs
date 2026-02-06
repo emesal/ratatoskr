@@ -23,6 +23,9 @@ fn test_chat_event_variants() {
     let content = ChatEvent::Content("hello".into());
     assert!(matches!(content, ChatEvent::Content(_)));
 
+    let tool_call_end = ChatEvent::ToolCallEnd { index: 0 };
+    assert!(matches!(tool_call_end, ChatEvent::ToolCallEnd { index: 0 }));
+
     let done = ChatEvent::Done;
     assert!(matches!(done, ChatEvent::Done));
 }
