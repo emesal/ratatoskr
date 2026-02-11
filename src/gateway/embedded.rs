@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures_util::Stream;
+use tracing::instrument;
 
 #[cfg(feature = "local-inference")]
 use crate::Token;
@@ -63,6 +64,7 @@ impl EmbeddedGateway {
 
 #[async_trait]
 impl ModelGateway for EmbeddedGateway {
+    #[instrument(name = "gateway.chat_stream", skip(self, messages, tools, options), fields(model = %options.model))]
     async fn chat_stream(
         &self,
         messages: &[Message],
@@ -72,6 +74,7 @@ impl ModelGateway for EmbeddedGateway {
         self.registry.chat_stream(messages, tools, options).await
     }
 
+    #[instrument(name = "gateway.chat", skip(self, messages, tools, options), fields(model = %options.model))]
     async fn chat(
         &self,
         messages: &[Message],
@@ -117,14 +120,17 @@ impl ModelGateway for EmbeddedGateway {
         }
     }
 
+    #[instrument(name = "gateway.embed", skip(self, text))]
     async fn embed(&self, text: &str, model: &str) -> Result<crate::Embedding> {
         self.registry.embed(text, model).await
     }
 
+    #[instrument(name = "gateway.embed_batch", skip(self, texts), fields(batch_size = texts.len()))]
     async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<crate::Embedding>> {
         self.registry.embed_batch(texts, model).await
     }
 
+    #[instrument(name = "gateway.infer_nli", skip(self, premise, hypothesis))]
     async fn infer_nli(
         &self,
         premise: &str,
@@ -134,6 +140,7 @@ impl ModelGateway for EmbeddedGateway {
         self.registry.infer_nli(premise, hypothesis, model).await
     }
 
+    #[instrument(name = "gateway.classify_zero_shot", skip(self, text, labels))]
     async fn classify_zero_shot(
         &self,
         text: &str,
@@ -148,10 +155,12 @@ impl ModelGateway for EmbeddedGateway {
         self.tokenizer_registry.count_tokens(text, model)
     }
 
+    #[instrument(name = "gateway.generate", skip(self, prompt, options), fields(model = %options.model))]
     async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
         self.registry.generate(prompt, options).await
     }
 
+    #[instrument(name = "gateway.generate_stream", skip(self, prompt, options), fields(model = %options.model))]
     async fn generate_stream(
         &self,
         prompt: &str,
@@ -160,6 +169,7 @@ impl ModelGateway for EmbeddedGateway {
         self.registry.generate_stream(prompt, options).await
     }
 
+    #[instrument(name = "gateway.classify_stance", skip(self, text, target))]
     async fn classify_stance(&self, text: &str, target: &str, model: &str) -> Result<StanceResult> {
         self.registry.classify_stance(text, target, model).await
     }
@@ -259,6 +269,7 @@ impl ModelGateway for EmbeddedGateway {
             .or_else(|| self.model_cache.get(model))
     }
 
+    #[instrument(name = "gateway.fetch_model_metadata", skip(self))]
     async fn fetch_model_metadata(&self, model: &str) -> Result<ModelMetadata> {
         let metadata = self.registry.fetch_chat_metadata(model).await?;
         self.model_cache.insert(metadata.clone());

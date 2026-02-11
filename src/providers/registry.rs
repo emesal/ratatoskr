@@ -45,9 +45,12 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Instant;
 
 use futures_util::Stream;
-use tracing::warn;
+use tracing::{instrument, warn};
+
+use crate::telemetry;
 
 use super::retry::{
     RetryConfig, RetryingChatProvider, RetryingEmbeddingProvider, RetryingGenerateProvider,
@@ -179,117 +182,171 @@ impl ProviderRegistry {
     // ========================================================================
 
     /// Embed text using the fallback chain.
+    #[instrument(skip(self, text), fields(operation = "embed"))]
     pub async fn embed(&self, text: &str, model: &str) -> Result<Embedding> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.embedding {
             match provider.embed(text, model).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("embed", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("embed", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("embed", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Embed batch of texts using the fallback chain.
+    #[instrument(skip(self, texts), fields(operation = "embed_batch", batch_size = texts.len()))]
     pub async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<Embedding>> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.embedding {
             match provider.embed_batch(texts, model).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("embed_batch", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("embed_batch", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("embed_batch", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Infer NLI using the fallback chain.
+    #[instrument(skip(self, premise, hypothesis), fields(operation = "infer_nli"))]
     pub async fn infer_nli(
         &self,
         premise: &str,
         hypothesis: &str,
         model: &str,
     ) -> Result<NliResult> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.nli {
             match provider.infer_nli(premise, hypothesis, model).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("infer_nli", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("infer_nli", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("infer_nli", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Batch NLI inference using the fallback chain.
+    #[instrument(skip(self, pairs), fields(operation = "infer_nli_batch", batch_size = pairs.len()))]
     pub async fn infer_nli_batch(
         &self,
         pairs: &[(&str, &str)],
         model: &str,
     ) -> Result<Vec<NliResult>> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.nli {
             match provider.infer_nli_batch(pairs, model).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("infer_nli_batch", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("infer_nli_batch", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("infer_nli_batch", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Zero-shot classification using the fallback chain.
+    #[instrument(skip(self, text, labels), fields(operation = "classify_zero_shot"))]
     pub async fn classify_zero_shot(
         &self,
         text: &str,
         labels: &[&str],
         model: &str,
     ) -> Result<ClassifyResult> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.classify {
             match provider.classify_zero_shot(text, labels, model).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("classify_zero_shot", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("classify_zero_shot", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("classify_zero_shot", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Stance detection using the fallback chain.
+    #[instrument(skip(self, text, target), fields(operation = "classify_stance"))]
     pub async fn classify_stance(
         &self,
         text: &str,
         target: &str,
         model: &str,
     ) -> Result<StanceResult> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.stance {
             match provider.classify_stance(text, target, model).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("classify_stance", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("classify_stance", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("classify_stance", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -297,26 +354,39 @@ impl ProviderRegistry {
     ///
     /// If a provider declares `supported_chat_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    #[instrument(skip(self, messages, tools, options), fields(operation = "chat", model = %options.model))]
     pub async fn chat(
         &self,
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.chat {
             // Validate parameters before calling provider
             self.validate_chat_params(provider.as_ref(), options)?;
 
             match provider.chat(messages, tools, options).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    let name = provider.name();
+                    Self::record_request("chat", name, start, true);
+                    if let Some(ref usage) = result.usage {
+                        Self::record_token_usage(name, usage);
+                    }
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("chat", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("chat", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -324,26 +394,35 @@ impl ProviderRegistry {
     ///
     /// If a provider declares `supported_chat_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    #[instrument(skip(self, messages, tools, options), fields(operation = "chat_stream", model = %options.model))]
     pub async fn chat_stream(
         &self,
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.chat {
             // Validate parameters before calling provider
             self.validate_chat_params(provider.as_ref(), options)?;
 
             match provider.chat_stream(messages, tools, options).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("chat_stream", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("chat_stream", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("chat_stream", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -351,25 +430,34 @@ impl ProviderRegistry {
     ///
     /// If a provider declares `supported_generate_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    #[instrument(skip(self, prompt, options), fields(operation = "generate", model = %options.model))]
     pub async fn generate(
         &self,
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<GenerateResponse> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.generate {
             // Validate parameters before calling provider
             self.validate_generate_params(provider.as_ref(), options)?;
 
             match provider.generate(prompt, options).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("generate", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("generate", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("generate", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -377,25 +465,34 @@ impl ProviderRegistry {
     ///
     /// If a provider declares `supported_generate_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    #[instrument(skip(self, prompt, options), fields(operation = "generate_stream", model = %options.model))]
     pub async fn generate_stream(
         &self,
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.generate {
             // Validate parameters before calling provider
             self.validate_generate_params(provider.as_ref(), options)?;
 
             match provider.generate_stream(prompt, options).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    Self::record_request("generate_stream", provider.name(), start, true);
+                    return Ok(result);
+                }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("generate_stream", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("generate_stream", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -407,11 +504,16 @@ impl ProviderRegistry {
     ///
     /// Walks providers in priority order. `ModelNotAvailable`, `NotImplemented`,
     /// and exhausted transient errors trigger fallback; other errors are terminal.
+    #[instrument(skip(self), fields(operation = "fetch_chat_metadata"))]
     pub async fn fetch_chat_metadata(&self, model: &str) -> Result<ModelMetadata> {
+        let start = Instant::now();
         let mut last_err = None;
         for provider in &self.chat {
             match provider.fetch_metadata(model).await {
-                Ok(metadata) => return Ok(metadata),
+                Ok(metadata) => {
+                    Self::record_request("fetch_chat_metadata", provider.name(), start, true);
+                    return Ok(metadata);
+                }
                 Err(RatatoskrError::NotImplemented(_)) => {
                     last_err = Some(RatatoskrError::NotImplemented("fetch_metadata"));
                     continue;
@@ -420,9 +522,13 @@ impl ProviderRegistry {
                     last_err = Some(e);
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    Self::record_request("fetch_chat_metadata", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
+        Self::record_request("fetch_chat_metadata", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -474,6 +580,41 @@ impl ProviderRegistry {
             chat: self.chat.iter().map(|p| p.name().to_string()).collect(),
             generate: self.generate.iter().map(|p| p.name().to_string()).collect(),
         }
+    }
+
+    // ========================================================================
+    // Metrics recording
+    // ========================================================================
+
+    /// Record request outcome metrics (counter + histogram).
+    fn record_request(operation: &'static str, provider: &str, start: Instant, ok: bool) {
+        let status = if ok { "ok" } else { "error" };
+        let elapsed = start.elapsed().as_secs_f64();
+        metrics::counter!(telemetry::REQUESTS_TOTAL,
+            "provider" => provider.to_owned(),
+            "operation" => operation,
+            "status" => status,
+        )
+        .increment(1);
+        metrics::histogram!(telemetry::REQUEST_DURATION_SECONDS,
+            "provider" => provider.to_owned(),
+            "operation" => operation,
+        )
+        .record(elapsed);
+    }
+
+    /// Record token usage metrics from a chat response.
+    fn record_token_usage(provider: &str, usage: &crate::types::Usage) {
+        metrics::counter!(telemetry::TOKENS_TOTAL,
+            "provider" => provider.to_owned(),
+            "direction" => "prompt",
+        )
+        .increment(u64::from(usage.prompt_tokens));
+        metrics::counter!(telemetry::TOKENS_TOTAL,
+            "provider" => provider.to_owned(),
+            "direction" => "completion",
+        )
+        .increment(u64::from(usage.completion_tokens));
     }
 
     // ========================================================================

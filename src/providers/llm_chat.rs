@@ -12,6 +12,7 @@ use futures_util::{Stream, StreamExt};
 use llm::LLMProvider;
 use llm::builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder};
 use llm::completion::CompletionRequest;
+use tracing::instrument;
 
 use crate::convert::{from_llm_tool_calls, from_llm_usage, to_llm_messages};
 use crate::providers::workarounds;
@@ -243,6 +244,7 @@ impl ChatProvider for LlmChatProvider {
         &self.name
     }
 
+    #[instrument(name = "llm.chat", skip(self, messages, tools, options), fields(model = %options.model, provider = %self.name))]
     async fn chat(
         &self,
         messages: &[Message],
@@ -284,6 +286,7 @@ impl ChatProvider for LlmChatProvider {
         })
     }
 
+    #[instrument(name = "llm.chat_stream", skip(self, messages, tools, options), fields(model = %options.model, provider = %self.name))]
     async fn chat_stream(
         &self,
         messages: &[Message],
@@ -337,6 +340,7 @@ impl ChatProvider for LlmChatProvider {
         ]
     }
 
+    #[instrument(name = "llm.fetch_metadata", skip(self), fields(provider = %self.name))]
     async fn fetch_metadata(&self, model: &str) -> Result<crate::types::ModelMetadata> {
         use super::openrouter_models::{ModelsResponse, into_model_metadata};
 
@@ -389,6 +393,7 @@ impl GenerateProvider for LlmChatProvider {
         &self.name
     }
 
+    #[instrument(name = "llm.generate", skip(self, prompt, options), fields(model = %options.model, provider = %self.name))]
     async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
         // Build chat options for the provider
         let mut chat_options = ChatOptions::default().model(&options.model);
@@ -429,6 +434,7 @@ impl GenerateProvider for LlmChatProvider {
         })
     }
 
+    #[instrument(name = "llm.generate_stream", skip(self, prompt, options), fields(model = %options.model, provider = %self.name))]
     async fn generate_stream(
         &self,
         prompt: &str,

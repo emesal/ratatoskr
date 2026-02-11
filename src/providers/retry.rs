@@ -16,6 +16,8 @@ use async_trait::async_trait;
 use futures_util::Stream;
 use tracing::warn;
 
+use crate::telemetry;
+
 use super::traits::{ChatProvider, EmbeddingProvider, GenerateProvider, NliProvider};
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, Embedding, GenerateEvent, GenerateOptions,
@@ -156,6 +158,11 @@ where
                         error = %e,
                         "retrying after transient error"
                     );
+                    metrics::counter!(telemetry::RETRIES_TOTAL,
+                        "provider" => provider_name.to_owned(),
+                        "operation" => operation.to_owned(),
+                    )
+                    .increment(1);
                     tokio::time::sleep(delay).await;
                 }
                 last_err = Some(e);

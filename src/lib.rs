@@ -79,6 +79,7 @@ pub mod gateway;
 pub mod model;
 pub mod providers;
 pub mod registry;
+pub mod telemetry;
 #[cfg(feature = "local-inference")]
 pub mod tokenizer;
 pub mod traits;
