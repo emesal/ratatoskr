@@ -58,6 +58,7 @@ use super::retry::{
     RetryConfig, RetryingChatProvider, RetryingEmbeddingProvider, RetryingGenerateProvider,
     RetryingNliProvider,
 };
+use super::routing::{self, HasName, ProviderCostInfo, ProviderLatency, RoutingConfig};
 use super::traits::{
     ChatProvider, ClassifyProvider, EmbeddingProvider, GenerateProvider, NliProvider,
     StanceProvider,
@@ -68,6 +69,38 @@ use crate::types::{
     ParameterValidationPolicy, StanceResult, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
+
+// HasName impls for Arc<dyn Provider> — enables generic promote_preferred().
+impl HasName for Arc<dyn EmbeddingProvider> {
+    fn name(&self) -> &str {
+        EmbeddingProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn NliProvider> {
+    fn name(&self) -> &str {
+        NliProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn ClassifyProvider> {
+    fn name(&self) -> &str {
+        ClassifyProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn StanceProvider> {
+    fn name(&self) -> &str {
+        StanceProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn ChatProvider> {
+    fn name(&self) -> &str {
+        ChatProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn GenerateProvider> {
+    fn name(&self) -> &str {
+        GenerateProvider::name(self.as_ref())
+    }
+}
 
 /// Registry of providers with fallback chain semantics.
 ///
@@ -96,6 +129,8 @@ pub struct ProviderRegistry {
     retry_config: Option<RetryConfig>,
     validation_policy: ParameterValidationPolicy,
     stream_buffer_size: usize,
+    /// Per-provider EWMA latency tracking, keyed by provider name.
+    latency: std::collections::HashMap<String, ProviderLatency>,
 }
 
 impl Default for ProviderRegistry {
@@ -110,6 +145,7 @@ impl Default for ProviderRegistry {
             retry_config: None,
             validation_policy: ParameterValidationPolicy::default(),
             stream_buffer_size: DEFAULT_STREAM_BUFFER,
+            latency: std::collections::HashMap::new(),
         }
     }
 }
@@ -151,15 +187,100 @@ impl ProviderRegistry {
     }
 
     // ========================================================================
+    // Preferred provider routing
+    // ========================================================================
+
+    /// Apply a [`RoutingConfig`] to reorder the fallback chains.
+    ///
+    /// For each capability with a preferred provider set, the named provider
+    /// is moved to position 0. If the provider isn't registered, the chain
+    /// is left unchanged.
+    pub fn apply_routing(&mut self, config: &RoutingConfig) {
+        if let Some(ref name) = config.chat {
+            routing::promote_preferred(&mut self.chat, name);
+        }
+        if let Some(ref name) = config.generate {
+            routing::promote_preferred(&mut self.generate, name);
+        }
+        if let Some(ref name) = config.embed {
+            routing::promote_preferred(&mut self.embedding, name);
+        }
+        if let Some(ref name) = config.nli {
+            routing::promote_preferred(&mut self.nli, name);
+        }
+        if let Some(ref name) = config.classify {
+            routing::promote_preferred(&mut self.classify, name);
+        }
+    }
+
+    // ========================================================================
+    // Latency tracking
+    // ========================================================================
+
+    /// Get the EWMA latency tracker for a provider, or `None` if never observed.
+    pub fn provider_latency(&self, provider: &str) -> Option<&ProviderLatency> {
+        self.latency.get(provider)
+    }
+
+    // ========================================================================
+    // Cost-aware routing
+    // ========================================================================
+
+    /// Return chat providers sorted cheapest-first for the given model.
+    ///
+    /// Consults the provided metadata lookup function to get pricing for each
+    /// registered chat provider's handling of the model. Providers with unknown
+    /// pricing sort last.
+    ///
+    /// This is informational — callers can use it to choose a provider, but
+    /// the registry doesn't automatically route by cost.
+    pub fn providers_by_cost(&self, metadata: Option<&ModelMetadata>) -> Vec<ProviderCostInfo> {
+        let mut result: Vec<ProviderCostInfo> = self
+            .chat
+            .iter()
+            .map(|p| {
+                let (prompt_cost, completion_cost) = metadata
+                    .and_then(|m| m.pricing.as_ref())
+                    .map(|pricing| {
+                        (
+                            pricing.prompt_cost_per_mtok,
+                            pricing.completion_cost_per_mtok,
+                        )
+                    })
+                    .unwrap_or((None, None));
+                ProviderCostInfo {
+                    provider: p.name().to_string(),
+                    prompt_cost_per_mtok: prompt_cost,
+                    completion_cost_per_mtok: completion_cost,
+                }
+            })
+            .collect();
+        result.sort_by(|a, b| {
+            a.combined_cost()
+                .partial_cmp(&b.combined_cost())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        result
+    }
+
+    // ========================================================================
     // Registration methods (appends to end = lowest priority)
     // Call in priority order: first registered = highest priority
     // ========================================================================
+
+    /// Ensure a latency tracker exists for the given provider name.
+    fn ensure_latency_tracker(&mut self, name: &str) {
+        self.latency
+            .entry(name.to_owned())
+            .or_insert_with(ProviderLatency::with_default_alpha);
+    }
 
     /// Add an embedding provider (appended to end of chain).
     ///
     /// If a retry config is set, the provider is automatically wrapped
     /// in [`RetryingEmbeddingProvider`].
     pub fn add_embedding(&mut self, provider: Arc<dyn EmbeddingProvider>) {
+        self.ensure_latency_tracker(provider.name());
         self.embedding.push(self.maybe_wrap_embedding(provider));
     }
 
@@ -168,6 +289,7 @@ impl ProviderRegistry {
     /// If a retry config is set, the provider is automatically wrapped
     /// in [`RetryingNliProvider`].
     pub fn add_nli(&mut self, provider: Arc<dyn NliProvider>) {
+        self.ensure_latency_tracker(provider.name());
         self.nli.push(self.maybe_wrap_nli(provider));
     }
 
@@ -175,6 +297,7 @@ impl ProviderRegistry {
     ///
     /// Classification providers are not retry-wrapped (typically local).
     pub fn add_classify(&mut self, provider: Arc<dyn ClassifyProvider>) {
+        self.ensure_latency_tracker(provider.name());
         self.classify.push(provider);
     }
 
@@ -182,6 +305,7 @@ impl ProviderRegistry {
     ///
     /// Stance providers are not retry-wrapped (typically local).
     pub fn add_stance(&mut self, provider: Arc<dyn StanceProvider>) {
+        self.ensure_latency_tracker(provider.name());
         self.stance.push(provider);
     }
 
@@ -190,6 +314,7 @@ impl ProviderRegistry {
     /// If a retry config is set, the provider is automatically wrapped
     /// in [`RetryingChatProvider`].
     pub fn add_chat(&mut self, provider: Arc<dyn ChatProvider>) {
+        self.ensure_latency_tracker(provider.name());
         self.chat.push(self.maybe_wrap_chat(provider));
     }
 
@@ -198,6 +323,7 @@ impl ProviderRegistry {
     /// If a retry config is set, the provider is automatically wrapped
     /// in [`RetryingGenerateProvider`].
     pub fn add_generate(&mut self, provider: Arc<dyn GenerateProvider>) {
+        self.ensure_latency_tracker(provider.name());
         self.generate.push(self.maybe_wrap_generate(provider));
     }
 
@@ -215,7 +341,7 @@ impl ProviderRegistry {
         for provider in &self.embedding {
             match provider.embed(text, model).await {
                 Ok(result) => {
-                    Self::record_request("embed", provider.name(), start, true);
+                    self.record_request("embed", provider.name(), start, true);
                     return Ok(result);
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
@@ -223,12 +349,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("embed", provider.name(), start, false);
+                    self.record_request("embed", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("embed", "none", start, false);
+        self.record_request("embed", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -240,7 +366,7 @@ impl ProviderRegistry {
         for provider in &self.embedding {
             match provider.embed_batch(texts, model).await {
                 Ok(result) => {
-                    Self::record_request("embed_batch", provider.name(), start, true);
+                    self.record_request("embed_batch", provider.name(), start, true);
                     return Ok(result);
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
@@ -248,12 +374,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("embed_batch", provider.name(), start, false);
+                    self.record_request("embed_batch", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("embed_batch", "none", start, false);
+        self.record_request("embed_batch", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -270,7 +396,7 @@ impl ProviderRegistry {
         for provider in &self.nli {
             match provider.infer_nli(premise, hypothesis, model).await {
                 Ok(result) => {
-                    Self::record_request("infer_nli", provider.name(), start, true);
+                    self.record_request("infer_nli", provider.name(), start, true);
                     return Ok(result);
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
@@ -278,12 +404,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("infer_nli", provider.name(), start, false);
+                    self.record_request("infer_nli", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("infer_nli", "none", start, false);
+        self.record_request("infer_nli", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -299,7 +425,7 @@ impl ProviderRegistry {
         for provider in &self.nli {
             match provider.infer_nli_batch(pairs, model).await {
                 Ok(result) => {
-                    Self::record_request("infer_nli_batch", provider.name(), start, true);
+                    self.record_request("infer_nli_batch", provider.name(), start, true);
                     return Ok(result);
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
@@ -307,12 +433,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("infer_nli_batch", provider.name(), start, false);
+                    self.record_request("infer_nli_batch", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("infer_nli_batch", "none", start, false);
+        self.record_request("infer_nli_batch", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -329,7 +455,7 @@ impl ProviderRegistry {
         for provider in &self.classify {
             match provider.classify_zero_shot(text, labels, model).await {
                 Ok(result) => {
-                    Self::record_request("classify_zero_shot", provider.name(), start, true);
+                    self.record_request("classify_zero_shot", provider.name(), start, true);
                     return Ok(result);
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
@@ -337,12 +463,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("classify_zero_shot", provider.name(), start, false);
+                    self.record_request("classify_zero_shot", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("classify_zero_shot", "none", start, false);
+        self.record_request("classify_zero_shot", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -359,7 +485,7 @@ impl ProviderRegistry {
         for provider in &self.stance {
             match provider.classify_stance(text, target, model).await {
                 Ok(result) => {
-                    Self::record_request("classify_stance", provider.name(), start, true);
+                    self.record_request("classify_stance", provider.name(), start, true);
                     return Ok(result);
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
@@ -367,12 +493,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("classify_stance", provider.name(), start, false);
+                    self.record_request("classify_stance", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("classify_stance", "none", start, false);
+        self.record_request("classify_stance", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -396,7 +522,7 @@ impl ProviderRegistry {
             match provider.chat(messages, tools, options).await {
                 Ok(result) => {
                     let name = provider.name();
-                    Self::record_request("chat", name, start, true);
+                    self.record_request("chat", name, start, true);
                     if let Some(ref usage) = result.usage {
                         Self::record_token_usage(name, usage);
                     }
@@ -407,12 +533,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("chat", provider.name(), start, false);
+                    self.record_request("chat", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("chat", "none", start, false);
+        self.record_request("chat", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -435,7 +561,7 @@ impl ProviderRegistry {
 
             match provider.chat_stream(messages, tools, options).await {
                 Ok(stream) => {
-                    Self::record_request("chat_stream", provider.name(), start, true);
+                    self.record_request("chat_stream", provider.name(), start, true);
                     return Ok(backpressure::bounded_stream(
                         stream,
                         self.stream_buffer_size,
@@ -446,12 +572,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("chat_stream", provider.name(), start, false);
+                    self.record_request("chat_stream", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("chat_stream", "none", start, false);
+        self.record_request("chat_stream", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -473,7 +599,7 @@ impl ProviderRegistry {
 
             match provider.generate(prompt, options).await {
                 Ok(result) => {
-                    Self::record_request("generate", provider.name(), start, true);
+                    self.record_request("generate", provider.name(), start, true);
                     return Ok(result);
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
@@ -481,12 +607,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("generate", provider.name(), start, false);
+                    self.record_request("generate", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("generate", "none", start, false);
+        self.record_request("generate", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -508,7 +634,7 @@ impl ProviderRegistry {
 
             match provider.generate_stream(prompt, options).await {
                 Ok(stream) => {
-                    Self::record_request("generate_stream", provider.name(), start, true);
+                    self.record_request("generate_stream", provider.name(), start, true);
                     return Ok(backpressure::bounded_stream(
                         stream,
                         self.stream_buffer_size,
@@ -519,12 +645,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("generate_stream", provider.name(), start, false);
+                    self.record_request("generate_stream", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("generate_stream", "none", start, false);
+        self.record_request("generate_stream", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -543,7 +669,7 @@ impl ProviderRegistry {
         for provider in &self.chat {
             match provider.fetch_metadata(model).await {
                 Ok(metadata) => {
-                    Self::record_request("fetch_chat_metadata", provider.name(), start, true);
+                    self.record_request("fetch_chat_metadata", provider.name(), start, true);
                     return Ok(metadata);
                 }
                 Err(RatatoskrError::NotImplemented(_)) => {
@@ -555,12 +681,12 @@ impl ProviderRegistry {
                     continue;
                 }
                 Err(e) => {
-                    Self::record_request("fetch_chat_metadata", provider.name(), start, false);
+                    self.record_request("fetch_chat_metadata", provider.name(), start, false);
                     return Err(e);
                 }
             }
         }
-        Self::record_request("fetch_chat_metadata", "none", start, false);
+        self.record_request("fetch_chat_metadata", "none", start, false);
         Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
@@ -618,10 +744,10 @@ impl ProviderRegistry {
     // Metrics recording
     // ========================================================================
 
-    /// Record request outcome metrics (counter + histogram).
-    fn record_request(operation: &'static str, provider: &str, start: Instant, ok: bool) {
+    /// Record request outcome metrics (counter + histogram) and update latency tracker.
+    fn record_request(&self, operation: &'static str, provider: &str, start: Instant, ok: bool) {
+        let elapsed = start.elapsed();
         let status = if ok { "ok" } else { "error" };
-        let elapsed = start.elapsed().as_secs_f64();
         metrics::counter!(telemetry::REQUESTS_TOTAL,
             "provider" => provider.to_owned(),
             "operation" => operation,
@@ -632,7 +758,12 @@ impl ProviderRegistry {
             "provider" => provider.to_owned(),
             "operation" => operation,
         )
-        .record(elapsed);
+        .record(elapsed.as_secs_f64());
+
+        // Update per-provider EWMA latency (pre-populated at registration time)
+        if let Some(tracker) = self.latency.get(provider) {
+            tracker.record(elapsed);
+        }
     }
 
     /// Record token usage metrics from a chat response.

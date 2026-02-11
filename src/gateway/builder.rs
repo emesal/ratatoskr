@@ -5,6 +5,7 @@ use crate::ParameterValidationPolicy;
 use crate::cache::CacheConfig;
 use crate::providers::RetryConfig;
 use crate::providers::backpressure::DEFAULT_STREAM_BUFFER;
+use crate::providers::routing::RoutingConfig;
 use crate::{RatatoskrError, Result};
 
 #[cfg(feature = "local-inference")]
@@ -38,6 +39,7 @@ pub struct RatatoskrBuilder {
     retry_config: RetryConfig,
     validation_policy: ParameterValidationPolicy,
     stream_buffer_size: usize,
+    routing_config: Option<RoutingConfig>,
     cache_config: Option<CacheConfig>,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
@@ -67,6 +69,7 @@ impl RatatoskrBuilder {
             retry_config: RetryConfig::default(),
             validation_policy: ParameterValidationPolicy::default(),
             stream_buffer_size: DEFAULT_STREAM_BUFFER,
+            routing_config: None,
             cache_config: None,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
@@ -213,6 +216,24 @@ impl RatatoskrBuilder {
     /// ```
     pub fn response_cache(mut self, config: CacheConfig) -> Self {
         self.cache_config = Some(config);
+        self
+    }
+
+    /// Set preferred provider routing.
+    ///
+    /// Reorders the fallback chain so the named provider is tried first
+    /// for each capability. Unset capabilities keep the default order.
+    ///
+    /// ```rust,ignore
+    /// # use ratatoskr::{Ratatoskr, RoutingConfig};
+    /// Ratatoskr::builder()
+    ///     .openrouter("key")
+    ///     .anthropic("key")
+    ///     .routing(RoutingConfig::new().chat("anthropic").embed("local"))
+    ///     .build()?;
+    /// ```
+    pub fn routing(mut self, config: RoutingConfig) -> Self {
+        self.routing_config = Some(config);
         self
     }
 
@@ -402,6 +423,11 @@ impl RatatoskrBuilder {
             }
             Arc::new(registry)
         };
+
+        // Apply preferred provider routing (reorders fallback chains)
+        if let Some(ref routing) = self.routing_config {
+            registry.apply_routing(routing);
+        }
 
         let model_registry = crate::registry::ModelRegistry::with_embedded_seed();
         let model_cache = Arc::new(ModelCache::new());

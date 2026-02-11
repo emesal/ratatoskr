@@ -35,8 +35,8 @@ task 6:  telemetry — tracing spans with #[instrument] on dispatch paths       
 task 7:  telemetry — metrics crate integration (counters, histograms)               [x]
 task 8:  streaming backpressure — bounded channels in chat_stream/generate_stream   [x]
 task 9:  response cache — CacheConfig + ResponseCache for embed/NLI                 [x]
-task 10: routing — wire up RoutingConfig + latency tracking                         [ ]
-task 11: update AGENTS.md, ROADMAP.md, and docs                                    [ ]
+task 10: routing — wire up RoutingConfig + latency tracking                         [x]
+task 11: update AGENTS.md, ROADMAP.md, and docs                                    [x]
 ```
 
 Dependencies: task 1 → 2 → 3 → 4. task 5 depends on 3. tasks 6–7 are independent. task 8 is independent. task 9 depends on 7 (metrics for cache hit/miss). task 10 depends on 6–7 (latency data). task 11 is last.

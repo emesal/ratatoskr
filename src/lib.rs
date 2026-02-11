@@ -100,6 +100,7 @@ pub use client::ServiceClient;
 pub use error::{RatatoskrError, Result};
 pub use gateway::{EmbeddedGateway, Ratatoskr, RatatoskrBuilder};
 pub use providers::RetryConfig;
+pub use providers::{ProviderCostInfo, ProviderLatency, RoutingConfig};
 pub use traits::ModelGateway;
 
 // Re-export tokenizer types when feature is enabled
