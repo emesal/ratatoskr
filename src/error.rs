@@ -4,6 +4,7 @@ use std::time::Duration;
 
 /// Ratatoskr error types
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum RatatoskrError {
     // Provider/network errors
     #[error("HTTP error: {0}")]

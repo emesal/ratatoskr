@@ -97,7 +97,7 @@ there is no `crates/` directory. this is a leftover from a different project.
 
 one-line-per-site changes with massive long-term payoff. do these together since they touch the same files.
 
-### B1. add `#[non_exhaustive]` to all public enums `[  ]`
+### B1. add `#[non_exhaustive]` to all public enums `[x]`
 
 **Severity:** MAJOR
 
@@ -125,7 +125,7 @@ without `#[non_exhaustive]`, adding a variant to any public enum post-1.0 is a b
 
 ---
 
-### B2. add `PartialEq` derives across core types `[  ]`
+### B2. add `PartialEq` derives across core types `[x]`
 
 **Severity:** MAJOR
 
@@ -147,7 +147,7 @@ most core types are missing `PartialEq`, making test assertions painful. all fie
 
 ---
 
-### B3. add `Serialize`/`Deserialize` to `ChatEvent` `[  ]`
+### B3. add `Serialize`/`Deserialize` to `ChatEvent` `[x]`
 
 **Severity:** MAJOR
 
@@ -157,7 +157,7 @@ most core types are missing `PartialEq`, making test assertions painful. all fie
 
 ---
 
-### B4. unify capability representations `[  ]`
+### B4. unify capability representations `[x]` (partial — naming alignment + bridge; full unification deferred to #20)
 
 **Severity:** MAJOR
 

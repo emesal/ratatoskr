@@ -259,6 +259,7 @@ fn print_metadata(m: &ModelMetadata) {
                 ParameterAvailability::ReadOnly { value } => format!("read-only = {value}"),
                 ParameterAvailability::Opaque => "opaque".to_string(),
                 ParameterAvailability::Unsupported => "unsupported".to_string(),
+                _ => "unknown".to_string(),
             };
             println!("  {name}: {desc}");
         }

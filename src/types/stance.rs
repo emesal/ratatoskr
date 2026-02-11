@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// The detected stance label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum StanceLabel {
     /// Text expresses support for the target.
     Favor,
@@ -17,7 +18,7 @@ pub enum StanceLabel {
 }
 
 /// Result of stance detection.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StanceResult {
     /// Score for favor stance (0.0 to 1.0).
     pub favor: f32,

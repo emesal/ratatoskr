@@ -6,7 +6,7 @@ use crate::types::{FinishReason, Usage};
 use serde::{Deserialize, Serialize};
 
 /// Options for text generation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerateOptions {
     /// Model to use for generation.
     pub model: String,
@@ -163,7 +163,7 @@ impl GenerateOptions {
 }
 
 /// Response from text generation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerateResponse {
     /// Generated text.
     pub text: String,
@@ -181,8 +181,9 @@ pub struct GenerateResponse {
 }
 
 /// Events emitted during streaming generation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
+#[non_exhaustive]
 pub enum GenerateEvent {
     /// Text chunk generated.
     #[serde(rename = "text")]

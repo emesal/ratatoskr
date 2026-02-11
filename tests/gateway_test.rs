@@ -20,7 +20,7 @@ fn test_capabilities_chat_only() {
     let caps = Capabilities::chat_only();
     assert!(caps.chat);
     assert!(caps.chat_streaming);
-    assert!(!caps.embeddings);
+    assert!(!caps.embed);
 }
 
 #[test]
@@ -32,9 +32,9 @@ fn test_builder_with_huggingface() {
         .expect("should build with huggingface only");
 
     let caps = gateway.capabilities();
-    assert!(caps.embeddings);
+    assert!(caps.embed);
     assert!(caps.nli);
-    assert!(caps.classification);
+    assert!(caps.classify);
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn test_builder_openrouter_and_huggingface() {
 
     let caps = gateway.capabilities();
     assert!(caps.chat);
-    assert!(caps.embeddings);
+    assert!(caps.embed);
 }
 
 // ===== Phase 6: model_metadata tests =====

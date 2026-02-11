@@ -359,13 +359,15 @@ impl From<ModelInfo> for proto::ModelInfo {
             capabilities: m
                 .capabilities
                 .into_iter()
-                .map(|c| match c {
-                    ModelCapability::Chat => proto::ModelCapability::Chat as i32,
-                    ModelCapability::Generate => proto::ModelCapability::Generate as i32,
-                    ModelCapability::Embed => proto::ModelCapability::Embed as i32,
-                    ModelCapability::Nli => proto::ModelCapability::Nli as i32,
-                    ModelCapability::Classify => proto::ModelCapability::Classify as i32,
-                    ModelCapability::Stance => proto::ModelCapability::Stance as i32,
+                .filter_map(|c| match c {
+                    ModelCapability::Chat => Some(proto::ModelCapability::Chat as i32),
+                    ModelCapability::Generate => Some(proto::ModelCapability::Generate as i32),
+                    ModelCapability::Embed => Some(proto::ModelCapability::Embed as i32),
+                    ModelCapability::Nli => Some(proto::ModelCapability::Nli as i32),
+                    ModelCapability::Classify => Some(proto::ModelCapability::Classify as i32),
+                    ModelCapability::Stance => Some(proto::ModelCapability::Stance as i32),
+                    // Gateway-level capabilities have no proto equivalent
+                    _ => None,
                 })
                 .collect(),
             context_window: m.context_window.map(|w| w as u32),

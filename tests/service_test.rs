@@ -104,6 +104,7 @@ async fn test_client_model_status() {
         | ratatoskr::ModelStatus::Available
         | ratatoskr::ModelStatus::Loading
         | ratatoskr::ModelStatus::Unavailable { .. } => {}
+        _ => panic!("unexpected model status variant"),
     }
 }
 
