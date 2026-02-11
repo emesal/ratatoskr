@@ -64,6 +64,7 @@ src/
 │   └── seed.json       # Embedded model metadata (compiled-in fallback)
 ├── cache/
 │   ├── mod.rs          # ModelCache — ephemeral provider-fetched metadata store
+│   ├── discovery.rs    # ParameterDiscoveryCache — runtime parameter rejection cache (moka)
 │   └── response.rs     # ResponseCache — opt-in LRU+TTL cache for embed/NLI (moka)
 ├── gateway/
 │   ├── embedded.rs     # EmbeddedGateway delegating to ProviderRegistry
@@ -132,6 +133,9 @@ contrib/
 - `ProviderCostInfo` — cost ranking for providers serving a model (sorted cheapest-first)
 - `CacheConfig` — opt-in response cache configuration (max entries, TTL)
 - `ResponseCache` — moka-backed LRU+TTL cache for embed/NLI responses
+- `DiscoveryConfig` — configuration for runtime parameter discovery cache (max entries, TTL)
+- `ParameterDiscoveryCache` — moka-backed cache recording parameter rejections at runtime; consulted during validation to prevent repeated failures
+- `DiscoveryRecord` — a single parameter rejection (parameter, provider, model, timestamp, reason); forward-compatible with #14 aggregation
 
 ### Builder Pattern
 
@@ -148,6 +152,8 @@ Ratatoskr::builder()
     .retry(RetryConfig::new().max_attempts(5))      // phase 7: retry on transient errors
     .routing(RoutingConfig::new().chat("anthropic")) // phase 7: preferred provider routing
     .response_cache(CacheConfig::default())          // phase 7: cache embed/NLI responses
+    .discovery(DiscoveryConfig::new().ttl(Duration::from_secs(12 * 3600)))  // optional: tune discovery
+    // .disable_parameter_discovery()                 // opt-out: disable runtime discovery
     .build()?
 ```
 
@@ -213,6 +219,7 @@ With the `server` and `client` features enabled:
 - **Response cache**: Opt-in moka-backed LRU+TTL cache for deterministic operations (embed, NLI). Zero overhead when not configured. Cache key = `hash(operation, model, input)`. Emits `ratatoskr_cache_hits_total` / `ratatoskr_cache_misses_total` metrics.
 - **Telemetry**: `#[instrument]` tracing spans on dispatch and gateway paths. `metrics` crate integration: `ratatoskr_requests_total`, `ratatoskr_request_duration_seconds`, `ratatoskr_retries_total`, `ratatoskr_tokens_total`. Recorder-agnostic (consumers install their own backend).
 - **Routing**: `RoutingConfig` reorders fallback chains per capability (preferred provider first). `ProviderLatency` tracks EWMA per provider. `providers_by_cost()` returns providers sorted cheapest-first via `ModelMetadata.pricing`. ratd TOML `[routing]` section now wired through to the builder.
+- **Parameter discovery**: `ParameterDiscoveryCache` records runtime parameter rejections (`UnsupportedParameter` errors) keyed on `(provider, model, parameter)`. Validation consults this cache alongside static declarations. On by default (1,000 entries, 24h TTL); opt-out via `.disable_parameter_discovery()`. Emits `ratatoskr_parameter_discoveries_total` metric. ratd TOML `[discovery]` section for configuration.
 
 ## Testing Strategy
 

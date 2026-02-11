@@ -119,7 +119,7 @@ pub use providers::{
 };
 
 // Re-export cache
-pub use cache::{CacheConfig, ModelCache, ResponseCache};
+pub use cache::{CacheConfig, DiscoveryConfig, ModelCache, ResponseCache};
 
 // Re-export registry
 pub use registry::ModelRegistry;

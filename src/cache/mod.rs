@@ -1,6 +1,6 @@
 //! Caching subsystem.
 //!
-//! Two independent caches:
+//! Three independent caches:
 //!
 //! - [`ModelCache`] — ephemeral model metadata fetched from providers at
 //!   runtime. Populated by [`ModelGateway::fetch_model_metadata()`](crate::ModelGateway::fetch_model_metadata),
@@ -10,8 +10,15 @@
 //!   operations (embeddings, NLI). Activated via the builder's
 //!   `.response_cache()` method. See [`response`] module docs for
 //!   architecture and future extensibility notes.
+//!
+//! - [`discovery::ParameterDiscoveryCache`] — records parameter rejections
+//!   from providers at runtime, preventing repeated failures. On by default;
+//!   opt-out via [`RatatoskrBuilder::disable_parameter_discovery()`](crate::RatatoskrBuilder::disable_parameter_discovery).
 
+pub mod discovery;
 pub mod response;
+
+pub use discovery::{DiscoveryConfig, DiscoveryRecord, ParameterDiscoveryCache};
 pub use response::{CacheConfig, ResponseCache};
 
 use std::collections::HashMap;

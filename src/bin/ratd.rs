@@ -125,5 +125,12 @@ fn build_gateway(
     // Apply routing preferences from config
     builder = builder.routing(config.routing.clone());
 
+    // Apply parameter discovery config
+    if config.discovery.enabled {
+        builder = builder.discovery(config.discovery.clone().into());
+    } else {
+        builder = builder.disable_parameter_discovery();
+    }
+
     builder.build()
 }

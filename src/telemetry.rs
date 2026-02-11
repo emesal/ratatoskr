@@ -45,3 +45,6 @@ pub const CACHE_HITS_TOTAL: &str = "ratatoskr_cache_hits_total";
 ///
 /// Labels: `operation`.
 pub const CACHE_MISSES_TOTAL: &str = "ratatoskr_cache_misses_total";
+
+/// Counter: parameter discoveries from runtime rejections.
+pub const PARAMETER_DISCOVERIES_TOTAL: &str = "ratatoskr_parameter_discoveries_total";

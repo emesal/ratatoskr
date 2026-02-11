@@ -25,6 +25,59 @@ pub struct Config {
     pub providers: ProvidersConfig,
     #[serde(default)]
     pub routing: RoutingConfig,
+    #[serde(default)]
+    pub discovery: DiscoveryTomlConfig,
+}
+
+/// Runtime parameter discovery configuration (TOML section).
+///
+/// ```toml
+/// [discovery]
+/// enabled = true
+/// ttl_hours = 24
+/// max_entries = 1000
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiscoveryTomlConfig {
+    /// Whether parameter discovery is enabled. Default: true.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Time-to-live for cached entries, in hours. Default: 24.
+    #[serde(default = "default_ttl_hours")]
+    pub ttl_hours: u64,
+    /// Maximum number of cached entries. Default: 1,000.
+    #[serde(default = "default_discovery_entries")]
+    pub max_entries: u64,
+}
+
+impl Default for DiscoveryTomlConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            ttl_hours: default_ttl_hours(),
+            max_entries: default_discovery_entries(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_ttl_hours() -> u64 {
+    24
+}
+
+fn default_discovery_entries() -> u64 {
+    1_000
+}
+
+impl From<DiscoveryTomlConfig> for crate::DiscoveryConfig {
+    fn from(toml: DiscoveryTomlConfig) -> Self {
+        crate::DiscoveryConfig::new()
+            .max_entries(toml.max_entries)
+            .ttl(std::time::Duration::from_secs(toml.ttl_hours * 3600))
+    }
 }
 
 /// Server network configuration.
@@ -314,6 +367,7 @@ mod tests {
             server: ServerConfig::default(),
             providers: ProvidersConfig::default(),
             routing: RoutingConfig::default(),
+            discovery: DiscoveryTomlConfig::default(),
         };
         assert_eq!(config.server.address, "127.0.0.1:9741");
         assert_eq!(config.server.limits.max_concurrent_requests, 100);
@@ -422,5 +476,43 @@ mod tests {
         assert_eq!(local.device, "cuda");
         assert_eq!(local.models_dir, Some(PathBuf::from("/opt/models")));
         assert_eq!(local.ram_budget_mb, Some(2048));
+    }
+
+    #[test]
+    fn parse_discovery_config() {
+        let toml = r#"
+            [discovery]
+            enabled = false
+            ttl_hours = 12
+            max_entries = 500
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert!(!config.discovery.enabled);
+        assert_eq!(config.discovery.ttl_hours, 12);
+        assert_eq!(config.discovery.max_entries, 500);
+    }
+
+    #[test]
+    fn discovery_defaults_when_omitted() {
+        let toml = r#"
+            [server]
+            address = "127.0.0.1:9741"
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert!(config.discovery.enabled);
+        assert_eq!(config.discovery.ttl_hours, 24);
+        assert_eq!(config.discovery.max_entries, 1_000);
+    }
+
+    #[test]
+    fn discovery_toml_to_config_conversion() {
+        let toml_config = DiscoveryTomlConfig {
+            enabled: true,
+            ttl_hours: 12,
+            max_entries: 500,
+        };
+        let config: crate::DiscoveryConfig = toml_config.into();
+        assert_eq!(config.max_entries, 500);
+        assert_eq!(config.ttl, std::time::Duration::from_secs(12 * 3600));
     }
 }

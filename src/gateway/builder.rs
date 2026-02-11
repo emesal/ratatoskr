@@ -2,7 +2,7 @@
 
 use super::EmbeddedGateway;
 use crate::ParameterValidationPolicy;
-use crate::cache::CacheConfig;
+use crate::cache::{CacheConfig, DiscoveryConfig};
 use crate::providers::RetryConfig;
 use crate::providers::backpressure::DEFAULT_STREAM_BUFFER;
 use crate::providers::routing::RoutingConfig;
@@ -41,6 +41,8 @@ pub struct RatatoskrBuilder {
     stream_buffer_size: usize,
     routing_config: Option<RoutingConfig>,
     cache_config: Option<CacheConfig>,
+    discovery_config: Option<DiscoveryConfig>,
+    discovery_disabled: bool,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -71,6 +73,8 @@ impl RatatoskrBuilder {
             stream_buffer_size: DEFAULT_STREAM_BUFFER,
             routing_config: None,
             cache_config: None,
+            discovery_config: Some(DiscoveryConfig::default()),
+            discovery_disabled: false,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -219,6 +223,23 @@ impl RatatoskrBuilder {
         self
     }
 
+    /// Override the runtime parameter discovery configuration.
+    ///
+    /// Discovery is on by default; this method allows tuning TTL, capacity, etc.
+    pub fn discovery(mut self, config: DiscoveryConfig) -> Self {
+        self.discovery_config = Some(config);
+        self
+    }
+
+    /// Disable runtime parameter discovery entirely.
+    ///
+    /// When disabled, parameter rejections at runtime are not cached and
+    /// subsequent requests may repeat the same unsupported parameter.
+    pub fn disable_parameter_discovery(mut self) -> Self {
+        self.discovery_disabled = true;
+        self
+    }
+
     /// Set preferred provider routing.
     ///
     /// Reorders the fallback chain so the named provider is tried first
@@ -312,6 +333,14 @@ impl RatatoskrBuilder {
         registry.set_retry_config(self.retry_config);
         registry.set_validation_policy(self.validation_policy);
         registry.set_stream_buffer_size(self.stream_buffer_size);
+
+        // Wire up parameter discovery cache (on by default, opt-out via disable_parameter_discovery)
+        if !self.discovery_disabled
+            && let Some(ref config) = self.discovery_config
+        {
+            let cache = Arc::new(crate::cache::ParameterDiscoveryCache::new(config));
+            registry.set_discovery_cache(cache);
+        }
 
         // =====================================================================
         // Register LOCAL providers FIRST (higher priority)
