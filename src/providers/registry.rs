@@ -52,6 +52,8 @@ use tracing::{instrument, warn};
 
 use crate::telemetry;
 
+use super::backpressure;
+use super::backpressure::DEFAULT_STREAM_BUFFER;
 use super::retry::{
     RetryConfig, RetryingChatProvider, RetryingEmbeddingProvider, RetryingGenerateProvider,
     RetryingNliProvider,
@@ -84,7 +86,6 @@ use crate::{RatatoskrError, Result};
 /// When a provider declares its supported parameters via `supported_chat_parameters()`
 /// or `supported_generate_parameters()`, the registry can validate incoming requests.
 /// Set `validation_policy` to control behaviour when unsupported parameters are found.
-#[derive(Default)]
 pub struct ProviderRegistry {
     embedding: Vec<Arc<dyn EmbeddingProvider>>,
     nli: Vec<Arc<dyn NliProvider>>,
@@ -94,6 +95,23 @@ pub struct ProviderRegistry {
     generate: Vec<Arc<dyn GenerateProvider>>,
     retry_config: Option<RetryConfig>,
     validation_policy: ParameterValidationPolicy,
+    stream_buffer_size: usize,
+}
+
+impl Default for ProviderRegistry {
+    fn default() -> Self {
+        Self {
+            embedding: Vec::new(),
+            nli: Vec::new(),
+            classify: Vec::new(),
+            stance: Vec::new(),
+            chat: Vec::new(),
+            generate: Vec::new(),
+            retry_config: None,
+            validation_policy: ParameterValidationPolicy::default(),
+            stream_buffer_size: DEFAULT_STREAM_BUFFER,
+        }
+    }
 }
 
 impl ProviderRegistry {
@@ -109,6 +127,14 @@ impl ProviderRegistry {
     /// retry exhaustion trigger fallback to the next provider.
     pub fn set_retry_config(&mut self, config: RetryConfig) {
         self.retry_config = Some(config);
+    }
+
+    /// Set the stream buffer size for backpressure.
+    ///
+    /// Controls the bounded channel capacity between stream producers
+    /// and consumers. Default: [`DEFAULT_STREAM_BUFFER`] (64).
+    pub fn set_stream_buffer_size(&mut self, size: usize) {
+        self.stream_buffer_size = size;
     }
 
     /// Set the parameter validation policy.
@@ -408,9 +434,12 @@ impl ProviderRegistry {
             self.validate_chat_params(provider.as_ref(), options)?;
 
             match provider.chat_stream(messages, tools, options).await {
-                Ok(result) => {
+                Ok(stream) => {
                     Self::record_request("chat_stream", provider.name(), start, true);
-                    return Ok(result);
+                    return Ok(backpressure::bounded_stream(
+                        stream,
+                        self.stream_buffer_size,
+                    ));
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);
@@ -478,9 +507,12 @@ impl ProviderRegistry {
             self.validate_generate_params(provider.as_ref(), options)?;
 
             match provider.generate_stream(prompt, options).await {
-                Ok(result) => {
+                Ok(stream) => {
                     Self::record_request("generate_stream", provider.name(), start, true);
-                    return Ok(result);
+                    return Ok(backpressure::bounded_stream(
+                        stream,
+                        self.stream_buffer_size,
+                    ));
                 }
                 Err(e) if Self::is_fallback_trigger(&e) => {
                     last_err = Some(e);

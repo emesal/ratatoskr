@@ -33,7 +33,7 @@ task 4:  RetryingProvider<T> for EmbeddingProvider, NliProvider, GenerateProvide
 task 5:  cross-provider retry fallback in ProviderRegistry                          [x]
 task 6:  telemetry — tracing spans with #[instrument] on dispatch paths             [x]
 task 7:  telemetry — metrics crate integration (counters, histograms)               [x]
-task 8:  streaming backpressure — bounded channels in chat_stream/generate_stream   [ ]
+task 8:  streaming backpressure — bounded channels in chat_stream/generate_stream   [x]
 task 9:  response cache — CacheConfig + ResponseCache for embed/NLI                 [ ]
 task 10: routing — wire up RoutingConfig + latency tracking                         [ ]
 task 11: update AGENTS.md, ROADMAP.md, and docs                                    [ ]

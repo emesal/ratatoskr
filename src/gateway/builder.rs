@@ -3,6 +3,7 @@
 use super::EmbeddedGateway;
 use crate::ParameterValidationPolicy;
 use crate::providers::RetryConfig;
+use crate::providers::backpressure::DEFAULT_STREAM_BUFFER;
 use crate::{RatatoskrError, Result};
 
 #[cfg(feature = "local-inference")]
@@ -35,6 +36,7 @@ pub struct RatatoskrBuilder {
     default_timeout_secs: Option<u64>,
     retry_config: RetryConfig,
     validation_policy: ParameterValidationPolicy,
+    stream_buffer_size: usize,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -62,6 +64,7 @@ impl RatatoskrBuilder {
             default_timeout_secs: None,
             retry_config: RetryConfig::default(),
             validation_policy: ParameterValidationPolicy::default(),
+            stream_buffer_size: DEFAULT_STREAM_BUFFER,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -182,6 +185,15 @@ impl RatatoskrBuilder {
         self
     }
 
+    /// Set the stream buffer size for backpressure.
+    ///
+    /// Controls the bounded channel capacity between stream producers and
+    /// consumers in `chat_stream` and `generate_stream`. Default: 64.
+    pub fn stream_buffer_size(mut self, size: usize) -> Self {
+        self.stream_buffer_size = size;
+        self
+    }
+
     /// Set the parameter validation policy.
     ///
     /// Controls how the registry handles requests containing parameters
@@ -256,6 +268,7 @@ impl RatatoskrBuilder {
         let mut registry = ProviderRegistry::new();
         registry.set_retry_config(self.retry_config);
         registry.set_validation_policy(self.validation_policy);
+        registry.set_stream_buffer_size(self.stream_buffer_size);
 
         // =====================================================================
         // Register LOCAL providers FIRST (higher priority)

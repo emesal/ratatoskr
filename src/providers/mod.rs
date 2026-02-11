@@ -5,6 +5,7 @@
 //! - `ProviderRegistry` for fallback chain routing
 //! - Concrete provider implementations (HuggingFace, FastEmbed, ONNX, etc.)
 
+pub mod backpressure;
 pub mod llm_chat;
 pub(crate) mod openrouter_models;
 pub mod registry;
