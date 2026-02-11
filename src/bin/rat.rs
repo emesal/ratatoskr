@@ -82,11 +82,42 @@ enum Command {
         /// Model identifier (e.g., "anthropic/claude-sonnet-4")
         model: String,
     },
+
+    /// Fetch and cache the remote model registry
+    UpdateRegistry {
+        /// Registry URL (default: emesal/ratatoskr-registry on GitHub)
+        #[arg(long)]
+        url: Option<String>,
+        /// Local cache path (default: ~/.cache/ratatoskr/registry.json)
+        #[arg(long)]
+        cache_path: Option<std::path::PathBuf>,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+
+    // Commands that don't require a ratd connection
+    if let Command::UpdateRegistry { url, cache_path } = args.command {
+        use ratatoskr::registry::remote::{DEFAULT_REGISTRY_URL, RemoteRegistryConfig};
+
+        let config = RemoteRegistryConfig {
+            url: url.unwrap_or_else(|| DEFAULT_REGISTRY_URL.to_string()),
+            cache_path: cache_path.unwrap_or_else(|| {
+                dirs::cache_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from(".cache"))
+                    .join("ratatoskr")
+                    .join("registry.json")
+            }),
+        };
+
+        let models = ratatoskr::registry::remote::update_registry(&config).await?;
+        println!("fetched {} model entries", models.len());
+        println!("saved to {}", config.cache_path.display());
+        return Ok(());
+    }
+
     let client = ServiceClient::connect(&args.address).await?;
 
     match args.command {
@@ -162,6 +193,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let metadata = client.fetch_model_metadata(&model).await?;
             print_metadata(&metadata);
         }
+
+        Command::UpdateRegistry { .. } => unreachable!("handled above"),
     }
 
     Ok(())

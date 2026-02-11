@@ -18,9 +18,9 @@ openrouter = ["llm/openrouter"]
 ollama = ["llm/ollama"]
 google = ["llm/google"]
 huggingface = []
-local-inference = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:hf-hub", "dep:dirs"]
+local-inference = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:hf-hub"]
 cuda = ["ort/cuda"]
-server = ["dep:tonic", "dep:prost", "dep:clap", "dep:toml", "dep:dirs"]
+server = ["dep:tonic", "dep:prost", "dep:clap", "dep:toml"]
 client = ["dep:tonic", "dep:prost", "dep:clap"]
 
 [dependencies]
@@ -43,7 +43,7 @@ fastembed = { version = "5", optional = true }
 ort = { version = "2.0.0-rc", optional = true, default-features = false }
 tokenizers = { version = "0.22", optional = true, default-features = false, features = ["http"] }
 hf-hub = { version = "0.4", optional = true }
-dirs = { version = "5", optional = true }
+dirs = "5"
 
 # gRPC service mode (optional)
 tonic = { version = "0.13", optional = true }
@@ -70,3 +70,4 @@ tokio = { version = "1", features = ["full", "test-util"] }
 tokio-test = "0.4"
 wiremock = "0.6"
 metrics-util = { version = "0.20", features = ["debugging"] }
+tempfile = "3"

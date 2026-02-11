@@ -125,6 +125,12 @@ fn build_gateway(
     // Apply routing preferences from config
     builder = builder.routing(config.routing.clone());
 
+    // Apply remote registry config (loads from local cache only, no network I/O)
+    if let Some(ref registry) = config.registry {
+        let reg_config: ratatoskr::registry::remote::RemoteRegistryConfig = registry.clone().into();
+        builder = builder.remote_registry(reg_config);
+    }
+
     // Apply parameter discovery config
     if config.discovery.enabled {
         builder = builder.discovery(config.discovery.clone().into());

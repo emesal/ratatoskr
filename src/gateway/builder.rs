@@ -6,6 +6,7 @@ use crate::cache::{CacheConfig, DiscoveryConfig};
 use crate::providers::RetryConfig;
 use crate::providers::backpressure::DEFAULT_STREAM_BUFFER;
 use crate::providers::routing::RoutingConfig;
+use crate::registry::remote::RemoteRegistryConfig;
 use crate::{RatatoskrError, Result};
 
 #[cfg(feature = "local-inference")]
@@ -43,6 +44,7 @@ pub struct RatatoskrBuilder {
     cache_config: Option<CacheConfig>,
     discovery_config: Option<DiscoveryConfig>,
     discovery_disabled: bool,
+    registry_config: Option<RemoteRegistryConfig>,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -75,6 +77,7 @@ impl RatatoskrBuilder {
             cache_config: None,
             discovery_config: Some(DiscoveryConfig::default()),
             discovery_disabled: false,
+            registry_config: None,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -237,6 +240,22 @@ impl RatatoskrBuilder {
     /// subsequent requests may repeat the same unsupported parameter.
     pub fn disable_parameter_discovery(mut self) -> Self {
         self.discovery_disabled = true;
+        self
+    }
+
+    /// Set the remote registry configuration.
+    ///
+    /// At build time, the builder loads from the local cache file only (no
+    /// network I/O). Use [`remote::update_registry()`](crate::registry::remote::update_registry)
+    /// or `rat update-registry` to fetch from the network.
+    pub fn remote_registry(mut self, config: RemoteRegistryConfig) -> Self {
+        self.registry_config = Some(config);
+        self
+    }
+
+    /// Convenience: set the remote registry URL with default cache path.
+    pub fn registry_url(mut self, url: impl Into<String>) -> Self {
+        self.registry_config = Some(RemoteRegistryConfig::with_url(url));
         self
     }
 
@@ -458,7 +477,10 @@ impl RatatoskrBuilder {
             registry.apply_routing(routing);
         }
 
-        let model_registry = crate::registry::ModelRegistry::with_embedded_seed();
+        let mut model_registry = crate::registry::ModelRegistry::with_embedded_seed();
+        if let Some(ref config) = self.registry_config {
+            model_registry = model_registry.with_cached_remote(&config.cache_path);
+        }
         let model_cache = Arc::new(ModelCache::new());
 
         let response_cache = self

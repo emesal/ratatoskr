@@ -27,6 +27,43 @@ pub struct Config {
     pub routing: RoutingConfig,
     #[serde(default)]
     pub discovery: DiscoveryTomlConfig,
+    #[serde(default)]
+    pub registry: Option<RegistryTomlConfig>,
+}
+
+/// Remote registry configuration (TOML section).
+///
+/// ```toml
+/// [registry]
+/// remote_url = "https://raw.githubusercontent.com/..."
+/// cache_path = "~/.cache/ratatoskr/registry.json"
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+pub struct RegistryTomlConfig {
+    /// URL to fetch the registry from. Default: emesal/ratatoskr-registry on GitHub.
+    #[serde(default = "default_registry_url")]
+    pub remote_url: String,
+    /// Local cache path. Default: ~/.cache/ratatoskr/registry.json.
+    #[serde(default)]
+    pub cache_path: Option<PathBuf>,
+}
+
+fn default_registry_url() -> String {
+    crate::registry::remote::DEFAULT_REGISTRY_URL.to_string()
+}
+
+impl From<RegistryTomlConfig> for crate::registry::remote::RemoteRegistryConfig {
+    fn from(toml: RegistryTomlConfig) -> Self {
+        crate::registry::remote::RemoteRegistryConfig {
+            url: toml.remote_url,
+            cache_path: toml.cache_path.unwrap_or_else(|| {
+                dirs::cache_dir()
+                    .unwrap_or_else(|| PathBuf::from(".cache"))
+                    .join("ratatoskr")
+                    .join("registry.json")
+            }),
+        }
+    }
 }
 
 /// Runtime parameter discovery configuration (TOML section).
@@ -502,6 +539,43 @@ mod tests {
         assert!(config.discovery.enabled);
         assert_eq!(config.discovery.ttl_hours, 24);
         assert_eq!(config.discovery.max_entries, 1_000);
+    }
+
+    #[test]
+    fn parse_registry_config() {
+        let toml = r#"
+            [registry]
+            remote_url = "https://example.com/registry.json"
+            cache_path = "/tmp/registry.json"
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        let registry = config.registry.unwrap();
+        assert_eq!(registry.remote_url, "https://example.com/registry.json");
+        assert_eq!(
+            registry.cache_path,
+            Some(PathBuf::from("/tmp/registry.json"))
+        );
+    }
+
+    #[test]
+    fn registry_defaults_when_omitted() {
+        let toml = r#"
+            [server]
+            address = "127.0.0.1:9741"
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert!(config.registry.is_none());
+    }
+
+    #[test]
+    fn registry_toml_to_config_conversion() {
+        let toml_config = RegistryTomlConfig {
+            remote_url: "https://example.com/reg.json".to_string(),
+            cache_path: Some(PathBuf::from("/tmp/reg.json")),
+        };
+        let config: crate::registry::remote::RemoteRegistryConfig = toml_config.into();
+        assert_eq!(config.url, "https://example.com/reg.json");
+        assert_eq!(config.cache_path, PathBuf::from("/tmp/reg.json"));
     }
 
     #[test]

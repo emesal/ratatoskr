@@ -61,6 +61,7 @@ src/
 │   └── token.rs        # Token (detailed tokenization)
 ├── registry/           # Model metadata registry (Phase 6)
 │   ├── mod.rs          # ModelRegistry with layered merge
+│   ├── remote.rs       # Remote registry fetch, local cache, versioned format
 │   └── seed.json       # Embedded model metadata (compiled-in fallback)
 ├── cache/
 │   ├── mod.rs          # ModelCache — ephemeral provider-fetched metadata store
@@ -118,7 +119,9 @@ contrib/
 - `RatatoskrError` — comprehensive error enum; `ModelNotAvailable` triggers fallback, `UnsupportedParameter` for validation errors
 - `StanceResult` — stance detection result (favor/against/neutral scores with label)
 - `ProviderRegistry` — fallback chains per capability with opt-in parameter validation; `fetch_chat_metadata()` for on-demand fetch
-- `ModelRegistry` — centralized model metadata with layered merge (embedded seed + live data)
+- `ModelRegistry` — centralized model metadata with three-layer merge (embedded seed → cached remote → live data)
+- `RemoteRegistryConfig` — URL + cache path for the remote registry; default: `emesal/ratatoskr-registry` on GitHub
+- `RemoteRegistry` — versioned payload wrapper (`{ "version": 1, "models": [...] }`) with legacy bare-array fallback
 - `ModelCache` — ephemeral thread-safe cache for provider-fetched metadata (consulted after registry miss)
 - `ModelMetadata` — extended model info: capabilities, parameters, pricing, max output tokens
 - `ParameterName` — hybrid enum (well-known params + `Custom(String)` escape hatch)
@@ -154,6 +157,8 @@ Ratatoskr::builder()
     .response_cache(CacheConfig::default())          // phase 7: cache embed/NLI responses
     .discovery(DiscoveryConfig::new().ttl(Duration::from_secs(12 * 3600)))  // optional: tune discovery
     // .disable_parameter_discovery()                 // opt-out: disable runtime discovery
+    .registry_url("https://...")                     // optional: remote registry (loads cached only)
+    // .remote_registry(RemoteRegistryConfig::default()) // full control over URL + cache path
     .build()?
 ```
 
@@ -192,7 +197,7 @@ Supported NLI models: `NliDebertaV3Base`, `NliDebertaV3Small`, or custom ONNX mo
 
 With the `server` and `client` features enabled:
 - `ratd` — daemon binary serving `EmbeddedGateway` over gRPC (default `127.0.0.1:9741`)
-- `rat` — CLI client with subcommands: `health`, `models`, `status`, `chat`, `embed`, `nli`, `tokens`, `metadata`
+- `rat` — CLI client with subcommands: `health`, `models`, `status`, `chat`, `embed`, `nli`, `tokens`, `metadata`, `update-registry`
 - `ServiceClient` — implements `ModelGateway` trait, transparently forwarding all calls over gRPC
 - TOML configuration with provider/routing/limits sections
 - Separate secrets file (`~/.config/ratatoskr/secrets.toml`) with 0600 permission enforcement
@@ -200,7 +205,7 @@ With the `server` and `client` features enabled:
 
 ### Model Intelligence (Phase 6)
 
-- `ModelRegistry` — centralized model metadata with three-layer merge (embedded seed → live → cache)
+- `ModelRegistry` — centralized model metadata with three-layer merge (embedded seed → cached remote → live)
 - `ModelCache` — ephemeral store for metadata fetched on cache miss from provider APIs
 - `model_metadata(model)` — sync lookup: registry (curated) → cache (ephemeral)
 - `fetch_model_metadata(model)` — async: walks chat provider chain, populates cache on success
