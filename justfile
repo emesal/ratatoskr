@@ -245,9 +245,9 @@ pre-push: check-freeze lint test
 push: pre-push
   git push
 
-# Install to ~/.cargo/bin
+# Install ratd + rat to ~/.cargo/bin
 install:
-  cargo install --path crates/chibi-cli
+  cargo install --path . --features server,client
 
 # === Documentation ===
 

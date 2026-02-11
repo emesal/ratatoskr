@@ -122,10 +122,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match args.command {
         Command::Health => {
+            let (healthy, version, git_sha) = client.health().await?;
+            let status = if healthy { "healthy" } else { "unhealthy" };
+            println!(
+                "ratd {version} ({})",
+                git_sha.as_deref().unwrap_or("unknown")
+            );
+            println!("status: {status}");
             let models = client.list_models();
-            println!("connected to ratd at {}", args.address);
-            println!("available providers: {}", models.len());
-            println!("status: healthy");
+            println!("models: {}", models.len());
         }
 
         Command::Models => {
@@ -177,7 +182,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .chat(
                     &[ratatoskr::Message::user(&message)],
                     None,
-                    &ChatOptions::default().model(&model),
+                    &ChatOptions::new(&model),
                 )
                 .await?;
             println!("{}", response.content);

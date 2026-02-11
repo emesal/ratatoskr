@@ -396,7 +396,7 @@ impl GenerateProvider for LlmChatProvider {
     #[instrument(name = "llm.generate", skip(self, prompt, options), fields(model = %options.model, provider = %self.name))]
     async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
         // Build chat options for the provider
-        let mut chat_options = ChatOptions::default().model(&options.model);
+        let mut chat_options = ChatOptions::new(&options.model);
         if let Some(temp) = options.temperature {
             chat_options = chat_options.temperature(temp);
         }
@@ -444,7 +444,7 @@ impl GenerateProvider for LlmChatProvider {
         // by wrapping the prompt in a user message
         let messages = vec![Message::user(prompt)];
 
-        let mut chat_options = ChatOptions::default().model(&options.model);
+        let mut chat_options = ChatOptions::new(&options.model);
         if let Some(temp) = options.temperature {
             chat_options = chat_options.temperature(temp);
         }

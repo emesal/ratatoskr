@@ -5,8 +5,7 @@
 
 use llm::chat::ChatMessage as LlmMessage;
 
-use crate::types::response::Usage as RataUsage;
-use crate::{Message, MessageContent, Role, ToolCall};
+use crate::{Message, MessageContent, Role, ToolCall, Usage as RataUsage};
 
 /// Convert our messages to llm crate messages
 pub fn to_llm_messages(messages: &[Message]) -> (Option<String>, Vec<LlmMessage>) {

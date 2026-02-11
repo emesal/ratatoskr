@@ -718,7 +718,7 @@ impl ProviderRegistry {
                     return Ok(metadata);
                 }
                 Err(RatatoskrError::NotImplemented(_)) => {
-                    last_err = Some(RatatoskrError::NotImplemented("fetch_metadata"));
+                    last_err = Some(RatatoskrError::NotImplemented("fetch_metadata".into()));
                     continue;
                 }
                 Err(e) if self.is_fallback_trigger(&e) => {

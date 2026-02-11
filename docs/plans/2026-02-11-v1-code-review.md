@@ -13,7 +13,7 @@
 
 These are API surface issues that become permanent after 1.0, plus broken tooling.
 
-### A1. Memory leak in `from_status` `[  ]`
+### A1. Memory leak in `from_status` `[x]`
 
 **File:** `src/client/service_client.rs` (~line 62)
 **Severity:** CRITICAL
@@ -26,7 +26,7 @@ These are API surface issues that become permanent after 1.0, plus broken toolin
 
 ---
 
-### A2. `rat health` ignores the Health RPC `[  ]`
+### A2. `rat health` ignores the Health RPC `[x]`
 
 **File:** `src/bin/rat.rs` (~line 125)
 **Severity:** CRITICAL
@@ -40,7 +40,7 @@ the `health` subcommand calls `list_models()` and unconditionally prints "status
 
 ---
 
-### A3. `pub mod response` leaks internal module path `[  ]`
+### A3. `pub mod response` leaks internal module path `[x]`
 
 **File:** `src/types/mod.rs` (line 10)
 **Severity:** CRITICAL
@@ -51,7 +51,7 @@ every other submodule in `types/` is `mod` (private) with re-exports. `response`
 
 ---
 
-### A4. rename `future.rs` — misleading module name `[  ]`
+### A4. rename `future.rs` — misleading module name `[x]`
 
 **File:** `src/types/future.rs`
 **Severity:** CRITICAL
@@ -62,7 +62,7 @@ module is named `future` but contains production NLP types (`Embedding`, `NliRes
 
 ---
 
-### A5. `ChatOptions::default()` foot-gun `[  ]`
+### A5. `ChatOptions::default()` foot-gun `[x]`
 
 **File:** `src/types/options.rs`
 **Severity:** CRITICAL
@@ -77,7 +77,7 @@ module is named `future` but contains production NLP types (`Embedding`, `NliRes
 
 ---
 
-### A6. justfile `install` target references nonexistent path `[  ]`
+### A6. justfile `install` target references nonexistent path `[x]`
 
 **File:** `justfile` (line 250)
 **Severity:** CRITICAL
@@ -116,7 +116,7 @@ without `#[non_exhaustive]`, adding a variant to any public enum post-1.0 is a b
 - `ParameterAvailability` — `src/types/parameter.rs`
 - `ParameterValidationPolicy` — `src/types/validation.rs`
 - `StanceLabel` — `src/types/stance.rs`
-- `NliLabel` — `src/types/future.rs` (or `inference.rs` after A4)
+- `NliLabel` — `src/types/inference.rs`
 - `ToolChoice` — `src/types/tool.rs`
 - `ReasoningEffort` — `src/types/options.rs`
 - `ResponseFormat` — `src/types/options.rs`
@@ -138,7 +138,7 @@ most core types are missing `PartialEq`, making test assertions painful. all fie
 - `ChatEvent` — `src/types/response.rs`
 - `GenerateEvent` — `src/types/generate.rs`
 - `ChatResponse`, `GenerateResponse`, `Usage` — `src/types/response.rs`, `src/types/generate.rs`
-- `Embedding`, `NliResult`, `ClassifyResult` — `src/types/future.rs`
+- `Embedding`, `NliResult`, `ClassifyResult` — `src/types/inference.rs`
 - `Capabilities` — `src/types/capabilities.rs`
 - `ModelInfo` — `src/types/model.rs`
 - `StanceResult` — `src/types/stance.rs`

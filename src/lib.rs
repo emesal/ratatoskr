@@ -21,7 +21,7 @@
 //!             Message::user("What is the capital of France?"),
 //!         ],
 //!         None,
-//!         &ChatOptions::default().model("anthropic/claude-sonnet-4"),
+//!         &ChatOptions::new("anthropic/claude-sonnet-4"),
 //!     ).await?;
 //!
 //!     println!("{}", response.content);

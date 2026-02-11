@@ -1,4 +1,4 @@
-//! Stub types for future capabilities (Phase 2+)
+//! Inference result types for embeddings, NLI, and classification.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

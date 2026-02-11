@@ -9,7 +9,7 @@ use std::sync::Arc;
 use futures_util::StreamExt;
 use tonic::{Request, Response, Status};
 
-use crate::ModelGateway;
+use crate::{ChatOptions, ModelGateway};
 
 use super::proto;
 use super::proto::ratatoskr_server::Ratatoskr;
@@ -68,7 +68,10 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
         let req = request.into_inner();
         let messages: Vec<_> = req.messages.into_iter().map(Into::into).collect();
         let tools: Vec<_> = req.tools.into_iter().map(Into::into).collect();
-        let options = req.options.map(Into::into).unwrap_or_default();
+        let options = req
+            .options
+            .map(Into::into)
+            .unwrap_or_else(|| ChatOptions::new(""));
 
         let tools_ref = if tools.is_empty() {
             None
@@ -94,7 +97,10 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
         let req = request.into_inner();
         let messages: Vec<_> = req.messages.into_iter().map(Into::into).collect();
         let tools: Vec<_> = req.tools.into_iter().map(Into::into).collect();
-        let options = req.options.map(Into::into).unwrap_or_default();
+        let options = req
+            .options
+            .map(Into::into)
+            .unwrap_or_else(|| ChatOptions::new(""));
 
         let tools_ref = if tools.is_empty() {
             None

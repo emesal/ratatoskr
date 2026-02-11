@@ -48,7 +48,7 @@ impl ChatProvider for MockChat {
         _tools: Option<&[ToolDefinition]>,
         _options: &ChatOptions,
     ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<ChatEvent>> + Send>>> {
-        Err(RatatoskrError::NotImplemented("stream"))
+        Err(RatatoskrError::NotImplemented("stream".into()))
     }
 }
 
@@ -125,7 +125,7 @@ async fn preferred_chat_provider_tried_first() {
 
     // Verify it actually dispatches to anthropic first
     let result = registry
-        .chat(&[], None, &ChatOptions::default().model("test"))
+        .chat(&[], None, &ChatOptions::new("test"))
         .await
         .unwrap();
     assert_eq!(result.content, "from anthropic");
@@ -227,7 +227,7 @@ async fn registry_tracks_latency_on_dispatch() {
 
     // Dispatch a request
     registry
-        .chat(&[], None, &ChatOptions::default().model("test"))
+        .chat(&[], None, &ChatOptions::new("test"))
         .await
         .unwrap();
 

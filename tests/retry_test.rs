@@ -67,7 +67,7 @@ impl ChatProvider for FailThenSucceed {
         _tools: Option<&[ToolDefinition]>,
         _options: &ChatOptions,
     ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<ChatEvent>> + Send>>> {
-        Err(RatatoskrError::NotImplemented("stream"))
+        Err(RatatoskrError::NotImplemented("stream".into()))
     }
 }
 
@@ -84,9 +84,7 @@ async fn retries_on_transient_error_then_succeeds() {
             .jitter(false),
     );
 
-    let result = provider
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = provider.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_ok());
     assert_eq!(inner.call_count(), 3); // 2 failures + 1 success
@@ -105,9 +103,7 @@ async fn gives_up_after_max_attempts() {
             .jitter(false),
     );
 
-    let result = provider
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = provider.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_err());
     assert_eq!(inner.call_count(), 3);
@@ -125,9 +121,7 @@ async fn does_not_retry_permanent_errors() {
             .initial_delay(Duration::from_millis(1)),
     );
 
-    let result = provider
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = provider.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_err());
     assert_eq!(inner.call_count(), 1); // no retry
@@ -147,9 +141,7 @@ async fn respects_retry_after_duration() {
     );
 
     let start = std::time::Instant::now();
-    let result = provider
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = provider.chat(&[], None, &ChatOptions::new("test")).await;
     let elapsed = start.elapsed();
 
     assert!(result.is_ok());
@@ -164,9 +156,7 @@ async fn disabled_config_no_retry() {
     }));
     let provider = RetryingChatProvider::new(inner.clone(), RetryConfig::disabled());
 
-    let result = provider
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = provider.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_err());
     assert_eq!(inner.call_count(), 1);
@@ -309,7 +299,7 @@ impl GenerateProvider for FailingGenerateProvider {
         _options: &GenerateOptions,
     ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<GenerateEvent>> + Send>>>
     {
-        Err(RatatoskrError::NotImplemented("stream"))
+        Err(RatatoskrError::NotImplemented("stream".into()))
     }
 }
 

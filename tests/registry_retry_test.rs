@@ -56,7 +56,7 @@ impl ChatProvider for AlwaysFailProvider {
         _tools: Option<&[ToolDefinition]>,
         _options: &ChatOptions,
     ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<ChatEvent>> + Send>>> {
-        Err(RatatoskrError::NotImplemented("stream"))
+        Err(RatatoskrError::NotImplemented("stream".into()))
     }
 }
 
@@ -108,7 +108,7 @@ impl ChatProvider for SuccessProvider {
         _tools: Option<&[ToolDefinition]>,
         _options: &ChatOptions,
     ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<ChatEvent>> + Send>>> {
-        Err(RatatoskrError::NotImplemented("stream"))
+        Err(RatatoskrError::NotImplemented("stream".into()))
     }
 }
 
@@ -130,9 +130,7 @@ async fn transient_error_triggers_fallback_to_next_provider() {
     registry.add_chat(failing.clone());
     registry.add_chat(success.clone());
 
-    let result = registry
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = registry.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -164,9 +162,7 @@ async fn all_providers_fail_transiently_returns_last_error() {
     registry.add_chat(provider1.clone());
     registry.add_chat(provider2.clone());
 
-    let result = registry
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = registry.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_err());
     // Last error should be from provider2 (the last in chain)
@@ -192,9 +188,7 @@ async fn permanent_error_stops_chain_immediately() {
     registry.add_chat(failing.clone());
     registry.add_chat(success.clone());
 
-    let result = registry
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = registry.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_err());
     assert!(matches!(result, Err(RatatoskrError::AuthenticationFailed)));
@@ -215,9 +209,7 @@ async fn model_not_available_still_triggers_fallback() {
     registry.add_chat(failing.clone());
     registry.add_chat(success.clone());
 
-    let result = registry
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = registry.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_ok());
     assert_eq!(failing.calls(), 1);
@@ -238,9 +230,7 @@ async fn without_retry_config_transient_errors_are_terminal() {
     registry.add_chat(failing.clone());
     registry.add_chat(success.clone());
 
-    let result = registry
-        .chat(&[], None, &ChatOptions::default().model("test"))
-        .await;
+    let result = registry.chat(&[], None, &ChatOptions::new("test")).await;
 
     assert!(result.is_err());
     assert_eq!(failing.calls(), 1);

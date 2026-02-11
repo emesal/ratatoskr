@@ -173,7 +173,7 @@ async fn test_live_chat() {
         .chat(
             &[Message::user("Say hello in exactly 3 words.")],
             None,
-            &ChatOptions::default().model("anthropic/claude-sonnet-4"),
+            &ChatOptions::new("anthropic/claude-sonnet-4"),
         )
         .await
         .expect("chat request failed");

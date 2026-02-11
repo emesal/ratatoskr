@@ -28,7 +28,7 @@ fn test_tool_definition_roundtrip() {
 
 #[test]
 fn test_chat_options_roundtrip() {
-    let opts = ChatOptions::default()
+    let opts = ChatOptions::new("")
         .model("gpt-4")
         .temperature(0.7)
         .parallel_tool_calls(false);

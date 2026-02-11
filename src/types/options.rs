@@ -5,7 +5,7 @@ use super::tool::ToolChoice;
 use serde::{Deserialize, Serialize};
 
 /// Options for chat requests (provider-agnostic)
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatOptions {
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -43,6 +43,27 @@ pub struct ChatOptions {
 }
 
 impl ChatOptions {
+    /// Create options with the specified model.
+    pub fn new(model: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            temperature: None,
+            max_tokens: None,
+            top_p: None,
+            top_k: None,
+            stop: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            seed: None,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            response_format: None,
+            cache_prompt: None,
+            reasoning: None,
+            raw_provider_options: None,
+        }
+    }
+
     pub fn model(mut self, model: impl Into<String>) -> Self {
         self.model = model.into();
         self

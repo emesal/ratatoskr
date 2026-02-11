@@ -45,7 +45,7 @@ pub enum RatatoskrError {
     Configuration(String),
 
     #[error("operation not implemented: {0}")]
-    NotImplemented(&'static str),
+    NotImplemented(String),
 
     #[error("provider does not support this operation")]
     Unsupported,

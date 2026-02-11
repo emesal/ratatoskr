@@ -47,6 +47,21 @@ impl ServiceClient {
             .map_err(|e| RatatoskrError::Http(format!("failed to connect to {addr}: {e}")))?;
         Ok(Self { inner })
     }
+
+    /// Query the server's health status.
+    ///
+    /// Returns version, git SHA, and healthy flag from the `Health` RPC.
+    /// This method is not part of the [`ModelGateway`] trait since health
+    /// is a service-level concern, not a gateway abstraction.
+    pub async fn health(&self) -> Result<(bool, String, Option<String>)> {
+        let mut client = self.inner.clone();
+        let response = client
+            .health(proto::HealthRequest {})
+            .await
+            .map_err(from_status)?;
+        let health = response.into_inner();
+        Ok((health.healthy, health.version, health.git_sha))
+    }
 }
 
 /// Convert [`tonic::Status`] to [`RatatoskrError`].
@@ -57,10 +72,7 @@ fn from_status(status: tonic::Status) -> RatatoskrError {
         tonic::Code::ResourceExhausted => RatatoskrError::RateLimited { retry_after: None },
         tonic::Code::Unauthenticated => RatatoskrError::AuthenticationFailed,
         tonic::Code::InvalidArgument => RatatoskrError::InvalidInput(status.message().to_string()),
-        tonic::Code::Unimplemented => {
-            // Leak the string to get a &'static str — acceptable for error paths
-            RatatoskrError::NotImplemented(Box::leak(status.message().to_string().into_boxed_str()))
-        }
+        tonic::Code::Unimplemented => RatatoskrError::NotImplemented(status.message().to_string()),
         _ => RatatoskrError::Http(status.message().to_string()),
     }
 }
