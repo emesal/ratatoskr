@@ -186,7 +186,7 @@ impl ResponseCache {
     /// Used by `embed_batch` for per-item decomposition. Returns a vec
     /// of `Option<Embedding>` in the same order as `texts` — `Some` for
     /// hits, `None` for misses. The caller forwards only misses to the
-    /// provider, then reassembles using [`merge_batch_results`].
+    /// provider, then reassembles using `merge_batch_results`.
     pub async fn get_embedding_batch(&self, model: &str, texts: &[&str]) -> Vec<Option<Embedding>> {
         let mut results = Vec::with_capacity(texts.len());
         for text in texts {

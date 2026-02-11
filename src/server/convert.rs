@@ -364,9 +364,8 @@ impl From<ModelInfo> for proto::ModelInfo {
                     ModelCapability::Generate => proto::ModelCapability::Generate as i32,
                     ModelCapability::Embed => proto::ModelCapability::Embed as i32,
                     ModelCapability::Nli => proto::ModelCapability::Nli as i32,
-                    ModelCapability::Classify | ModelCapability::Stance => {
-                        proto::ModelCapability::Classify as i32
-                    }
+                    ModelCapability::Classify => proto::ModelCapability::Classify as i32,
+                    ModelCapability::Stance => proto::ModelCapability::Stance as i32,
                 })
                 .collect(),
             context_window: m.context_window.map(|w| w as u32),
@@ -496,7 +495,11 @@ impl From<proto::ChatEvent> for ChatEvent {
                 index: t.index as usize,
             },
             Some(proto::chat_event::Event::Usage(u)) => ChatEvent::Usage(u.into()),
-            Some(proto::chat_event::Event::Done(_)) | None => ChatEvent::Done,
+            Some(proto::chat_event::Event::Done(_)) => ChatEvent::Done,
+            // A missing event field means a malformed/default-initialised proto message.
+            // Treating it as Done is the safest option — the client stops consuming
+            // rather than processing garbage. The server always sets event: Some(...).
+            None => ChatEvent::Done,
         }
     }
 }
@@ -527,7 +530,9 @@ impl From<proto::GenerateEvent> for GenerateEvent {
     fn from(p: proto::GenerateEvent) -> Self {
         match p.event {
             Some(proto::generate_event::Event::Text(s)) => GenerateEvent::Text(s),
-            Some(proto::generate_event::Event::Done(_)) | None => GenerateEvent::Done,
+            Some(proto::generate_event::Event::Done(_)) => GenerateEvent::Done,
+            // Same rationale as ChatEvent::None — see comment above.
+            None => GenerateEvent::Done,
         }
     }
 }
@@ -618,6 +623,7 @@ impl From<proto::ModelInfo> for ModelInfo {
                     proto::ModelCapability::Embed => Some(ModelCapability::Embed),
                     proto::ModelCapability::Nli => Some(ModelCapability::Nli),
                     proto::ModelCapability::Classify => Some(ModelCapability::Classify),
+                    proto::ModelCapability::Stance => Some(ModelCapability::Stance),
                     proto::ModelCapability::Unspecified => None,
                 })
                 .collect(),
@@ -693,9 +699,13 @@ impl From<proto::ProtoParameterAvailability> for ParameterAvailability {
             Some(proto::proto_parameter_availability::Kind::Opaque(_)) => {
                 ParameterAvailability::Opaque
             }
-            Some(proto::proto_parameter_availability::Kind::Unsupported(_)) | None => {
+            Some(proto::proto_parameter_availability::Kind::Unsupported(_)) => {
                 ParameterAvailability::Unsupported
             }
+            // Missing kind defaults to Opaque (unknown constraints) rather than
+            // Unsupported, so we don't accidentally reject valid parameters when
+            // decoding messages from future server versions.
+            None => ParameterAvailability::Opaque,
         }
     }
 }

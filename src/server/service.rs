@@ -51,6 +51,9 @@ fn to_status(err: crate::RatatoskrError) -> Status {
             Status::unimplemented(format!("Not implemented: {op}"))
         }
         RatatoskrError::Unsupported => Status::unimplemented("Operation not supported"),
+        e @ RatatoskrError::UnsupportedParameter { .. } => Status::invalid_argument(e.to_string()),
+        e @ RatatoskrError::ContentFiltered { .. } => Status::permission_denied(e.to_string()),
+        e @ RatatoskrError::ContextLengthExceeded { .. } => Status::out_of_range(e.to_string()),
         e => Status::internal(e.to_string()),
     }
 }

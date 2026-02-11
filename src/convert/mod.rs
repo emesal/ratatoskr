@@ -3,7 +3,6 @@
 //! This module is internal and handles the translation layer between
 //! our stable public types and the llm crate's internal types.
 
-use llm::builder::LLMBackend;
 use llm::chat::ChatMessage as LlmMessage;
 
 use crate::types::response::Usage as RataUsage;
@@ -92,36 +91,5 @@ pub fn from_llm_usage(usage: &llm::chat::Usage) -> RataUsage {
         completion_tokens: usage.completion_tokens,
         total_tokens: usage.prompt_tokens + usage.completion_tokens,
         reasoning_tokens: None, // llm crate doesn't expose this yet
-    }
-}
-
-/// Determine backend from model string.
-///
-/// This is kept for potential future use in model routing logic.
-#[allow(dead_code)]
-pub fn backend_from_model(model: &str) -> LLMBackend {
-    // Model string patterns:
-    // "anthropic/claude-..." -> OpenRouter
-    // "openai/gpt-..." -> OpenRouter
-    // "claude-..." -> Direct Anthropic
-    // "gpt-..." -> Direct OpenAI
-    // "llama3:..." -> Ollama
-    // "gemini-..." -> Google
-
-    if model.contains('/') {
-        // Routing through OpenRouter
-        LLMBackend::OpenRouter
-    } else if model.starts_with("claude") {
-        LLMBackend::Anthropic
-    } else if model.starts_with("gpt") || model.starts_with("o1") || model.starts_with("o3") {
-        LLMBackend::OpenAI
-    } else if model.contains(':') {
-        // Ollama format: model:tag
-        LLMBackend::Ollama
-    } else if model.starts_with("gemini") {
-        LLMBackend::Google
-    } else {
-        // Default to OpenRouter for unknown models
-        LLMBackend::OpenRouter
     }
 }

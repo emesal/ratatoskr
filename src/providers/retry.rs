@@ -4,7 +4,7 @@
 //! `Retrying*Provider` decorators that wrap provider traits with
 //! automatic retry on transient errors.
 //!
-//! All decorators delegate to the shared [`with_retry()`] helper,
+//! All decorators delegate to the shared `with_retry()` helper,
 //! keeping retry logic in a single place.
 
 use std::future::Future;
@@ -147,6 +147,11 @@ where
         match f().await {
             Ok(result) => return Ok(result),
             Err(e) if e.is_transient() => {
+                metrics::counter!(telemetry::RETRIES_TOTAL,
+                    "provider" => provider_name.to_owned(),
+                    "operation" => operation.to_owned(),
+                )
+                .increment(1);
                 if attempt + 1 < config.max_attempts {
                     let delay = config.effective_delay(attempt, e.retry_after());
                     warn!(
@@ -158,11 +163,6 @@ where
                         error = %e,
                         "retrying after transient error"
                     );
-                    metrics::counter!(telemetry::RETRIES_TOTAL,
-                        "provider" => provider_name.to_owned(),
-                        "operation" => operation.to_owned(),
-                    )
-                    .increment(1);
                     tokio::time::sleep(delay).await;
                 }
                 last_err = Some(e);

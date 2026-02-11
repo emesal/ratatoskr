@@ -132,7 +132,7 @@ message ResponseFormat {
 }
 
 message ReasoningConfig {
-    optional int32 effort = 1;
+    optional ReasoningEffort effort = 1;
     optional uint32 max_tokens = 2;
     optional bool exclude_from_output = 3;
 }
@@ -384,6 +384,7 @@ enum ModelCapability {
     MODEL_CAPABILITY_EMBED = 3;
     MODEL_CAPABILITY_NLI = 4;
     MODEL_CAPABILITY_CLASSIFY = 5;
+    MODEL_CAPABILITY_STANCE = 6;
 }
 
 message ModelStatusRequest {

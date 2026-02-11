@@ -102,7 +102,7 @@ src/
 └── convert/            # ratatoskr ↔ llm type conversions (internal)
 
 proto/
-└── ratatoskr.proto     # gRPC service definition (15 RPCs)
+└── ratatoskr.proto     # gRPC service definition (17 RPCs)
 
 contrib/
 └── systemd/
