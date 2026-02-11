@@ -316,6 +316,7 @@ impl ChatProvider for LlmChatProvider {
                     llm::chat::StreamChunk::ToolUseComplete { index, .. } => {
                         ChatEvent::ToolCallEnd { index }
                     }
+                    llm::chat::StreamChunk::Thinking(text) => ChatEvent::Reasoning(text),
                     llm::chat::StreamChunk::Done { .. } => ChatEvent::Done,
                 })
                 .map_err(RatatoskrError::from)
