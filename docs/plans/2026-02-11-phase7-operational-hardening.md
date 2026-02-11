@@ -26,11 +26,11 @@
 ## Task Overview
 
 ```
-task 1:  error classification — is_transient() on RatatoskrError                    [ ]
-task 2:  RetryConfig type + builder integration                                     [ ]
-task 3:  RetryingProvider<T> decorator for ChatProvider                              [ ]
-task 4:  RetryingProvider<T> for EmbeddingProvider, NliProvider, GenerateProvider    [ ]
-task 5:  cross-provider retry fallback in ProviderRegistry                          [ ]
+task 1:  error classification — is_transient() on RatatoskrError                    [x]
+task 2:  RetryConfig type + builder integration                                     [x]
+task 3:  RetryingProvider<T> decorator for ChatProvider                              [x]
+task 4:  RetryingProvider<T> for EmbeddingProvider, NliProvider, GenerateProvider    [x]
+task 5:  cross-provider retry fallback in ProviderRegistry                          [x]
 task 6:  telemetry — tracing spans with #[instrument] on dispatch paths             [ ]
 task 7:  telemetry — metrics crate integration (counters, histograms)               [ ]
 task 8:  streaming backpressure — bounded channels in chat_stream/generate_stream   [ ]

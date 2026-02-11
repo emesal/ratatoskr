@@ -8,6 +8,7 @@
 pub mod llm_chat;
 pub(crate) mod openrouter_models;
 pub mod registry;
+pub mod retry;
 pub mod traits;
 pub(crate) mod workarounds;
 
@@ -20,6 +21,7 @@ pub mod onnx_nli;
 
 // Re-export traits
 pub use registry::{ProviderNames, ProviderRegistry};
+pub use retry::RetryConfig;
 pub use traits::{
     ChatProvider, ClassifyProvider, EmbeddingProvider, GenerateProvider, NliProvider,
     StanceProvider, ZeroShotStanceProvider,

@@ -98,6 +98,7 @@ pub use client::ServiceClient;
 // Re-export main types at crate root
 pub use error::{RatatoskrError, Result};
 pub use gateway::{EmbeddedGateway, Ratatoskr, RatatoskrBuilder};
+pub use providers::RetryConfig;
 pub use traits::ModelGateway;
 
 // Re-export tokenizer types when feature is enabled

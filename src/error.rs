@@ -80,6 +80,60 @@ pub enum RatatoskrError {
     Llm(String),
 }
 
+impl RatatoskrError {
+    /// Whether this error is transient and the request may succeed on retry.
+    ///
+    /// Used by `RetryingProvider` to decide whether to retry a failed request.
+    /// Permanent errors (auth, validation, model not found) return `false`.
+    pub fn is_transient(&self) -> bool {
+        match self {
+            // Always transient
+            Self::RateLimited { .. } => true,
+            Self::Http(_) => true,
+            Self::Stream(_) => true,
+            Self::EmptyResponse => true,
+
+            // Server errors are transient; client errors are not
+            Self::Api { status, .. } => *status >= 500,
+
+            // Heuristic: network-sounding messages are transient
+            Self::Llm(msg) => {
+                let lower = msg.to_lowercase();
+                lower.contains("timeout")
+                    || lower.contains("connection")
+                    || lower.contains("reset")
+                    || lower.contains("refused")
+            }
+
+            // Everything else is permanent
+            Self::Json(_)
+            | Self::AuthenticationFailed
+            | Self::ModelNotFound(_)
+            | Self::InvalidInput(_)
+            | Self::NoProvider
+            | Self::ModelNotAvailable
+            | Self::Configuration(_)
+            | Self::NotImplemented(_)
+            | Self::Unsupported
+            | Self::UnsupportedParameter { .. }
+            | Self::DataError(_)
+            | Self::ContentFiltered { .. }
+            | Self::ContextLengthExceeded { .. } => false,
+        }
+    }
+
+    /// For `RateLimited` errors, the duration the provider suggests waiting.
+    ///
+    /// Returns `None` for non-rate-limit errors or when the provider didn't
+    /// specify a retry-after duration.
+    pub fn retry_after(&self) -> Option<Duration> {
+        match self {
+            Self::RateLimited { retry_after } => *retry_after,
+            _ => None,
+        }
+    }
+}
+
 impl From<llm::error::LLMError> for RatatoskrError {
     fn from(err: llm::error::LLMError) -> Self {
         // Map llm errors to our error types

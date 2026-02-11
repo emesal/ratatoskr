@@ -2,6 +2,7 @@
 
 use super::EmbeddedGateway;
 use crate::ParameterValidationPolicy;
+use crate::providers::RetryConfig;
 use crate::{RatatoskrError, Result};
 
 #[cfg(feature = "local-inference")]
@@ -32,6 +33,7 @@ pub struct RatatoskrBuilder {
     google_key: Option<String>,
     ollama_url: Option<String>,
     default_timeout_secs: Option<u64>,
+    retry_config: RetryConfig,
     validation_policy: ParameterValidationPolicy,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
@@ -58,6 +60,7 @@ impl RatatoskrBuilder {
             google_key: None,
             ollama_url: None,
             default_timeout_secs: None,
+            retry_config: RetryConfig::default(),
             validation_policy: ParameterValidationPolicy::default(),
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
@@ -169,6 +172,16 @@ impl RatatoskrBuilder {
         self
     }
 
+    /// Set the retry configuration for transient error handling.
+    ///
+    /// Controls exponential backoff behaviour when providers return
+    /// transient errors (rate limits, server errors, network failures).
+    /// Default: 3 attempts, 500ms initial delay, 30s max delay, jitter on.
+    pub fn retry(mut self, config: RetryConfig) -> Self {
+        self.retry_config = config;
+        self
+    }
+
     /// Set the parameter validation policy.
     ///
     /// Controls how the registry handles requests containing parameters
@@ -241,6 +254,7 @@ impl RatatoskrBuilder {
 
         // Build provider registry with fallback chain
         let mut registry = ProviderRegistry::new();
+        registry.set_retry_config(self.retry_config);
         registry.set_validation_policy(self.validation_policy);
 
         // =====================================================================

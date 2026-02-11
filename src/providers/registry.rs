@@ -2,7 +2,22 @@
 //!
 //! The `ProviderRegistry` stores providers in priority order (index 0 = highest).
 //! When a capability is requested, it tries providers in order until one succeeds
-//! or returns a non-`ModelNotAvailable` error.
+//! or returns a non-fallback error.
+//!
+//! # Fallback Triggers
+//!
+//! The registry falls through to the next provider on:
+//! - `ModelNotAvailable` — provider can't handle this model
+//! - Transient errors after retry exhaustion — all retry attempts failed
+//!
+//! Permanent errors (auth, validation, etc.) are terminal and stop the chain.
+//!
+//! # Retry Wrapping
+//!
+//! When a `RetryConfig` is set, providers are automatically wrapped in
+//! `Retrying*Provider` decorators at registration time. This means each
+//! provider retries internally before the registry sees a transient error
+//! as exhausted.
 //!
 //! # Fallback Chain Flow
 //!
@@ -34,6 +49,10 @@ use std::sync::Arc;
 use futures_util::Stream;
 use tracing::warn;
 
+use super::retry::{
+    RetryConfig, RetryingChatProvider, RetryingEmbeddingProvider, RetryingGenerateProvider,
+    RetryingNliProvider,
+};
 use super::traits::{
     ChatProvider, ClassifyProvider, EmbeddingProvider, GenerateProvider, NliProvider,
     StanceProvider,
@@ -49,7 +68,13 @@ use crate::{RatatoskrError, Result};
 ///
 /// Providers are stored in priority order (index 0 = highest priority).
 /// When a capability is requested, the registry tries providers in order
-/// until one succeeds or returns a non-`ModelNotAvailable` error.
+/// until one succeeds or returns a non-fallback error.
+///
+/// # Retry + Fallback
+///
+/// When a [`RetryConfig`] is set, providers are wrapped in `Retrying*Provider`
+/// decorators at registration time. Transient errors after retry exhaustion
+/// trigger fallback to the next provider in the chain.
 ///
 /// # Parameter Validation
 ///
@@ -64,6 +89,7 @@ pub struct ProviderRegistry {
     stance: Vec<Arc<dyn StanceProvider>>,
     chat: Vec<Arc<dyn ChatProvider>>,
     generate: Vec<Arc<dyn GenerateProvider>>,
+    retry_config: Option<RetryConfig>,
     validation_policy: ParameterValidationPolicy,
 }
 
@@ -71,6 +97,15 @@ impl ProviderRegistry {
     /// Create a new empty registry.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the retry configuration.
+    ///
+    /// When set, providers registered after this call are automatically
+    /// wrapped in `Retrying*Provider` decorators. Transient errors after
+    /// retry exhaustion trigger fallback to the next provider.
+    pub fn set_retry_config(&mut self, config: RetryConfig) {
+        self.retry_config = Some(config);
     }
 
     /// Set the parameter validation policy.
@@ -92,62 +127,87 @@ impl ProviderRegistry {
     // ========================================================================
 
     /// Add an embedding provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingEmbeddingProvider`].
     pub fn add_embedding(&mut self, provider: Arc<dyn EmbeddingProvider>) {
-        self.embedding.push(provider);
+        self.embedding.push(self.maybe_wrap_embedding(provider));
     }
 
     /// Add an NLI provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingNliProvider`].
     pub fn add_nli(&mut self, provider: Arc<dyn NliProvider>) {
-        self.nli.push(provider);
+        self.nli.push(self.maybe_wrap_nli(provider));
     }
 
     /// Add a classification provider (appended to end of chain).
+    ///
+    /// Classification providers are not retry-wrapped (typically local).
     pub fn add_classify(&mut self, provider: Arc<dyn ClassifyProvider>) {
         self.classify.push(provider);
     }
 
     /// Add a stance provider (appended to end of chain).
+    ///
+    /// Stance providers are not retry-wrapped (typically local).
     pub fn add_stance(&mut self, provider: Arc<dyn StanceProvider>) {
         self.stance.push(provider);
     }
 
     /// Add a chat provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingChatProvider`].
     pub fn add_chat(&mut self, provider: Arc<dyn ChatProvider>) {
-        self.chat.push(provider);
+        self.chat.push(self.maybe_wrap_chat(provider));
     }
 
     /// Add a generate provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingGenerateProvider`].
     pub fn add_generate(&mut self, provider: Arc<dyn GenerateProvider>) {
-        self.generate.push(provider);
+        self.generate.push(self.maybe_wrap_generate(provider));
     }
 
     // ========================================================================
     // Fallback chain execution
-    // Tries providers in order; ModelNotAvailable means "try next"
+    // Tries providers in order; ModelNotAvailable and exhausted transient
+    // errors trigger fallback to the next provider.
     // ========================================================================
 
     /// Embed text using the fallback chain.
     pub async fn embed(&self, text: &str, model: &str) -> Result<Embedding> {
+        let mut last_err = None;
         for provider in &self.embedding {
             match provider.embed(text, model).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Embed batch of texts using the fallback chain.
     pub async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<Embedding>> {
+        let mut last_err = None;
         for provider in &self.embedding {
             match provider.embed_batch(texts, model).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Infer NLI using the fallback chain.
@@ -157,14 +217,18 @@ impl ProviderRegistry {
         hypothesis: &str,
         model: &str,
     ) -> Result<NliResult> {
+        let mut last_err = None;
         for provider in &self.nli {
             match provider.infer_nli(premise, hypothesis, model).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Batch NLI inference using the fallback chain.
@@ -173,14 +237,18 @@ impl ProviderRegistry {
         pairs: &[(&str, &str)],
         model: &str,
     ) -> Result<Vec<NliResult>> {
+        let mut last_err = None;
         for provider in &self.nli {
             match provider.infer_nli_batch(pairs, model).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Zero-shot classification using the fallback chain.
@@ -190,14 +258,18 @@ impl ProviderRegistry {
         labels: &[&str],
         model: &str,
     ) -> Result<ClassifyResult> {
+        let mut last_err = None;
         for provider in &self.classify {
             match provider.classify_zero_shot(text, labels, model).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Stance detection using the fallback chain.
@@ -207,14 +279,18 @@ impl ProviderRegistry {
         target: &str,
         model: &str,
     ) -> Result<StanceResult> {
+        let mut last_err = None;
         for provider in &self.stance {
             match provider.classify_stance(text, target, model).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Chat completion using the fallback chain.
@@ -227,17 +303,21 @@ impl ProviderRegistry {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
+        let mut last_err = None;
         for provider in &self.chat {
             // Validate parameters before calling provider
             self.validate_chat_params(provider.as_ref(), options)?;
 
             match provider.chat(messages, tools, options).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Streaming chat using the fallback chain.
@@ -250,17 +330,21 @@ impl ProviderRegistry {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
+        let mut last_err = None;
         for provider in &self.chat {
             // Validate parameters before calling provider
             self.validate_chat_params(provider.as_ref(), options)?;
 
             match provider.chat_stream(messages, tools, options).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Text generation using the fallback chain.
@@ -272,17 +356,21 @@ impl ProviderRegistry {
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<GenerateResponse> {
+        let mut last_err = None;
         for provider in &self.generate {
             // Validate parameters before calling provider
             self.validate_generate_params(provider.as_ref(), options)?;
 
             match provider.generate(prompt, options).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Streaming text generation using the fallback chain.
@@ -294,17 +382,21 @@ impl ProviderRegistry {
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
+        let mut last_err = None;
         for provider in &self.generate {
             // Validate parameters before calling provider
             self.validate_generate_params(provider.as_ref(), options)?;
 
             match provider.generate_stream(prompt, options).await {
                 Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     // ========================================================================
@@ -313,19 +405,25 @@ impl ProviderRegistry {
 
     /// Fetch model metadata from the chat provider fallback chain.
     ///
-    /// Walks providers in priority order. `ModelNotAvailable` and `NotImplemented`
-    /// trigger fallback to the next provider; other errors are terminal.
+    /// Walks providers in priority order. `ModelNotAvailable`, `NotImplemented`,
+    /// and exhausted transient errors trigger fallback; other errors are terminal.
     pub async fn fetch_chat_metadata(&self, model: &str) -> Result<ModelMetadata> {
+        let mut last_err = None;
         for provider in &self.chat {
             match provider.fetch_metadata(model).await {
                 Ok(metadata) => return Ok(metadata),
-                Err(RatatoskrError::ModelNotAvailable) | Err(RatatoskrError::NotImplemented(_)) => {
+                Err(RatatoskrError::NotImplemented(_)) => {
+                    last_err = Some(RatatoskrError::NotImplemented("fetch_metadata"));
+                    continue;
+                }
+                Err(e) if Self::is_fallback_trigger(&e) => {
+                    last_err = Some(e);
                     continue;
                 }
                 Err(e) => return Err(e),
             }
         }
-        Err(RatatoskrError::NoProvider)
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     // ========================================================================
@@ -375,6 +473,57 @@ impl ProviderRegistry {
             stance: self.stance.iter().map(|p| p.name().to_string()).collect(),
             chat: self.chat.iter().map(|p| p.name().to_string()).collect(),
             generate: self.generate.iter().map(|p| p.name().to_string()).collect(),
+        }
+    }
+
+    // ========================================================================
+    // Retry wrapping helpers
+    // ========================================================================
+
+    /// Whether an error should trigger fallback to the next provider.
+    ///
+    /// `ModelNotAvailable` always triggers fallback. Transient errors trigger
+    /// fallback when retry is configured (meaning retries were exhausted
+    /// inside the `RetryingProvider` wrapper).
+    fn is_fallback_trigger(e: &RatatoskrError) -> bool {
+        matches!(e, RatatoskrError::ModelNotAvailable) || e.is_transient()
+    }
+
+    /// Wrap an embedding provider in retry decorator if config is set.
+    fn maybe_wrap_embedding(
+        &self,
+        provider: Arc<dyn EmbeddingProvider>,
+    ) -> Arc<dyn EmbeddingProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingEmbeddingProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap an NLI provider in retry decorator if config is set.
+    fn maybe_wrap_nli(&self, provider: Arc<dyn NliProvider>) -> Arc<dyn NliProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingNliProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap a chat provider in retry decorator if config is set.
+    fn maybe_wrap_chat(&self, provider: Arc<dyn ChatProvider>) -> Arc<dyn ChatProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingChatProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap a generate provider in retry decorator if config is set.
+    fn maybe_wrap_generate(
+        &self,
+        provider: Arc<dyn GenerateProvider>,
+    ) -> Arc<dyn GenerateProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingGenerateProvider::new(provider, config.clone())),
+            None => provider,
         }
     }
 
@@ -587,7 +736,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn registry_returns_no_provider_when_all_fail() {
+    async fn registry_returns_last_error_when_all_fail() {
         let mut registry = ProviderRegistry::new();
 
         registry.add_embedding(Arc::new(MockEmbeddingProvider {
@@ -596,9 +745,10 @@ mod tests {
             dimensions: 128,
         }));
 
-        // Request unknown model
+        // Request unknown model — provider returns ModelNotAvailable,
+        // which becomes the last error in the fallback chain
         let result = registry.embed("test", "unknown-model").await;
-        assert!(matches!(result, Err(RatatoskrError::NoProvider)));
+        assert!(matches!(result, Err(RatatoskrError::ModelNotAvailable)));
     }
 
     #[tokio::test]
