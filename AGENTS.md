@@ -2,7 +2,7 @@
 
 Ratatoskr is a unified LLM gateway abstraction layer. The core idea: consumers (chibi, orlog) interact only with the `ModelGateway` trait while the `llm` crate is an internal implementation detail.
 
-**Current Status**: Phase 6 (model intelligence) complete, with dynamic metadata fetch (#10). See `docs/plans/2026-02-05-phase6-model-intelligence.md` for the base phase 6 plan.
+**Current Status**: Phase 7 (operational hardening) complete. See `docs/plans/2026-02-11-phase7-operational-hardening.md` for the implementation plan.
 
 ## Principles
 
@@ -63,13 +63,18 @@ src/
 │   ├── mod.rs          # ModelRegistry with layered merge
 │   └── seed.json       # Embedded model metadata (compiled-in fallback)
 ├── cache/
-│   └── mod.rs          # ModelCache — ephemeral provider-fetched metadata store
+│   ├── mod.rs          # ModelCache — ephemeral provider-fetched metadata store
+│   └── response.rs     # ResponseCache — opt-in LRU+TTL cache for embed/NLI (moka)
 ├── gateway/
 │   ├── embedded.rs     # EmbeddedGateway delegating to ProviderRegistry
 │   └── builder.rs      # Ratatoskr::builder()
+├── telemetry.rs        # Metric name constants (ratatoskr_requests_total, etc.)
 ├── providers/          # Provider implementations and traits (feature-gated)
 │   ├── traits.rs       # EmbeddingProvider, NliProvider, StanceProvider, etc.
-│   ├── registry.rs     # ProviderRegistry (fallback chains per capability)
+│   ├── registry.rs     # ProviderRegistry (fallback chains, latency tracking, cost routing)
+│   ├── retry.rs        # RetryConfig, RetryingProvider<T> decorators, with_retry() helper
+│   ├── routing.rs      # RoutingConfig, ProviderLatency (EWMA), ProviderCostInfo
+│   ├── backpressure.rs # Bounded channel wrapper for streaming backpressure
 │   ├── llm_chat.rs     # LlmChatProvider wrapping llm crate (+ fetch_metadata for OpenRouter)
 │   ├── workarounds.rs  # Provider-specific parameter translation (parallel_tool_calls, extra_body)
 │   ├── openrouter_models.rs  # OpenRouter /api/v1/models response types + conversion
@@ -120,6 +125,13 @@ contrib/
 - `ParameterValidationPolicy` — warn/error/ignore for unsupported parameters
 - `ServiceClient` — `ModelGateway` impl that forwards to ratd over gRPC (client feature)
 - `RatatoskrService<G>` — wraps any `ModelGateway` behind gRPC handlers (server feature)
+- `RetryConfig` — retry behaviour (max attempts, exponential backoff, jitter, retry-after support)
+- `RetryingProvider<T>` — decorator wrapping any provider trait with retry logic on transient errors
+- `RoutingConfig` — preferred provider per capability (reorders fallback chain)
+- `ProviderLatency` — EWMA-based per-provider latency tracker (thread-safe atomics)
+- `ProviderCostInfo` — cost ranking for providers serving a model (sorted cheapest-first)
+- `CacheConfig` — opt-in response cache configuration (max entries, TTL)
+- `ResponseCache` — moka-backed LRU+TTL cache for embed/NLI responses
 
 ### Builder Pattern
 
@@ -133,6 +145,9 @@ Ratatoskr::builder()
     .local_nli(model)                 // requires `local-inference` feature
     .device(Device::Cpu)              // or Device::Cuda { device_id: 0 }
     .ram_budget(1024 * 1024 * 1024)   // optional: 1GB RAM budget for local models
+    .retry(RetryConfig::new().max_attempts(5))      // phase 7: retry on transient errors
+    .routing(RoutingConfig::new().chat("anthropic")) // phase 7: preferred provider routing
+    .response_cache(CacheConfig::default())          // phase 7: cache embed/NLI responses
     .build()?
 ```
 
@@ -191,6 +206,14 @@ With the `server` and `client` features enabled:
 - `workarounds` module isolates provider-specific parameter translation (e.g. `parallel_tool_calls` via `extra_body` for OpenAI-compatible backends, native flag for Mistral, `UnsupportedParameter` for Anthropic direct)
 - Proto `GetModelMetadata` + `FetchModelMetadata` RPCs for remote metadata queries via `ServiceClient`
 
+### Operational Hardening (Phase 7)
+
+- **Retry logic**: `RetryConfig` with exponential backoff + jitter. `RetryingProvider<T>` decorators auto-wrap providers at registration. Transient errors (`is_transient()`) are retried; permanent errors (auth, validation) are not. Exhausted retries trigger cross-provider fallback in the registry.
+- **Streaming backpressure**: Bounded `tokio::sync::mpsc::channel` wraps `chat_stream`/`generate_stream` output. Producer blocks when consumer falls behind (default buffer: 64).
+- **Response cache**: Opt-in moka-backed LRU+TTL cache for deterministic operations (embed, NLI). Zero overhead when not configured. Cache key = `hash(operation, model, input)`. Emits `ratatoskr_cache_hits_total` / `ratatoskr_cache_misses_total` metrics.
+- **Telemetry**: `#[instrument]` tracing spans on dispatch and gateway paths. `metrics` crate integration: `ratatoskr_requests_total`, `ratatoskr_request_duration_seconds`, `ratatoskr_retries_total`, `ratatoskr_tokens_total`. Recorder-agnostic (consumers install their own backend).
+- **Routing**: `RoutingConfig` reorders fallback chains per capability (preferred provider first). `ProviderLatency` tracks EWMA per provider. `providers_by_cost()` returns providers sorted cheapest-first via `ModelMetadata.pricing`. ratd TOML `[routing]` section now wired through to the builder.
+
 ## Testing Strategy
 
 1. **Unit tests** — types, conversions, builder (fast, no I/O)
@@ -234,4 +257,4 @@ OPENROUTER_API_KEY=sk-or-xxx cargo test --test openrouter_metadata_live_test -- 
 - Phase 3-4: Local inference (embeddings, NLI, tokenizers, generate) ✓
 - Phase 5: Service mode (gRPC daemon + CLI client) ✓
 - Phase 6: Model intelligence & parameter surface (metadata, registry, validation) ✓
-- Phase 7: Operational hardening (caching, retry, routing, telemetry)
+- Phase 7: Operational hardening (retry, telemetry, backpressure, caching, routing) ✓

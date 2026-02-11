@@ -2,6 +2,10 @@
 
 use super::EmbeddedGateway;
 use crate::ParameterValidationPolicy;
+use crate::cache::CacheConfig;
+use crate::providers::RetryConfig;
+use crate::providers::backpressure::DEFAULT_STREAM_BUFFER;
+use crate::providers::routing::RoutingConfig;
 use crate::{RatatoskrError, Result};
 
 #[cfg(feature = "local-inference")]
@@ -32,7 +36,11 @@ pub struct RatatoskrBuilder {
     google_key: Option<String>,
     ollama_url: Option<String>,
     default_timeout_secs: Option<u64>,
+    retry_config: RetryConfig,
     validation_policy: ParameterValidationPolicy,
+    stream_buffer_size: usize,
+    routing_config: Option<RoutingConfig>,
+    cache_config: Option<CacheConfig>,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -58,7 +66,11 @@ impl RatatoskrBuilder {
             google_key: None,
             ollama_url: None,
             default_timeout_secs: None,
+            retry_config: RetryConfig::default(),
             validation_policy: ParameterValidationPolicy::default(),
+            stream_buffer_size: DEFAULT_STREAM_BUFFER,
+            routing_config: None,
+            cache_config: None,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -169,6 +181,62 @@ impl RatatoskrBuilder {
         self
     }
 
+    /// Set the retry configuration for transient error handling.
+    ///
+    /// Controls exponential backoff behaviour when providers return
+    /// transient errors (rate limits, server errors, network failures).
+    /// Default: 3 attempts, 500ms initial delay, 30s max delay, jitter on.
+    pub fn retry(mut self, config: RetryConfig) -> Self {
+        self.retry_config = config;
+        self
+    }
+
+    /// Set the stream buffer size for backpressure.
+    ///
+    /// Controls the bounded channel capacity between stream producers and
+    /// consumers in `chat_stream` and `generate_stream`. Default: 64.
+    pub fn stream_buffer_size(mut self, size: usize) -> Self {
+        self.stream_buffer_size = size;
+        self
+    }
+
+    /// Enable the response cache for deterministic operations.
+    ///
+    /// Caches embedding and NLI responses using an in-memory LRU + TTL
+    /// cache (moka). Without this call, no cache is allocated and all
+    /// requests go directly to providers (zero overhead).
+    ///
+    /// ```rust,ignore
+    /// # use ratatoskr::{Ratatoskr, CacheConfig};
+    /// # use std::time::Duration;
+    /// Ratatoskr::builder()
+    ///     .openrouter("key")
+    ///     .response_cache(CacheConfig::new().max_entries(10_000).ttl(Duration::from_secs(3600)))
+    ///     .build()?;
+    /// ```
+    pub fn response_cache(mut self, config: CacheConfig) -> Self {
+        self.cache_config = Some(config);
+        self
+    }
+
+    /// Set preferred provider routing.
+    ///
+    /// Reorders the fallback chain so the named provider is tried first
+    /// for each capability. Unset capabilities keep the default order.
+    ///
+    /// ```rust,ignore
+    /// # use ratatoskr::{Ratatoskr, RoutingConfig};
+    /// Ratatoskr::builder()
+    ///     .openrouter("key")
+    ///     .anthropic("key")
+    ///     .routing(RoutingConfig::new().chat("anthropic").embed("local"))
+    ///     .build()?;
+    /// ```
+    pub fn routing(mut self, config: RoutingConfig) -> Self {
+        self.routing_config = Some(config);
+        self
+    }
+
     /// Set the parameter validation policy.
     ///
     /// Controls how the registry handles requests containing parameters
@@ -241,7 +309,9 @@ impl RatatoskrBuilder {
 
         // Build provider registry with fallback chain
         let mut registry = ProviderRegistry::new();
+        registry.set_retry_config(self.retry_config);
         registry.set_validation_policy(self.validation_policy);
+        registry.set_stream_buffer_size(self.stream_buffer_size);
 
         // =====================================================================
         // Register LOCAL providers FIRST (higher priority)
@@ -354,13 +424,24 @@ impl RatatoskrBuilder {
             Arc::new(registry)
         };
 
+        // Apply preferred provider routing (reorders fallback chains)
+        if let Some(ref routing) = self.routing_config {
+            registry.apply_routing(routing);
+        }
+
         let model_registry = crate::registry::ModelRegistry::with_embedded_seed();
         let model_cache = Arc::new(ModelCache::new());
+
+        let response_cache = self
+            .cache_config
+            .as_ref()
+            .map(crate::cache::ResponseCache::new);
 
         Ok(EmbeddedGateway::new(
             registry,
             model_registry,
             model_cache,
+            response_cache,
             #[cfg(feature = "local-inference")]
             model_manager,
             #[cfg(feature = "local-inference")]

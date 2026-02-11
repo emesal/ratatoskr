@@ -122,5 +122,8 @@ fn build_gateway(
         builder = builder.local_nli(LocalNliModel::NliDebertaV3Small);
     }
 
+    // Apply routing preferences from config
+    builder = builder.routing(config.routing.clone());
+
     builder.build()
 }

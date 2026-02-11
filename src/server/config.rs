@@ -13,6 +13,7 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::providers::RoutingConfig;
 use crate::{RatatoskrError, Result};
 
 /// Server configuration.
@@ -134,20 +135,7 @@ fn default_device() -> String {
     "cpu".to_string()
 }
 
-/// Routing configuration — preferred provider per capability.
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct RoutingConfig {
-    #[serde(default)]
-    pub chat: Option<String>,
-    #[serde(default)]
-    pub generate: Option<String>,
-    #[serde(default)]
-    pub embed: Option<String>,
-    #[serde(default)]
-    pub nli: Option<String>,
-    #[serde(default)]
-    pub classify: Option<String>,
-}
+// RoutingConfig is re-used from crate::providers::routing (single source of truth).
 
 /// Secrets configuration (API keys).
 #[derive(Debug, Clone, Default, Deserialize)]

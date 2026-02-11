@@ -1,11 +1,18 @@
-//! Ephemeral model metadata cache.
+//! Caching subsystem.
 //!
-//! [`ModelCache`] stores metadata fetched from providers at runtime.
-//! It is separate from [`ModelRegistry`](crate::registry::ModelRegistry),
-//! which holds curated/authoritative data from the embedded seed.
+//! Two independent caches:
 //!
-//! The cache is populated by [`ModelGateway::fetch_model_metadata()`](crate::ModelGateway::fetch_model_metadata)
-//! and consulted as a fallback when the registry has no entry.
+//! - [`ModelCache`] — ephemeral model metadata fetched from providers at
+//!   runtime. Populated by [`ModelGateway::fetch_model_metadata()`](crate::ModelGateway::fetch_model_metadata),
+//!   consulted as a fallback when the registry has no entry.
+//!
+//! - [`response::ResponseCache`] — opt-in LRU + TTL cache for deterministic
+//!   operations (embeddings, NLI). Activated via the builder's
+//!   `.response_cache()` method. See [`response`] module docs for
+//!   architecture and future extensibility notes.
+
+pub mod response;
+pub use response::{CacheConfig, ResponseCache};
 
 use std::collections::HashMap;
 use std::sync::RwLock;
