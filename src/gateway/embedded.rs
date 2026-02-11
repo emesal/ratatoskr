@@ -12,7 +12,8 @@ use tracing::instrument;
 
 #[cfg(feature = "local-inference")]
 use crate::Token;
-use crate::cache::ModelCache;
+use crate::cache::response::merge_batch_results;
+use crate::cache::{ModelCache, ResponseCache};
 use crate::providers::ProviderRegistry;
 use crate::registry::ModelRegistry;
 use crate::{
@@ -34,6 +35,21 @@ pub struct EmbeddedGateway {
     registry: ProviderRegistry,
     model_registry: ModelRegistry,
     model_cache: Arc<ModelCache>,
+    /// Opt-in response cache for deterministic operations (embed, NLI).
+    ///
+    /// When `Some`, embed/NLI calls check the cache before dispatching to
+    /// the provider registry. Cache sits above retry, fallback, and metrics —
+    /// a hit bypasses the entire provider stack.
+    ///
+    /// # Future: shared/distributed caching
+    ///
+    /// To support shared caching across multiple gateway instances (e.g.
+    /// redis-backed for a ratd cluster), replace this field with
+    /// `Option<Arc<dyn CacheBackend>>` where `CacheBackend` is the trait
+    /// described in [`crate::cache::response`] module docs. All cache
+    /// interactions flow through this single point in `EmbeddedGateway`,
+    /// so no other modules need changes.
+    response_cache: Option<ResponseCache>,
     #[cfg(feature = "local-inference")]
     #[allow(dead_code)] // used for model status queries
     model_manager: Arc<ModelManager>,
@@ -47,6 +63,7 @@ impl EmbeddedGateway {
         registry: ProviderRegistry,
         model_registry: ModelRegistry,
         model_cache: Arc<ModelCache>,
+        response_cache: Option<ResponseCache>,
         #[cfg(feature = "local-inference")] model_manager: Arc<ModelManager>,
         #[cfg(feature = "local-inference")] tokenizer_registry: Arc<TokenizerRegistry>,
     ) -> Self {
@@ -54,6 +71,7 @@ impl EmbeddedGateway {
             registry,
             model_registry,
             model_cache,
+            response_cache,
             #[cfg(feature = "local-inference")]
             model_manager,
             #[cfg(feature = "local-inference")]
@@ -122,11 +140,44 @@ impl ModelGateway for EmbeddedGateway {
 
     #[instrument(name = "gateway.embed", skip(self, text))]
     async fn embed(&self, text: &str, model: &str) -> Result<crate::Embedding> {
+        if let Some(cache) = &self.response_cache {
+            if let Some(cached) = cache.get_embedding(model, text).await {
+                return Ok(cached);
+            }
+            let result = self.registry.embed(text, model).await?;
+            cache.insert_embedding(model, text, result.clone()).await;
+            return Ok(result);
+        }
         self.registry.embed(text, model).await
     }
 
     #[instrument(name = "gateway.embed_batch", skip(self, texts), fields(batch_size = texts.len()))]
     async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<crate::Embedding>> {
+        if let Some(cache) = &self.response_cache {
+            let cached = cache.get_embedding_batch(model, texts).await;
+
+            // Collect miss indices and their texts for provider dispatch
+            let miss_texts: Vec<&str> = cached
+                .iter()
+                .enumerate()
+                .filter(|(_, opt)| opt.is_none())
+                .map(|(i, _)| texts[i])
+                .collect();
+
+            if miss_texts.is_empty() {
+                // All hits — no provider call needed
+                return Ok(merge_batch_results(cached, vec![]));
+            }
+
+            let provider_results = self.registry.embed_batch(&miss_texts, model).await?;
+
+            // Cache the newly fetched results
+            cache
+                .insert_embedding_batch(model, &miss_texts, &provider_results)
+                .await;
+
+            return Ok(merge_batch_results(cached, provider_results));
+        }
         self.registry.embed_batch(texts, model).await
     }
 
@@ -137,6 +188,16 @@ impl ModelGateway for EmbeddedGateway {
         hypothesis: &str,
         model: &str,
     ) -> Result<crate::NliResult> {
+        if let Some(cache) = &self.response_cache {
+            if let Some(cached) = cache.get_nli(model, premise, hypothesis).await {
+                return Ok(cached);
+            }
+            let result = self.registry.infer_nli(premise, hypothesis, model).await?;
+            cache
+                .insert_nli(model, premise, hypothesis, result.clone())
+                .await;
+            return Ok(result);
+        }
         self.registry.infer_nli(premise, hypothesis, model).await
     }
 

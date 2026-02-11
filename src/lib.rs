@@ -118,7 +118,7 @@ pub use providers::{
 };
 
 // Re-export cache
-pub use cache::ModelCache;
+pub use cache::{CacheConfig, ModelCache, ResponseCache};
 
 // Re-export registry
 pub use registry::ModelRegistry;

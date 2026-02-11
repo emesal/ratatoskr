@@ -2,6 +2,7 @@
 
 use super::EmbeddedGateway;
 use crate::ParameterValidationPolicy;
+use crate::cache::CacheConfig;
 use crate::providers::RetryConfig;
 use crate::providers::backpressure::DEFAULT_STREAM_BUFFER;
 use crate::{RatatoskrError, Result};
@@ -37,6 +38,7 @@ pub struct RatatoskrBuilder {
     retry_config: RetryConfig,
     validation_policy: ParameterValidationPolicy,
     stream_buffer_size: usize,
+    cache_config: Option<CacheConfig>,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -65,6 +67,7 @@ impl RatatoskrBuilder {
             retry_config: RetryConfig::default(),
             validation_policy: ParameterValidationPolicy::default(),
             stream_buffer_size: DEFAULT_STREAM_BUFFER,
+            cache_config: None,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -191,6 +194,25 @@ impl RatatoskrBuilder {
     /// consumers in `chat_stream` and `generate_stream`. Default: 64.
     pub fn stream_buffer_size(mut self, size: usize) -> Self {
         self.stream_buffer_size = size;
+        self
+    }
+
+    /// Enable the response cache for deterministic operations.
+    ///
+    /// Caches embedding and NLI responses using an in-memory LRU + TTL
+    /// cache (moka). Without this call, no cache is allocated and all
+    /// requests go directly to providers (zero overhead).
+    ///
+    /// ```rust,ignore
+    /// # use ratatoskr::{Ratatoskr, CacheConfig};
+    /// # use std::time::Duration;
+    /// Ratatoskr::builder()
+    ///     .openrouter("key")
+    ///     .response_cache(CacheConfig::new().max_entries(10_000).ttl(Duration::from_secs(3600)))
+    ///     .build()?;
+    /// ```
+    pub fn response_cache(mut self, config: CacheConfig) -> Self {
+        self.cache_config = Some(config);
         self
     }
 
@@ -384,10 +406,16 @@ impl RatatoskrBuilder {
         let model_registry = crate::registry::ModelRegistry::with_embedded_seed();
         let model_cache = Arc::new(ModelCache::new());
 
+        let response_cache = self
+            .cache_config
+            .as_ref()
+            .map(crate::cache::ResponseCache::new);
+
         Ok(EmbeddedGateway::new(
             registry,
             model_registry,
             model_cache,
+            response_cache,
             #[cfg(feature = "local-inference")]
             model_manager,
             #[cfg(feature = "local-inference")]
