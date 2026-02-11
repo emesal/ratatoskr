@@ -2,10 +2,11 @@
 
 use super::EmbeddedGateway;
 use crate::ParameterValidationPolicy;
-use crate::cache::CacheConfig;
+use crate::cache::{CacheConfig, DiscoveryConfig};
 use crate::providers::RetryConfig;
 use crate::providers::backpressure::DEFAULT_STREAM_BUFFER;
 use crate::providers::routing::RoutingConfig;
+use crate::registry::remote::RemoteRegistryConfig;
 use crate::{RatatoskrError, Result};
 
 #[cfg(feature = "local-inference")]
@@ -41,6 +42,9 @@ pub struct RatatoskrBuilder {
     stream_buffer_size: usize,
     routing_config: Option<RoutingConfig>,
     cache_config: Option<CacheConfig>,
+    discovery_config: Option<DiscoveryConfig>,
+    discovery_disabled: bool,
+    registry_config: Option<RemoteRegistryConfig>,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -71,6 +75,9 @@ impl RatatoskrBuilder {
             stream_buffer_size: DEFAULT_STREAM_BUFFER,
             routing_config: None,
             cache_config: None,
+            discovery_config: Some(DiscoveryConfig::default()),
+            discovery_disabled: false,
+            registry_config: None,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -219,6 +226,39 @@ impl RatatoskrBuilder {
         self
     }
 
+    /// Override the runtime parameter discovery configuration.
+    ///
+    /// Discovery is on by default; this method allows tuning TTL, capacity, etc.
+    pub fn discovery(mut self, config: DiscoveryConfig) -> Self {
+        self.discovery_config = Some(config);
+        self
+    }
+
+    /// Disable runtime parameter discovery entirely.
+    ///
+    /// When disabled, parameter rejections at runtime are not cached and
+    /// subsequent requests may repeat the same unsupported parameter.
+    pub fn disable_parameter_discovery(mut self) -> Self {
+        self.discovery_disabled = true;
+        self
+    }
+
+    /// Set the remote registry configuration.
+    ///
+    /// At build time, the builder loads from the local cache file only (no
+    /// network I/O). Use [`remote::update_registry()`](crate::registry::remote::update_registry)
+    /// or `rat update-registry` to fetch from the network.
+    pub fn remote_registry(mut self, config: RemoteRegistryConfig) -> Self {
+        self.registry_config = Some(config);
+        self
+    }
+
+    /// Convenience: set the remote registry URL with default cache path.
+    pub fn registry_url(mut self, url: impl Into<String>) -> Self {
+        self.registry_config = Some(RemoteRegistryConfig::with_url(url));
+        self
+    }
+
     /// Set preferred provider routing.
     ///
     /// Reorders the fallback chain so the named provider is tried first
@@ -312,6 +352,14 @@ impl RatatoskrBuilder {
         registry.set_retry_config(self.retry_config);
         registry.set_validation_policy(self.validation_policy);
         registry.set_stream_buffer_size(self.stream_buffer_size);
+
+        // Wire up parameter discovery cache (on by default, opt-out via disable_parameter_discovery)
+        if !self.discovery_disabled
+            && let Some(ref config) = self.discovery_config
+        {
+            let cache = Arc::new(crate::cache::ParameterDiscoveryCache::new(config));
+            registry.set_discovery_cache(cache);
+        }
 
         // =====================================================================
         // Register LOCAL providers FIRST (higher priority)
@@ -429,7 +477,10 @@ impl RatatoskrBuilder {
             registry.apply_routing(routing);
         }
 
-        let model_registry = crate::registry::ModelRegistry::with_embedded_seed();
+        let mut model_registry = crate::registry::ModelRegistry::with_embedded_seed();
+        if let Some(ref config) = self.registry_config {
+            model_registry = model_registry.with_cached_remote(&config.cache_path);
+        }
         let model_cache = Arc::new(ModelCache::new());
 
         let response_cache = self

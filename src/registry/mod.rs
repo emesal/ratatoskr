@@ -2,15 +2,19 @@
 //!
 //! The registry holds [`ModelMetadata`] entries from multiple sources:
 //! 1. **Embedded seed** — compiled-in JSON, always available
-//! 2. **Live provider data** — runtime API queries
-//! 3. **Remote curated data** — future, see issue #6
+//! 2. **Cached remote** — curated data from `emesal/ratatoskr-registry`
+//! 3. **Live provider data** — runtime API queries
 //!
-//! Merge priority: later data overrides earlier (live > embedded).
+//! Merge priority: later data overrides earlier (live > remote > embedded).
 //! Within a merge, per-parameter overrides are applied (not whole-entry replacement).
+//!
+//! See [`remote`] for the fetch/cache mechanism.
+
+pub mod remote;
 
 use std::collections::HashMap;
 
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{ModelCapability, ModelMetadata};
 
@@ -101,6 +105,18 @@ impl ModelRegistry {
     /// Whether the registry is empty.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// Load cached remote registry data and merge into this registry.
+    ///
+    /// Reads from the local cache file only (no network I/O). If the file
+    /// is missing or corrupt, this is a no-op (logged at warn level).
+    pub fn with_cached_remote(mut self, path: &std::path::Path) -> Self {
+        if let Some(models) = remote::load_cached(path) {
+            info!(count = models.len(), "loaded cached remote registry");
+            self.merge_batch(models);
+        }
+        self
     }
 
     /// Create a registry pre-populated with the embedded seed data.

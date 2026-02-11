@@ -61,9 +61,11 @@ src/
 │   └── token.rs        # Token (detailed tokenization)
 ├── registry/           # Model metadata registry (Phase 6)
 │   ├── mod.rs          # ModelRegistry with layered merge
+│   ├── remote.rs       # Remote registry fetch, local cache, versioned format
 │   └── seed.json       # Embedded model metadata (compiled-in fallback)
 ├── cache/
 │   ├── mod.rs          # ModelCache — ephemeral provider-fetched metadata store
+│   ├── discovery.rs    # ParameterDiscoveryCache — runtime parameter rejection cache (moka)
 │   └── response.rs     # ResponseCache — opt-in LRU+TTL cache for embed/NLI (moka)
 ├── gateway/
 │   ├── embedded.rs     # EmbeddedGateway delegating to ProviderRegistry
@@ -117,7 +119,9 @@ contrib/
 - `RatatoskrError` — comprehensive error enum; `ModelNotAvailable` triggers fallback, `UnsupportedParameter` for validation errors
 - `StanceResult` — stance detection result (favor/against/neutral scores with label)
 - `ProviderRegistry` — fallback chains per capability with opt-in parameter validation; `fetch_chat_metadata()` for on-demand fetch
-- `ModelRegistry` — centralized model metadata with layered merge (embedded seed + live data)
+- `ModelRegistry` — centralized model metadata with three-layer merge (embedded seed → cached remote → live data)
+- `RemoteRegistryConfig` — URL + cache path for the remote registry; default: `emesal/ratatoskr-registry` on GitHub
+- `RemoteRegistry` — versioned payload wrapper (`{ "version": 1, "models": [...] }`) with legacy bare-array fallback
 - `ModelCache` — ephemeral thread-safe cache for provider-fetched metadata (consulted after registry miss)
 - `ModelMetadata` — extended model info: capabilities, parameters, pricing, max output tokens
 - `ParameterName` — hybrid enum (well-known params + `Custom(String)` escape hatch)
@@ -132,6 +136,9 @@ contrib/
 - `ProviderCostInfo` — cost ranking for providers serving a model (sorted cheapest-first)
 - `CacheConfig` — opt-in response cache configuration (max entries, TTL)
 - `ResponseCache` — moka-backed LRU+TTL cache for embed/NLI responses
+- `DiscoveryConfig` — configuration for runtime parameter discovery cache (max entries, TTL)
+- `ParameterDiscoveryCache` — moka-backed cache recording parameter rejections at runtime; consulted during validation to prevent repeated failures
+- `DiscoveryRecord` — a single parameter rejection (parameter, provider, model, timestamp, reason); forward-compatible with #14 aggregation
 
 ### Builder Pattern
 
@@ -148,6 +155,10 @@ Ratatoskr::builder()
     .retry(RetryConfig::new().max_attempts(5))      // phase 7: retry on transient errors
     .routing(RoutingConfig::new().chat("anthropic")) // phase 7: preferred provider routing
     .response_cache(CacheConfig::default())          // phase 7: cache embed/NLI responses
+    .discovery(DiscoveryConfig::new().ttl(Duration::from_secs(12 * 3600)))  // optional: tune discovery
+    // .disable_parameter_discovery()                 // opt-out: disable runtime discovery
+    .registry_url("https://...")                     // optional: remote registry (loads cached only)
+    // .remote_registry(RemoteRegistryConfig::default()) // full control over URL + cache path
     .build()?
 ```
 
@@ -186,7 +197,7 @@ Supported NLI models: `NliDebertaV3Base`, `NliDebertaV3Small`, or custom ONNX mo
 
 With the `server` and `client` features enabled:
 - `ratd` — daemon binary serving `EmbeddedGateway` over gRPC (default `127.0.0.1:9741`)
-- `rat` — CLI client with subcommands: `health`, `models`, `status`, `chat`, `embed`, `nli`, `tokens`, `metadata`
+- `rat` — CLI client with subcommands: `health`, `models`, `status`, `chat`, `embed`, `nli`, `tokens`, `metadata`, `update-registry`
 - `ServiceClient` — implements `ModelGateway` trait, transparently forwarding all calls over gRPC
 - TOML configuration with provider/routing/limits sections
 - Separate secrets file (`~/.config/ratatoskr/secrets.toml`) with 0600 permission enforcement
@@ -194,7 +205,7 @@ With the `server` and `client` features enabled:
 
 ### Model Intelligence (Phase 6)
 
-- `ModelRegistry` — centralized model metadata with three-layer merge (embedded seed → live → cache)
+- `ModelRegistry` — centralized model metadata with three-layer merge (embedded seed → cached remote → live)
 - `ModelCache` — ephemeral store for metadata fetched on cache miss from provider APIs
 - `model_metadata(model)` — sync lookup: registry (curated) → cache (ephemeral)
 - `fetch_model_metadata(model)` — async: walks chat provider chain, populates cache on success
@@ -213,6 +224,7 @@ With the `server` and `client` features enabled:
 - **Response cache**: Opt-in moka-backed LRU+TTL cache for deterministic operations (embed, NLI). Zero overhead when not configured. Cache key = `hash(operation, model, input)`. Emits `ratatoskr_cache_hits_total` / `ratatoskr_cache_misses_total` metrics.
 - **Telemetry**: `#[instrument]` tracing spans on dispatch and gateway paths. `metrics` crate integration: `ratatoskr_requests_total`, `ratatoskr_request_duration_seconds`, `ratatoskr_retries_total`, `ratatoskr_tokens_total`. Recorder-agnostic (consumers install their own backend).
 - **Routing**: `RoutingConfig` reorders fallback chains per capability (preferred provider first). `ProviderLatency` tracks EWMA per provider. `providers_by_cost()` returns providers sorted cheapest-first via `ModelMetadata.pricing`. ratd TOML `[routing]` section now wired through to the builder.
+- **Parameter discovery**: `ParameterDiscoveryCache` records runtime parameter rejections (`UnsupportedParameter` errors) keyed on `(provider, model, parameter)`. Validation consults this cache alongside static declarations. On by default (1,000 entries, 24h TTL); opt-out via `.disable_parameter_discovery()`. Emits `ratatoskr_parameter_discoveries_total` metric. ratd TOML `[discovery]` section for configuration.
 
 ## Testing Strategy
 

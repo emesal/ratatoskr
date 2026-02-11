@@ -48,7 +48,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use futures_util::Stream;
-use tracing::{instrument, warn};
+use tracing::{info, instrument, warn};
 
 use crate::telemetry;
 
@@ -65,7 +65,7 @@ use super::traits::{
 };
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, ModelMetadata, NliResult,
+    GenerateOptions, GenerateResponse, Message, ModelMetadata, NliResult, ParameterName,
     ParameterValidationPolicy, StanceResult, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
@@ -131,6 +131,8 @@ pub struct ProviderRegistry {
     stream_buffer_size: usize,
     /// Per-provider EWMA latency tracking, keyed by provider name.
     latency: std::collections::HashMap<String, ProviderLatency>,
+    /// Runtime parameter discovery cache (records provider rejections).
+    discovery_cache: Option<Arc<crate::cache::ParameterDiscoveryCache>>,
 }
 
 impl Default for ProviderRegistry {
@@ -146,6 +148,7 @@ impl Default for ProviderRegistry {
             validation_policy: ParameterValidationPolicy::default(),
             stream_buffer_size: DEFAULT_STREAM_BUFFER,
             latency: std::collections::HashMap::new(),
+            discovery_cache: None,
         }
     }
 }
@@ -179,6 +182,14 @@ impl ProviderRegistry {
     /// not declared as supported by the provider.
     pub fn set_validation_policy(&mut self, policy: ParameterValidationPolicy) {
         self.validation_policy = policy;
+    }
+
+    /// Set the runtime parameter discovery cache.
+    ///
+    /// When set, the registry records parameter rejections at runtime and
+    /// consults the cache during validation, preventing repeated failures.
+    pub fn set_discovery_cache(&mut self, cache: Arc<crate::cache::ParameterDiscoveryCache>) {
+        self.discovery_cache = Some(cache);
     }
 
     /// Get the current validation policy.
@@ -534,6 +545,7 @@ impl ProviderRegistry {
                 }
                 Err(e) => {
                     self.record_request("chat", provider.name(), start, false);
+                    self.record_parameter_discovery(&e);
                     return Err(e);
                 }
             }
@@ -573,6 +585,7 @@ impl ProviderRegistry {
                 }
                 Err(e) => {
                     self.record_request("chat_stream", provider.name(), start, false);
+                    self.record_parameter_discovery(&e);
                     return Err(e);
                 }
             }
@@ -608,6 +621,7 @@ impl ProviderRegistry {
                 }
                 Err(e) => {
                     self.record_request("generate", provider.name(), start, false);
+                    self.record_parameter_discovery(&e);
                     return Err(e);
                 }
             }
@@ -646,6 +660,7 @@ impl ProviderRegistry {
                 }
                 Err(e) => {
                     self.record_request("generate_stream", provider.name(), start, false);
+                    self.record_parameter_discovery(&e);
                     return Err(e);
                 }
             }
@@ -793,6 +808,42 @@ impl ProviderRegistry {
         matches!(e, RatatoskrError::ModelNotAvailable) || e.is_transient()
     }
 
+    /// Record a runtime parameter rejection in the discovery cache.
+    ///
+    /// Called in terminal error arms of dispatch methods. Only acts on
+    /// `UnsupportedParameter` errors when a discovery cache is configured.
+    fn record_parameter_discovery(&self, error: &RatatoskrError) {
+        if let (
+            Some(cache),
+            RatatoskrError::UnsupportedParameter {
+                param,
+                model,
+                provider,
+            },
+        ) = (&self.discovery_cache, error)
+        {
+            let pname: ParameterName = param.parse().unwrap(); // infallible
+            cache.record(crate::cache::DiscoveryRecord {
+                parameter: pname.clone(),
+                provider: provider.clone(),
+                model: model.clone(),
+                discovered_at: std::time::Instant::now(),
+                reason: error.to_string(),
+            });
+            metrics::counter!(
+                crate::telemetry::PARAMETER_DISCOVERIES_TOTAL,
+                "provider" => provider.clone(),
+                "model" => model.clone(),
+                "parameter" => param.clone(),
+            )
+            .increment(1);
+            info!(
+                %param, %model, %provider,
+                "recorded parameter discovery"
+            );
+        }
+    }
+
     /// Wrap an embedding provider in retry decorator if config is set.
     fn maybe_wrap_embedding(
         &self,
@@ -846,17 +897,27 @@ impl ProviderRegistry {
         options: &ChatOptions,
     ) -> Result<()> {
         let supported = provider.supported_chat_parameters();
-
-        // If provider doesn't declare parameters, skip validation (legacy)
-        if supported.is_empty() {
-            return Ok(());
-        }
-
         let requested = options.set_parameters();
-        let unsupported: Vec<_> = requested
-            .iter()
-            .filter(|p| !supported.contains(p))
-            .collect();
+
+        // Collect statically unsupported params (skip if provider doesn't declare any)
+        let mut unsupported: Vec<ParameterName> = if supported.is_empty() {
+            Vec::new()
+        } else {
+            requested
+                .iter()
+                .filter(|p| !supported.contains(p))
+                .cloned()
+                .collect()
+        };
+
+        // Merge in runtime-discovered rejections
+        if let Some(ref cache) = self.discovery_cache {
+            for p in cache.known_unsupported_params(provider.name(), &options.model, &requested) {
+                if !unsupported.contains(&p) {
+                    unsupported.push(p);
+                }
+            }
+        }
 
         if unsupported.is_empty() {
             return Ok(());
@@ -893,17 +954,27 @@ impl ProviderRegistry {
         options: &GenerateOptions,
     ) -> Result<()> {
         let supported = provider.supported_generate_parameters();
-
-        // If provider doesn't declare parameters, skip validation (legacy)
-        if supported.is_empty() {
-            return Ok(());
-        }
-
         let requested = options.set_parameters();
-        let unsupported: Vec<_> = requested
-            .iter()
-            .filter(|p| !supported.contains(p))
-            .collect();
+
+        // Collect statically unsupported params (skip if provider doesn't declare any)
+        let mut unsupported: Vec<ParameterName> = if supported.is_empty() {
+            Vec::new()
+        } else {
+            requested
+                .iter()
+                .filter(|p| !supported.contains(p))
+                .cloned()
+                .collect()
+        };
+
+        // Merge in runtime-discovered rejections
+        if let Some(ref cache) = self.discovery_cache {
+            for p in cache.known_unsupported_params(provider.name(), &options.model, &requested) {
+                if !unsupported.contains(&p) {
+                    unsupported.push(p);
+                }
+            }
+        }
 
         if unsupported.is_empty() {
             return Ok(());
