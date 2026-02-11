@@ -18,10 +18,14 @@ use tracing::warn;
 
 use crate::telemetry;
 
-use super::traits::{ChatProvider, EmbeddingProvider, GenerateProvider, NliProvider};
+use super::traits::{
+    ChatProvider, ClassifyProvider, EmbeddingProvider, GenerateProvider, NliProvider,
+    StanceProvider,
+};
 use crate::types::{
-    ChatEvent, ChatOptions, ChatResponse, Embedding, GenerateEvent, GenerateOptions,
-    GenerateResponse, Message, ModelMetadata, NliResult, ParameterName, ToolDefinition,
+    ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
+    GenerateOptions, GenerateResponse, Message, ModelMetadata, NliResult, ParameterName,
+    StanceResult, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
 
@@ -369,5 +373,81 @@ impl GenerateProvider for RetryingGenerateProvider {
 
     fn supported_generate_parameters(&self) -> Vec<ParameterName> {
         self.inner.supported_generate_parameters()
+    }
+}
+
+// ============================================================================
+// RetryingClassifyProvider
+// ============================================================================
+
+/// Decorator that wraps a [`ClassifyProvider`] with retry logic.
+///
+/// Same semantics as [`RetryingChatProvider`] — retries transient errors,
+/// returns permanent errors immediately.
+pub struct RetryingClassifyProvider {
+    inner: Arc<dyn ClassifyProvider>,
+    config: RetryConfig,
+}
+
+impl RetryingClassifyProvider {
+    /// Wrap a classify provider with retry logic.
+    pub fn new(inner: Arc<dyn ClassifyProvider>, config: RetryConfig) -> Self {
+        Self { inner, config }
+    }
+}
+
+#[async_trait]
+impl ClassifyProvider for RetryingClassifyProvider {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    async fn classify_zero_shot(
+        &self,
+        text: &str,
+        labels: &[&str],
+        model: &str,
+    ) -> Result<ClassifyResult> {
+        with_retry(
+            &self.config,
+            self.inner.name(),
+            "classify_zero_shot",
+            || self.inner.classify_zero_shot(text, labels, model),
+        )
+        .await
+    }
+}
+
+// ============================================================================
+// RetryingStanceProvider
+// ============================================================================
+
+/// Decorator that wraps a [`StanceProvider`] with retry logic.
+///
+/// Same semantics as [`RetryingChatProvider`] — retries transient errors,
+/// returns permanent errors immediately.
+pub struct RetryingStanceProvider {
+    inner: Arc<dyn StanceProvider>,
+    config: RetryConfig,
+}
+
+impl RetryingStanceProvider {
+    /// Wrap a stance provider with retry logic.
+    pub fn new(inner: Arc<dyn StanceProvider>, config: RetryConfig) -> Self {
+        Self { inner, config }
+    }
+}
+
+#[async_trait]
+impl StanceProvider for RetryingStanceProvider {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    async fn classify_stance(&self, text: &str, target: &str, model: &str) -> Result<StanceResult> {
+        with_retry(&self.config, self.inner.name(), "classify_stance", || {
+            self.inner.classify_stance(text, target, model)
+        })
+        .await
     }
 }

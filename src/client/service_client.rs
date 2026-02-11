@@ -52,7 +52,8 @@ impl ServiceClient {
 /// Convert [`tonic::Status`] to [`RatatoskrError`].
 fn from_status(status: tonic::Status) -> RatatoskrError {
     match status.code() {
-        tonic::Code::NotFound => RatatoskrError::ModelNotAvailable,
+        tonic::Code::NotFound => RatatoskrError::ModelNotFound(status.message().to_string()),
+        tonic::Code::Unavailable => RatatoskrError::ModelNotAvailable,
         tonic::Code::ResourceExhausted => RatatoskrError::RateLimited { retry_after: None },
         tonic::Code::Unauthenticated => RatatoskrError::AuthenticationFailed,
         tonic::Code::InvalidArgument => RatatoskrError::InvalidInput(status.message().to_string()),

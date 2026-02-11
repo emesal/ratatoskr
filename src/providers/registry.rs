@@ -55,8 +55,8 @@ use crate::telemetry;
 use super::backpressure;
 use super::backpressure::DEFAULT_STREAM_BUFFER;
 use super::retry::{
-    RetryConfig, RetryingChatProvider, RetryingEmbeddingProvider, RetryingGenerateProvider,
-    RetryingNliProvider,
+    RetryConfig, RetryingChatProvider, RetryingClassifyProvider, RetryingEmbeddingProvider,
+    RetryingGenerateProvider, RetryingNliProvider, RetryingStanceProvider,
 };
 use super::routing::{self, HasName, ProviderCostInfo, ProviderLatency, RoutingConfig};
 use super::traits::{
@@ -306,18 +306,20 @@ impl ProviderRegistry {
 
     /// Add a classification provider (appended to end of chain).
     ///
-    /// Classification providers are not retry-wrapped (typically local).
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingClassifyProvider`].
     pub fn add_classify(&mut self, provider: Arc<dyn ClassifyProvider>) {
         self.ensure_latency_tracker(provider.name());
-        self.classify.push(provider);
+        self.classify.push(self.maybe_wrap_classify(provider));
     }
 
     /// Add a stance provider (appended to end of chain).
     ///
-    /// Stance providers are not retry-wrapped (typically local).
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingStanceProvider`].
     pub fn add_stance(&mut self, provider: Arc<dyn StanceProvider>) {
         self.ensure_latency_tracker(provider.name());
-        self.stance.push(provider);
+        self.stance.push(self.maybe_wrap_stance(provider));
     }
 
     /// Add a chat provider (appended to end of chain).
@@ -355,7 +357,7 @@ impl ProviderRegistry {
                     self.record_request("embed", provider.name(), start, true);
                     return Ok(result);
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -380,7 +382,7 @@ impl ProviderRegistry {
                     self.record_request("embed_batch", provider.name(), start, true);
                     return Ok(result);
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -410,7 +412,7 @@ impl ProviderRegistry {
                     self.record_request("infer_nli", provider.name(), start, true);
                     return Ok(result);
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -439,7 +441,7 @@ impl ProviderRegistry {
                     self.record_request("infer_nli_batch", provider.name(), start, true);
                     return Ok(result);
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -469,7 +471,7 @@ impl ProviderRegistry {
                     self.record_request("classify_zero_shot", provider.name(), start, true);
                     return Ok(result);
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -499,7 +501,7 @@ impl ProviderRegistry {
                     self.record_request("classify_stance", provider.name(), start, true);
                     return Ok(result);
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -527,8 +529,15 @@ impl ProviderRegistry {
         let start = Instant::now();
         let mut last_err = None;
         for provider in &self.chat {
-            // Validate parameters before calling provider
-            self.validate_chat_params(provider.as_ref(), options)?;
+            // Validate parameters — UnsupportedParameter triggers fallback to next provider
+            match self.validate_chat_params(provider.as_ref(), options) {
+                Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
 
             match provider.chat(messages, tools, options).await {
                 Ok(result) => {
@@ -539,7 +548,7 @@ impl ProviderRegistry {
                     }
                     return Ok(result);
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -568,8 +577,15 @@ impl ProviderRegistry {
         let start = Instant::now();
         let mut last_err = None;
         for provider in &self.chat {
-            // Validate parameters before calling provider
-            self.validate_chat_params(provider.as_ref(), options)?;
+            // Validate parameters — UnsupportedParameter triggers fallback to next provider
+            match self.validate_chat_params(provider.as_ref(), options) {
+                Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
 
             match provider.chat_stream(messages, tools, options).await {
                 Ok(stream) => {
@@ -579,7 +595,7 @@ impl ProviderRegistry {
                         self.stream_buffer_size,
                     ));
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -607,15 +623,22 @@ impl ProviderRegistry {
         let start = Instant::now();
         let mut last_err = None;
         for provider in &self.generate {
-            // Validate parameters before calling provider
-            self.validate_generate_params(provider.as_ref(), options)?;
+            // Validate parameters — UnsupportedParameter triggers fallback to next provider
+            match self.validate_generate_params(provider.as_ref(), options) {
+                Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
 
             match provider.generate(prompt, options).await {
                 Ok(result) => {
                     self.record_request("generate", provider.name(), start, true);
                     return Ok(result);
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -643,8 +666,15 @@ impl ProviderRegistry {
         let start = Instant::now();
         let mut last_err = None;
         for provider in &self.generate {
-            // Validate parameters before calling provider
-            self.validate_generate_params(provider.as_ref(), options)?;
+            // Validate parameters — UnsupportedParameter triggers fallback to next provider
+            match self.validate_generate_params(provider.as_ref(), options) {
+                Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
 
             match provider.generate_stream(prompt, options).await {
                 Ok(stream) => {
@@ -654,7 +684,7 @@ impl ProviderRegistry {
                         self.stream_buffer_size,
                     ));
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -691,7 +721,7 @@ impl ProviderRegistry {
                     last_err = Some(RatatoskrError::NotImplemented("fetch_metadata"));
                     continue;
                 }
-                Err(e) if Self::is_fallback_trigger(&e) => {
+                Err(e) if self.is_fallback_trigger(&e) => {
                     last_err = Some(e);
                     continue;
                 }
@@ -801,11 +831,14 @@ impl ProviderRegistry {
 
     /// Whether an error should trigger fallback to the next provider.
     ///
-    /// `ModelNotAvailable` always triggers fallback. Transient errors trigger
-    /// fallback when retry is configured (meaning retries were exhausted
-    /// inside the `RetryingProvider` wrapper).
-    fn is_fallback_trigger(e: &RatatoskrError) -> bool {
-        matches!(e, RatatoskrError::ModelNotAvailable) || e.is_transient()
+    /// `ModelNotAvailable` always triggers fallback. Transient errors only
+    /// trigger fallback when retry config is set — meaning the
+    /// `RetryingProvider` wrapper already exhausted its retry budget.
+    /// Without retry config, transient errors are terminal (no guarantee
+    /// that retries were attempted).
+    fn is_fallback_trigger(&self, e: &RatatoskrError) -> bool {
+        matches!(e, RatatoskrError::ModelNotAvailable)
+            || (self.retry_config.is_some() && e.is_transient())
     }
 
     /// Record a runtime parameter rejection in the discovery cache.
@@ -878,6 +911,25 @@ impl ProviderRegistry {
     ) -> Arc<dyn GenerateProvider> {
         match &self.retry_config {
             Some(config) => Arc::new(RetryingGenerateProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap a classify provider in retry decorator if config is set.
+    fn maybe_wrap_classify(
+        &self,
+        provider: Arc<dyn ClassifyProvider>,
+    ) -> Arc<dyn ClassifyProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingClassifyProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap a stance provider in retry decorator if config is set.
+    fn maybe_wrap_stance(&self, provider: Arc<dyn StanceProvider>) -> Arc<dyn StanceProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingStanceProvider::new(provider, config.clone())),
             None => provider,
         }
     }

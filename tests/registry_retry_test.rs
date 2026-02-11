@@ -225,9 +225,9 @@ async fn model_not_available_still_triggers_fallback() {
 }
 
 #[tokio::test]
-async fn without_retry_config_transient_errors_still_trigger_fallback() {
-    // Even without retry wrapping, the registry's is_fallback_trigger
-    // catches transient errors and falls through
+async fn without_retry_config_transient_errors_are_terminal() {
+    // Without retry config, transient errors are terminal — no fallback,
+    // since there's no guarantee retries were attempted.
     let mut registry = ProviderRegistry::new();
 
     let failing = Arc::new(AlwaysFailProvider::new("flaky", || {
@@ -242,8 +242,8 @@ async fn without_retry_config_transient_errors_still_trigger_fallback() {
         .chat(&[], None, &ChatOptions::default().model("test"))
         .await;
 
-    assert!(result.is_ok());
-    // No retry wrapping, so only 1 call to the failing provider
+    assert!(result.is_err());
     assert_eq!(failing.calls(), 1);
-    assert_eq!(success.calls(), 1);
+    // Second provider never reached
+    assert_eq!(success.calls(), 0);
 }

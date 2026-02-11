@@ -37,7 +37,7 @@ fn to_status(err: crate::RatatoskrError) -> Status {
     use crate::RatatoskrError;
     match err {
         RatatoskrError::ModelNotFound(m) => Status::not_found(format!("Model not found: {m}")),
-        RatatoskrError::ModelNotAvailable => Status::not_found("Model not available"),
+        RatatoskrError::ModelNotAvailable => Status::unavailable("Model not available"),
         RatatoskrError::RateLimited { retry_after } => {
             let msg = match retry_after {
                 Some(d) => format!("Rate limited, retry after {d:?}"),
