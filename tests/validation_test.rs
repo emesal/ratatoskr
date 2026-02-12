@@ -24,14 +24,13 @@ fn validation_policy_default_is_warn() {
 
 #[test]
 fn chat_options_set_parameters_empty() {
-    let opts = ChatOptions::default().model("test");
+    let opts = ChatOptions::new("test");
     assert!(opts.set_parameters().is_empty());
 }
 
 #[test]
 fn chat_options_set_parameters_tracks_all() {
-    let opts = ChatOptions::default()
-        .model("test")
+    let opts = ChatOptions::new("test")
         .temperature(0.7)
         .max_tokens(100)
         .top_p(0.9)
@@ -113,7 +112,7 @@ async fn validation_error_policy_rejects_unsupported_param() {
     let registry = registry_with_policy(ParameterValidationPolicy::Error);
 
     // LlmChatProvider doesn't support top_k
-    let opts = ChatOptions::default().model("test-model").top_k(40);
+    let opts = ChatOptions::new("test-model").top_k(40);
     let messages = vec![Message::user("hello")];
 
     let result = registry.chat(&messages, None, &opts).await;
@@ -131,7 +130,7 @@ async fn validation_ignore_policy_allows_unsupported_param() {
     let registry = registry_with_policy(ParameterValidationPolicy::Ignore);
 
     // LlmChatProvider doesn't support top_k, but Ignore should let it through
-    let opts = ChatOptions::default().model("test-model").top_k(40);
+    let opts = ChatOptions::new("test-model").top_k(40);
     let messages = vec![Message::user("hello")];
 
     // Will fail at the API call level (no valid key), but validation should pass
@@ -153,7 +152,7 @@ async fn validation_skipped_when_provider_has_no_declared_params() {
     registry.set_validation_policy(ParameterValidationPolicy::Error);
 
     // No providers registered — should return NoProvider, not validation error
-    let opts = ChatOptions::default().model("test-model").top_k(40);
+    let opts = ChatOptions::new("test-model").top_k(40);
     let messages = vec![Message::user("hello")];
 
     let result = registry.chat(&messages, None, &opts).await;

@@ -36,7 +36,7 @@ use ratatoskr::RatatoskrError;
 | Error | Description |
 |-------|-------------|
 | `NoProvider` | No provider configured for the requested model |
-| `NotImplemented(&'static str)` | Feature not yet available |
+| `NotImplemented(String)` | Feature not yet available |
 | `Unsupported` | Operation not supported by this provider |
 
 ### Soft Errors

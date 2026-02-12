@@ -2,31 +2,28 @@ use ratatoskr::{ChatOptions, ParameterName, ReasoningConfig, ReasoningEffort, Re
 
 #[test]
 fn test_chat_options_top_k() {
-    let opts = ChatOptions::default().model("gpt-4").top_k(40);
+    let opts = ChatOptions::new("gpt-4").top_k(40);
     assert_eq!(opts.top_k, Some(40));
 }
 
 #[test]
 fn test_chat_options_top_k_serde() {
-    let opts = ChatOptions::default().model("test").top_k(50);
+    let opts = ChatOptions::new("test").top_k(50);
     let json = serde_json::to_string(&opts).unwrap();
     let parsed: ChatOptions = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed.top_k, Some(50));
 }
 
 #[test]
-fn test_chat_options_default() {
-    let opts = ChatOptions::default();
-    assert!(opts.model.is_empty());
+fn test_chat_options_new() {
+    let opts = ChatOptions::new("test-model");
+    assert_eq!(opts.model, "test-model");
     assert!(opts.temperature.is_none());
 }
 
 #[test]
 fn test_chat_options_builder_style() {
-    let opts = ChatOptions::default()
-        .model("gpt-4")
-        .temperature(0.7)
-        .max_tokens(1000);
+    let opts = ChatOptions::new("gpt-4").temperature(0.7).max_tokens(1000);
 
     assert_eq!(opts.model, "gpt-4");
     assert_eq!(opts.temperature, Some(0.7));
@@ -53,17 +50,13 @@ fn test_response_format_variants() {
 
 #[test]
 fn test_chat_options_parallel_tool_calls_builder() {
-    let opts = ChatOptions::default()
-        .model("gpt-4o")
-        .parallel_tool_calls(false);
+    let opts = ChatOptions::new("gpt-4o").parallel_tool_calls(false);
     assert_eq!(opts.parallel_tool_calls, Some(false));
 }
 
 #[test]
 fn test_chat_options_parallel_tool_calls_serde() {
-    let opts = ChatOptions::default()
-        .model("gpt-4o")
-        .parallel_tool_calls(true);
+    let opts = ChatOptions::new("gpt-4o").parallel_tool_calls(true);
     let json = serde_json::to_string(&opts).unwrap();
     assert!(json.contains("\"parallel_tool_calls\":true"));
     let parsed: ChatOptions = serde_json::from_str(&json).unwrap();
@@ -72,14 +65,12 @@ fn test_chat_options_parallel_tool_calls_serde() {
 
 #[test]
 fn test_chat_options_parallel_tool_calls_in_set_parameters() {
-    let opts = ChatOptions::default()
-        .model("gpt-4o")
-        .parallel_tool_calls(true);
+    let opts = ChatOptions::new("gpt-4o").parallel_tool_calls(true);
     let params = opts.set_parameters();
     assert!(params.contains(&ParameterName::ParallelToolCalls));
 
     // absent when not set
-    let opts_none = ChatOptions::default().model("gpt-4o");
+    let opts_none = ChatOptions::new("gpt-4o");
     let params_none = opts_none.set_parameters();
     assert!(!params_none.contains(&ParameterName::ParallelToolCalls));
 }

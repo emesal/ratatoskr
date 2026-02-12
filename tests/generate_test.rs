@@ -247,6 +247,7 @@ async fn test_live_generate_stream_openrouter() {
                 full_response.push_str(&text);
             }
             Ok(GenerateEvent::Done) => break,
+            Ok(_) => {} // forward-compatible with future event variants
             Err(e) => panic!("Stream error: {}", e),
         }
     }

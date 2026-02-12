@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 /// what happens when a request contains unsupported parameters.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum ParameterValidationPolicy {
     /// Log a warning and proceed without the unsupported parameter.
     ///

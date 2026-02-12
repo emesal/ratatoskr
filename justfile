@@ -245,9 +245,9 @@ pre-push: check-freeze lint test
 push: pre-push
   git push
 
-# Install to ~/.cargo/bin
+# Install ratd + rat to ~/.cargo/bin
 install:
-  cargo install --path crates/chibi-cli
+  cargo install --path . --features server,client
 
 # === Documentation ===
 
@@ -307,20 +307,22 @@ push-release version:
 
   echo "✓ Released v{{version}} and synced dev"
 
-# Update dependencies after release
+# Update dependencies after release (creates chore branch for review)
 update-deps:
   #!/usr/bin/env bash
   set -e
   git checkout dev
   git pull
+  branch="chore/update-deps-$(date +%Y%m%d)"
+  git checkout -b "$branch"
   echo "Updating dependencies..."
   cargo update
   cargo build
   cargo test
   git add Cargo.lock
-  git commit -m "chore: update dependencies post-release" -a
-  git push origin dev
-  echo "✓ Dependencies updated on dev"
+  git commit -m "chore: update dependencies post-release"
+  git push origin "$branch"
+  echo "✓ Dependencies updated on $branch — create a PR to dev"
 
 # === Archaeology Commands ===
 

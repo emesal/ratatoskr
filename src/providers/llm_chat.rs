@@ -12,6 +12,7 @@ use futures_util::{Stream, StreamExt};
 use llm::LLMProvider;
 use llm::builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder};
 use llm::completion::CompletionRequest;
+use tracing::instrument;
 
 use crate::convert::{from_llm_tool_calls, from_llm_usage, to_llm_messages};
 use crate::providers::workarounds;
@@ -243,13 +244,14 @@ impl ChatProvider for LlmChatProvider {
         &self.name
     }
 
+    #[instrument(name = "llm.chat", skip(self, messages, tools, options), fields(model = %options.model, provider = %self.name))]
     async fn chat(
         &self,
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
-        let (system_prompt, llm_messages) = to_llm_messages(messages);
+        let (system_prompt, llm_messages) = to_llm_messages(messages)?;
         let provider = self.build_provider(options, system_prompt.as_deref(), tools)?;
 
         let response = if tools.is_some() {
@@ -284,13 +286,14 @@ impl ChatProvider for LlmChatProvider {
         })
     }
 
+    #[instrument(name = "llm.chat_stream", skip(self, messages, tools, options), fields(model = %options.model, provider = %self.name))]
     async fn chat_stream(
         &self,
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
-        let (system_prompt, llm_messages) = to_llm_messages(messages);
+        let (system_prompt, llm_messages) = to_llm_messages(messages)?;
         let provider = self.build_provider(options, system_prompt.as_deref(), tools)?;
 
         let stream = provider
@@ -316,6 +319,7 @@ impl ChatProvider for LlmChatProvider {
                     llm::chat::StreamChunk::ToolUseComplete { index, .. } => {
                         ChatEvent::ToolCallEnd { index }
                     }
+                    llm::chat::StreamChunk::Thinking(text) => ChatEvent::Reasoning(text),
                     llm::chat::StreamChunk::Done { .. } => ChatEvent::Done,
                 })
                 .map_err(RatatoskrError::from)
@@ -336,6 +340,7 @@ impl ChatProvider for LlmChatProvider {
         ]
     }
 
+    #[instrument(name = "llm.fetch_metadata", skip(self), fields(provider = %self.name))]
     async fn fetch_metadata(&self, model: &str) -> Result<crate::types::ModelMetadata> {
         use super::openrouter_models::{ModelsResponse, into_model_metadata};
 
@@ -388,9 +393,10 @@ impl GenerateProvider for LlmChatProvider {
         &self.name
     }
 
+    #[instrument(name = "llm.generate", skip(self, prompt, options), fields(model = %options.model, provider = %self.name))]
     async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
         // Build chat options for the provider
-        let mut chat_options = ChatOptions::default().model(&options.model);
+        let mut chat_options = ChatOptions::new(&options.model);
         if let Some(temp) = options.temperature {
             chat_options = chat_options.temperature(temp);
         }
@@ -428,6 +434,7 @@ impl GenerateProvider for LlmChatProvider {
         })
     }
 
+    #[instrument(name = "llm.generate_stream", skip(self, prompt, options), fields(model = %options.model, provider = %self.name))]
     async fn generate_stream(
         &self,
         prompt: &str,
@@ -437,7 +444,7 @@ impl GenerateProvider for LlmChatProvider {
         // by wrapping the prompt in a user message
         let messages = vec![Message::user(prompt)];
 
-        let mut chat_options = ChatOptions::default().model(&options.model);
+        let mut chat_options = ChatOptions::new(&options.model);
         if let Some(temp) = options.temperature {
             chat_options = chat_options.temperature(temp);
         }
@@ -451,14 +458,15 @@ impl GenerateProvider for LlmChatProvider {
         // Get streaming chat response
         let chat_stream = self.chat_stream(&messages, None, &chat_options).await?;
 
-        // Convert ChatEvent to GenerateEvent
-        let generate_stream = chat_stream.map(|result| {
-            result.map(|event| match event {
-                ChatEvent::Content(text) => GenerateEvent::Text(text),
-                ChatEvent::Done => GenerateEvent::Done,
-                // Ignore other events (reasoning, tool calls, usage) for generate
-                _ => GenerateEvent::Text(String::new()),
-            })
+        // Convert ChatEvent to GenerateEvent, filtering out non-content events.
+        let generate_stream = chat_stream.filter_map(|result| async {
+            match result {
+                Ok(ChatEvent::Content(text)) => Some(Ok(GenerateEvent::Text(text))),
+                Ok(ChatEvent::Done) => Some(Ok(GenerateEvent::Done)),
+                Err(e) => Some(Err(e)),
+                // Discard reasoning, tool calls, usage — not relevant for generate.
+                _ => None,
+            }
         });
 
         Ok(Box::pin(generate_stream))

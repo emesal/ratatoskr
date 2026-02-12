@@ -104,6 +104,42 @@ fn test_tokenizer_registry_no_match() {
     assert!(result.is_err());
 }
 
+#[test]
+fn test_tokenizer_alias_cycle_detected() {
+    let mut registry = TokenizerRegistry::new();
+
+    // Create a cycle: a → b → a
+    registry.register(
+        "alias-a",
+        TokenizerSource::Alias {
+            target: "alias-b".to_string(),
+        },
+    );
+    registry.register(
+        "alias-b",
+        TokenizerSource::Alias {
+            target: "alias-a".to_string(),
+        },
+    );
+
+    let result = registry.resolve_source("alias-a");
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("cycle") || err.contains("Alias"),
+        "expected cycle error, got: {err}"
+    );
+}
+
+#[test]
+fn test_tokenizer_prefix_match_over_exact() {
+    let registry = TokenizerRegistry::new();
+
+    // "gpt-4-turbo-preview" should match "gpt-4" prefix from defaults
+    let result = registry.resolve_source("gpt-4-turbo-preview");
+    assert!(result.is_ok());
+}
+
 // Note: This test is commented out as it requires network access to HuggingFace Hub.
 // Enable it for manual testing if needed.
 //

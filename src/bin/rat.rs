@@ -82,19 +82,63 @@ enum Command {
         /// Model identifier (e.g., "anthropic/claude-sonnet-4")
         model: String,
     },
+
+    /// Fetch and cache the remote model registry
+    UpdateRegistry {
+        /// Registry URL (default: emesal/ratatoskr-registry on GitHub)
+        #[arg(long)]
+        url: Option<String>,
+        /// Local cache path (default: ~/.cache/ratatoskr/registry.json)
+        #[arg(long)]
+        cache_path: Option<std::path::PathBuf>,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialise tracing (default: warn for CLI; override with RUST_LOG).
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+        )
+        .init();
+
     let args = Args::parse();
+
+    // Commands that don't require a ratd connection
+    if let Command::UpdateRegistry { url, cache_path } = args.command {
+        use ratatoskr::registry::remote::{DEFAULT_REGISTRY_URL, RemoteRegistryConfig};
+
+        let config = RemoteRegistryConfig {
+            url: url.unwrap_or_else(|| DEFAULT_REGISTRY_URL.to_string()),
+            cache_path: cache_path.unwrap_or_else(|| {
+                dirs::cache_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from(".cache"))
+                    .join("ratatoskr")
+                    .join("registry.json")
+            }),
+        };
+
+        let models = ratatoskr::registry::remote::update_registry(&config).await?;
+        println!("fetched {} model entries", models.len());
+        println!("saved to {}", config.cache_path.display());
+        return Ok(());
+    }
+
     let client = ServiceClient::connect(&args.address).await?;
 
     match args.command {
         Command::Health => {
+            let (healthy, version, git_sha) = client.health().await?;
+            let status = if healthy { "healthy" } else { "unhealthy" };
+            println!(
+                "ratd {version} ({})",
+                git_sha.as_deref().unwrap_or("unknown")
+            );
+            println!("status: {status}");
             let models = client.list_models();
-            println!("connected to ratd at {}", args.address);
-            println!("available providers: {}", models.len());
-            println!("status: healthy");
+            println!("models: {}", models.len());
         }
 
         Command::Models => {
@@ -146,7 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .chat(
                     &[ratatoskr::Message::user(&message)],
                     None,
-                    &ChatOptions::default().model(&model),
+                    &ChatOptions::new(&model),
                 )
                 .await?;
             println!("{}", response.content);
@@ -162,6 +206,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let metadata = client.fetch_model_metadata(&model).await?;
             print_metadata(&metadata);
         }
+
+        Command::UpdateRegistry { .. } => unreachable!("handled above"),
     }
 
     Ok(())
@@ -221,6 +267,7 @@ fn print_metadata(m: &ModelMetadata) {
                 ParameterAvailability::ReadOnly { value } => format!("read-only = {value}"),
                 ParameterAvailability::Opaque => "opaque".to_string(),
                 ParameterAvailability::Unsupported => "unsupported".to_string(),
+                _ => "unknown".to_string(),
             };
             println!("  {name}: {desc}");
         }

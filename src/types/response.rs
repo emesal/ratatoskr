@@ -4,7 +4,7 @@ use super::tool::ToolCall;
 use serde::{Deserialize, Serialize};
 
 /// Non-streaming chat response
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ChatResponse {
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -20,7 +20,9 @@ pub struct ChatResponse {
 }
 
 /// Events emitted during streaming chat
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ChatEvent {
     /// Text content chunk
     Content(String),
@@ -48,19 +50,20 @@ pub enum ChatEvent {
     Done,
 }
 
-/// Token usage statistics
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Token usage statistics.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
-    pub prompt_tokens: u32,
-    pub completion_tokens: u32,
-    pub total_tokens: u32,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub total_tokens: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_tokens: Option<u32>,
+    pub reasoning_tokens: Option<u64>,
 }
 
 /// Reason the model stopped generating
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum FinishReason {
     #[default]
     Stop,

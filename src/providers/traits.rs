@@ -219,7 +219,9 @@ pub trait ChatProvider: Send + Sync {
     /// or `NotImplemented` if the provider doesn't support metadata fetching.
     /// The registry walks the fallback chain on either of these.
     async fn fetch_metadata(&self, _model: &str) -> Result<ModelMetadata> {
-        Err(crate::RatatoskrError::NotImplemented("fetch_metadata"))
+        Err(crate::RatatoskrError::NotImplemented(
+            "fetch_metadata".into(),
+        ))
     }
 }
 

@@ -21,7 +21,7 @@ Phase 5: Service Mode                       ✓
     ↓
 Phase 6: Model Intelligence & Parameters    ✓  (see 2026-02-05-phase6-model-intelligence.md)
     ↓
-Phase 7: Operational Hardening              ←── Next
+Phase 7: Operational Hardening              ✓  (see 2026-02-11-phase7-operational-hardening.md)
 ```
 
 ---
