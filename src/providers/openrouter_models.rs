@@ -31,6 +31,7 @@ pub(crate) struct ModelEntry {
     pub top_provider: Option<TopProvider>,
     #[serde(default)]
     pub supported_parameters: Vec<String>,
+    /// Deserialized for forward compatibility; not yet surfaced in [`ModelMetadata`].
     #[serde(default)]
     #[allow(dead_code)]
     pub architecture: Option<Architecture>,

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Role of a message participant
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum Role {
     System,
     User,
@@ -14,8 +15,9 @@ pub enum Role {
 }
 
 /// Message content (extensible for future multimodal)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum MessageContent {
     Text(String),
     // Future: Parts(Vec<ContentPart>) for images, etc.
@@ -37,7 +39,7 @@ impl MessageContent {
 }
 
 /// A chat message
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub role: Role,
     pub content: MessageContent,

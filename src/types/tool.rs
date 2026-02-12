@@ -4,7 +4,7 @@ use crate::RatatoskrError;
 use serde::{Deserialize, Serialize};
 
 /// Tool definition for function calling
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolDefinition {
     pub name: String,
     pub description: String,
@@ -49,7 +49,7 @@ impl TryFrom<&serde_json::Value> for ToolDefinition {
 }
 
 /// A tool call made by the model
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
@@ -78,8 +78,9 @@ impl ToolCall {
 }
 
 /// Tool choice configuration
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum ToolChoice {
     #[default]
     Auto,

@@ -160,13 +160,26 @@ impl TokenizerRegistry {
     /// Resolve model name to tokenizer source.
     ///
     /// Matches against registered patterns (longest match wins).
+    /// Detects alias cycles (max depth: 16).
     #[doc(hidden)]
     pub fn resolve_source(&self, model: &str) -> Result<TokenizerSource> {
+        self.resolve_source_inner(model, 0)
+    }
+
+    /// Inner resolver with depth tracking for alias cycle detection.
+    fn resolve_source_inner(&self, model: &str, depth: u8) -> Result<TokenizerSource> {
+        if depth > 16 {
+            return Err(crate::error::RatatoskrError::Configuration(format!(
+                "Alias cycle detected for tokenizer model: {}",
+                model
+            )));
+        }
+
         // Try exact match first
         if let Some(source) = self.model_mappings.get(model) {
             // Resolve aliases recursively
             return match source {
-                TokenizerSource::Alias { target } => self.resolve_source(target),
+                TokenizerSource::Alias { target } => self.resolve_source_inner(target, depth + 1),
                 _ => Ok(source.clone()),
             };
         }
@@ -189,7 +202,7 @@ impl TokenizerRegistry {
         if let Some((_, source)) = best_match {
             // Resolve aliases
             match source {
-                TokenizerSource::Alias { target } => self.resolve_source(target),
+                TokenizerSource::Alias { target } => self.resolve_source_inner(target, depth + 1),
                 _ => Ok(source.clone()),
             }
         } else {

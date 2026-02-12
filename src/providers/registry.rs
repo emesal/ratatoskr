@@ -2,7 +2,22 @@
 //!
 //! The `ProviderRegistry` stores providers in priority order (index 0 = highest).
 //! When a capability is requested, it tries providers in order until one succeeds
-//! or returns a non-`ModelNotAvailable` error.
+//! or returns a non-fallback error.
+//!
+//! # Fallback Triggers
+//!
+//! The registry falls through to the next provider on:
+//! - `ModelNotAvailable` — provider can't handle this model
+//! - Transient errors after retry exhaustion — all retry attempts failed
+//!
+//! Permanent errors (auth, validation, etc.) are terminal and stop the chain.
+//!
+//! # Retry Wrapping
+//!
+//! When a `RetryConfig` is set, providers are automatically wrapped in
+//! `Retrying*Provider` decorators at registration time. This means each
+//! provider retries internally before the registry sees a transient error
+//! as exhausted.
 //!
 //! # Fallback Chain Flow
 //!
@@ -30,33 +45,80 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Instant;
 
 use futures_util::Stream;
-use tracing::warn;
+use tracing::{info, instrument, warn};
 
+use crate::telemetry;
+
+use super::backpressure;
+use super::backpressure::DEFAULT_STREAM_BUFFER;
+use super::retry::{
+    RetryConfig, RetryingChatProvider, RetryingClassifyProvider, RetryingEmbeddingProvider,
+    RetryingGenerateProvider, RetryingNliProvider, RetryingStanceProvider,
+};
+use super::routing::{self, HasName, ProviderCostInfo, ProviderLatency, RoutingConfig};
 use super::traits::{
     ChatProvider, ClassifyProvider, EmbeddingProvider, GenerateProvider, NliProvider,
     StanceProvider,
 };
 use crate::types::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, ModelMetadata, NliResult,
+    GenerateOptions, GenerateResponse, Message, ModelMetadata, NliResult, ParameterName,
     ParameterValidationPolicy, StanceResult, ToolDefinition,
 };
 use crate::{RatatoskrError, Result};
+
+// HasName impls for Arc<dyn Provider> — enables generic promote_preferred().
+impl HasName for Arc<dyn EmbeddingProvider> {
+    fn name(&self) -> &str {
+        EmbeddingProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn NliProvider> {
+    fn name(&self) -> &str {
+        NliProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn ClassifyProvider> {
+    fn name(&self) -> &str {
+        ClassifyProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn StanceProvider> {
+    fn name(&self) -> &str {
+        StanceProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn ChatProvider> {
+    fn name(&self) -> &str {
+        ChatProvider::name(self.as_ref())
+    }
+}
+impl HasName for Arc<dyn GenerateProvider> {
+    fn name(&self) -> &str {
+        GenerateProvider::name(self.as_ref())
+    }
+}
 
 /// Registry of providers with fallback chain semantics.
 ///
 /// Providers are stored in priority order (index 0 = highest priority).
 /// When a capability is requested, the registry tries providers in order
-/// until one succeeds or returns a non-`ModelNotAvailable` error.
+/// until one succeeds or returns a non-fallback error.
+///
+/// # Retry + Fallback
+///
+/// When a [`RetryConfig`] is set, providers are wrapped in `Retrying*Provider`
+/// decorators at registration time. Transient errors after retry exhaustion
+/// trigger fallback to the next provider in the chain.
 ///
 /// # Parameter Validation
 ///
 /// When a provider declares its supported parameters via `supported_chat_parameters()`
 /// or `supported_generate_parameters()`, the registry can validate incoming requests.
 /// Set `validation_policy` to control behaviour when unsupported parameters are found.
-#[derive(Default)]
 pub struct ProviderRegistry {
     embedding: Vec<Arc<dyn EmbeddingProvider>>,
     nli: Vec<Arc<dyn NliProvider>>,
@@ -64,13 +126,54 @@ pub struct ProviderRegistry {
     stance: Vec<Arc<dyn StanceProvider>>,
     chat: Vec<Arc<dyn ChatProvider>>,
     generate: Vec<Arc<dyn GenerateProvider>>,
+    retry_config: Option<RetryConfig>,
     validation_policy: ParameterValidationPolicy,
+    stream_buffer_size: usize,
+    /// Per-provider EWMA latency tracking, keyed by provider name.
+    latency: std::collections::HashMap<String, ProviderLatency>,
+    /// Runtime parameter discovery cache (records provider rejections).
+    discovery_cache: Option<Arc<crate::cache::ParameterDiscoveryCache>>,
+}
+
+impl Default for ProviderRegistry {
+    fn default() -> Self {
+        Self {
+            embedding: Vec::new(),
+            nli: Vec::new(),
+            classify: Vec::new(),
+            stance: Vec::new(),
+            chat: Vec::new(),
+            generate: Vec::new(),
+            retry_config: None,
+            validation_policy: ParameterValidationPolicy::default(),
+            stream_buffer_size: DEFAULT_STREAM_BUFFER,
+            latency: std::collections::HashMap::new(),
+            discovery_cache: None,
+        }
+    }
 }
 
 impl ProviderRegistry {
     /// Create a new empty registry.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the retry configuration.
+    ///
+    /// When set, providers registered after this call are automatically
+    /// wrapped in `Retrying*Provider` decorators. Transient errors after
+    /// retry exhaustion trigger fallback to the next provider.
+    pub fn set_retry_config(&mut self, config: RetryConfig) {
+        self.retry_config = Some(config);
+    }
+
+    /// Set the stream buffer size for backpressure.
+    ///
+    /// Controls the bounded channel capacity between stream producers
+    /// and consumers. Default: [`DEFAULT_STREAM_BUFFER`] (64).
+    pub fn set_stream_buffer_size(&mut self, size: usize) {
+        self.stream_buffer_size = size;
     }
 
     /// Set the parameter validation policy.
@@ -81,9 +184,97 @@ impl ProviderRegistry {
         self.validation_policy = policy;
     }
 
+    /// Set the runtime parameter discovery cache.
+    ///
+    /// When set, the registry records parameter rejections at runtime and
+    /// consults the cache during validation, preventing repeated failures.
+    pub fn set_discovery_cache(&mut self, cache: Arc<crate::cache::ParameterDiscoveryCache>) {
+        self.discovery_cache = Some(cache);
+    }
+
     /// Get the current validation policy.
     pub fn validation_policy(&self) -> ParameterValidationPolicy {
         self.validation_policy
+    }
+
+    // ========================================================================
+    // Preferred provider routing
+    // ========================================================================
+
+    /// Apply a [`RoutingConfig`] to reorder the fallback chains.
+    ///
+    /// For each capability with a preferred provider set, the named provider
+    /// is moved to position 0. If the provider isn't registered, the chain
+    /// is left unchanged.
+    pub fn apply_routing(&mut self, config: &RoutingConfig) {
+        if let Some(ref name) = config.chat {
+            routing::promote_preferred(&mut self.chat, name);
+        }
+        if let Some(ref name) = config.generate {
+            routing::promote_preferred(&mut self.generate, name);
+        }
+        if let Some(ref name) = config.embed {
+            routing::promote_preferred(&mut self.embedding, name);
+        }
+        if let Some(ref name) = config.nli {
+            routing::promote_preferred(&mut self.nli, name);
+        }
+        if let Some(ref name) = config.classify {
+            routing::promote_preferred(&mut self.classify, name);
+        }
+        if let Some(ref name) = config.stance {
+            routing::promote_preferred(&mut self.stance, name);
+        }
+    }
+
+    // ========================================================================
+    // Latency tracking
+    // ========================================================================
+
+    /// Get the EWMA latency tracker for a provider, or `None` if never observed.
+    pub fn provider_latency(&self, provider: &str) -> Option<&ProviderLatency> {
+        self.latency.get(provider)
+    }
+
+    // ========================================================================
+    // Cost-aware routing
+    // ========================================================================
+
+    /// Return chat providers sorted cheapest-first for the given model.
+    ///
+    /// Consults the provided metadata lookup function to get pricing for each
+    /// registered chat provider's handling of the model. Providers with unknown
+    /// pricing sort last.
+    ///
+    /// This is informational — callers can use it to choose a provider, but
+    /// the registry doesn't automatically route by cost.
+    pub fn providers_by_cost(&self, metadata: Option<&ModelMetadata>) -> Vec<ProviderCostInfo> {
+        let mut result: Vec<ProviderCostInfo> = self
+            .chat
+            .iter()
+            .map(|p| {
+                let (prompt_cost, completion_cost) = metadata
+                    .and_then(|m| m.pricing.as_ref())
+                    .map(|pricing| {
+                        (
+                            pricing.prompt_cost_per_mtok,
+                            pricing.completion_cost_per_mtok,
+                        )
+                    })
+                    .unwrap_or((None, None));
+                ProviderCostInfo {
+                    provider: p.name().to_string(),
+                    prompt_cost_per_mtok: prompt_cost,
+                    completion_cost_per_mtok: completion_cost,
+                }
+            })
+            .collect();
+        result.sort_by(|a, b| {
+            a.combined_cost()
+                .partial_cmp(&b.combined_cost())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        result
     }
 
     // ========================================================================
@@ -91,220 +282,424 @@ impl ProviderRegistry {
     // Call in priority order: first registered = highest priority
     // ========================================================================
 
+    /// Ensure a latency tracker exists for the given provider name.
+    fn ensure_latency_tracker(&mut self, name: &str) {
+        self.latency
+            .entry(name.to_owned())
+            .or_insert_with(ProviderLatency::with_default_alpha);
+    }
+
     /// Add an embedding provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingEmbeddingProvider`].
     pub fn add_embedding(&mut self, provider: Arc<dyn EmbeddingProvider>) {
-        self.embedding.push(provider);
+        self.ensure_latency_tracker(provider.name());
+        self.embedding.push(self.maybe_wrap_embedding(provider));
     }
 
     /// Add an NLI provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingNliProvider`].
     pub fn add_nli(&mut self, provider: Arc<dyn NliProvider>) {
-        self.nli.push(provider);
+        self.ensure_latency_tracker(provider.name());
+        self.nli.push(self.maybe_wrap_nli(provider));
     }
 
     /// Add a classification provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingClassifyProvider`].
     pub fn add_classify(&mut self, provider: Arc<dyn ClassifyProvider>) {
-        self.classify.push(provider);
+        self.ensure_latency_tracker(provider.name());
+        self.classify.push(self.maybe_wrap_classify(provider));
     }
 
     /// Add a stance provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingStanceProvider`].
     pub fn add_stance(&mut self, provider: Arc<dyn StanceProvider>) {
-        self.stance.push(provider);
+        self.ensure_latency_tracker(provider.name());
+        self.stance.push(self.maybe_wrap_stance(provider));
     }
 
     /// Add a chat provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingChatProvider`].
     pub fn add_chat(&mut self, provider: Arc<dyn ChatProvider>) {
-        self.chat.push(provider);
+        self.ensure_latency_tracker(provider.name());
+        self.chat.push(self.maybe_wrap_chat(provider));
     }
 
     /// Add a generate provider (appended to end of chain).
+    ///
+    /// If a retry config is set, the provider is automatically wrapped
+    /// in [`RetryingGenerateProvider`].
     pub fn add_generate(&mut self, provider: Arc<dyn GenerateProvider>) {
-        self.generate.push(provider);
+        self.ensure_latency_tracker(provider.name());
+        self.generate.push(self.maybe_wrap_generate(provider));
     }
 
     // ========================================================================
     // Fallback chain execution
-    // Tries providers in order; ModelNotAvailable means "try next"
+    // Tries providers in order; ModelNotAvailable and exhausted transient
+    // errors trigger fallback to the next provider.
     // ========================================================================
 
     /// Embed text using the fallback chain.
+    #[instrument(skip(self, text), fields(operation = "embed"))]
     pub async fn embed(&self, text: &str, model: &str) -> Result<Embedding> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.embedding {
             match provider.embed(text, model).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(result) => {
+                    self.record_request("embed", provider.name(), start, true);
+                    return Ok(result);
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("embed", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("embed", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Embed batch of texts using the fallback chain.
+    #[instrument(skip(self, texts), fields(operation = "embed_batch", batch_size = texts.len()))]
     pub async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<Embedding>> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.embedding {
             match provider.embed_batch(texts, model).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(result) => {
+                    self.record_request("embed_batch", provider.name(), start, true);
+                    return Ok(result);
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("embed_batch", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("embed_batch", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Infer NLI using the fallback chain.
+    #[instrument(skip(self, premise, hypothesis), fields(operation = "infer_nli"))]
     pub async fn infer_nli(
         &self,
         premise: &str,
         hypothesis: &str,
         model: &str,
     ) -> Result<NliResult> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.nli {
             match provider.infer_nli(premise, hypothesis, model).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(result) => {
+                    self.record_request("infer_nli", provider.name(), start, true);
+                    return Ok(result);
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("infer_nli", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("infer_nli", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Batch NLI inference using the fallback chain.
+    #[instrument(skip(self, pairs), fields(operation = "infer_nli_batch", batch_size = pairs.len()))]
     pub async fn infer_nli_batch(
         &self,
         pairs: &[(&str, &str)],
         model: &str,
     ) -> Result<Vec<NliResult>> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.nli {
             match provider.infer_nli_batch(pairs, model).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(result) => {
+                    self.record_request("infer_nli_batch", provider.name(), start, true);
+                    return Ok(result);
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("infer_nli_batch", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("infer_nli_batch", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Zero-shot classification using the fallback chain.
+    #[instrument(skip(self, text, labels), fields(operation = "classify_zero_shot"))]
     pub async fn classify_zero_shot(
         &self,
         text: &str,
         labels: &[&str],
         model: &str,
     ) -> Result<ClassifyResult> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.classify {
             match provider.classify_zero_shot(text, labels, model).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(result) => {
+                    self.record_request("classify_zero_shot", provider.name(), start, true);
+                    return Ok(result);
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("classify_zero_shot", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("classify_zero_shot", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Stance detection using the fallback chain.
+    #[instrument(skip(self, text, target), fields(operation = "classify_stance"))]
     pub async fn classify_stance(
         &self,
         text: &str,
         target: &str,
         model: &str,
     ) -> Result<StanceResult> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.stance {
             match provider.classify_stance(text, target, model).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(result) => {
+                    self.record_request("classify_stance", provider.name(), start, true);
+                    return Ok(result);
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("classify_stance", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("classify_stance", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Chat completion using the fallback chain.
     ///
     /// If a provider declares `supported_chat_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    #[instrument(skip(self, messages, tools, options), fields(operation = "chat", model = %options.model))]
     pub async fn chat(
         &self,
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.chat {
-            // Validate parameters before calling provider
-            self.validate_chat_params(provider.as_ref(), options)?;
+            // Validate parameters — UnsupportedParameter triggers fallback to next provider
+            match self.validate_chat_params(provider.as_ref(), options) {
+                Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
 
             match provider.chat(messages, tools, options).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(result) => {
+                    let name = provider.name();
+                    self.record_request("chat", name, start, true);
+                    if let Some(ref usage) = result.usage {
+                        Self::record_token_usage(name, usage);
+                    }
+                    return Ok(result);
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("chat", provider.name(), start, false);
+                    self.record_parameter_discovery(&e);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("chat", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Streaming chat using the fallback chain.
     ///
     /// If a provider declares `supported_chat_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    #[instrument(skip(self, messages, tools, options), fields(operation = "chat_stream", model = %options.model))]
     pub async fn chat_stream(
         &self,
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.chat {
-            // Validate parameters before calling provider
-            self.validate_chat_params(provider.as_ref(), options)?;
+            // Validate parameters — UnsupportedParameter triggers fallback to next provider
+            match self.validate_chat_params(provider.as_ref(), options) {
+                Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
 
             match provider.chat_stream(messages, tools, options).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(stream) => {
+                    self.record_request("chat_stream", provider.name(), start, true);
+                    return Ok(backpressure::bounded_stream(
+                        stream,
+                        self.stream_buffer_size,
+                    ));
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("chat_stream", provider.name(), start, false);
+                    self.record_parameter_discovery(&e);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("chat_stream", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Text generation using the fallback chain.
     ///
     /// If a provider declares `supported_generate_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    #[instrument(skip(self, prompt, options), fields(operation = "generate", model = %options.model))]
     pub async fn generate(
         &self,
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<GenerateResponse> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.generate {
-            // Validate parameters before calling provider
-            self.validate_generate_params(provider.as_ref(), options)?;
+            // Validate parameters — UnsupportedParameter triggers fallback to next provider
+            match self.validate_generate_params(provider.as_ref(), options) {
+                Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
 
             match provider.generate(prompt, options).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(result) => {
+                    self.record_request("generate", provider.name(), start, true);
+                    return Ok(result);
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("generate", provider.name(), start, false);
+                    self.record_parameter_discovery(&e);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("generate", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     /// Streaming text generation using the fallback chain.
     ///
     /// If a provider declares `supported_generate_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    #[instrument(skip(self, prompt, options), fields(operation = "generate_stream", model = %options.model))]
     pub async fn generate_stream(
         &self,
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.generate {
-            // Validate parameters before calling provider
-            self.validate_generate_params(provider.as_ref(), options)?;
+            // Validate parameters — UnsupportedParameter triggers fallback to next provider
+            match self.validate_generate_params(provider.as_ref(), options) {
+                Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+                Ok(()) => {}
+            }
 
             match provider.generate_stream(prompt, options).await {
-                Ok(result) => return Ok(result),
-                Err(RatatoskrError::ModelNotAvailable) => continue,
-                Err(e) => return Err(e),
+                Ok(stream) => {
+                    self.record_request("generate_stream", provider.name(), start, true);
+                    return Ok(backpressure::bounded_stream(
+                        stream,
+                        self.stream_buffer_size,
+                    ));
+                }
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("generate_stream", provider.name(), start, false);
+                    self.record_parameter_discovery(&e);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("generate_stream", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     // ========================================================================
@@ -313,19 +708,34 @@ impl ProviderRegistry {
 
     /// Fetch model metadata from the chat provider fallback chain.
     ///
-    /// Walks providers in priority order. `ModelNotAvailable` and `NotImplemented`
-    /// trigger fallback to the next provider; other errors are terminal.
+    /// Walks providers in priority order. `ModelNotAvailable`, `NotImplemented`,
+    /// and exhausted transient errors trigger fallback; other errors are terminal.
+    #[instrument(skip(self), fields(operation = "fetch_chat_metadata"))]
     pub async fn fetch_chat_metadata(&self, model: &str) -> Result<ModelMetadata> {
+        let start = Instant::now();
+        let mut last_err = None;
         for provider in &self.chat {
             match provider.fetch_metadata(model).await {
-                Ok(metadata) => return Ok(metadata),
-                Err(RatatoskrError::ModelNotAvailable) | Err(RatatoskrError::NotImplemented(_)) => {
+                Ok(metadata) => {
+                    self.record_request("fetch_chat_metadata", provider.name(), start, true);
+                    return Ok(metadata);
+                }
+                Err(RatatoskrError::NotImplemented(_)) => {
+                    last_err = Some(RatatoskrError::NotImplemented("fetch_metadata".into()));
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) if self.is_fallback_trigger(&e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    self.record_request("fetch_chat_metadata", provider.name(), start, false);
+                    return Err(e);
+                }
             }
         }
-        Err(RatatoskrError::NoProvider)
+        self.record_request("fetch_chat_metadata", "none", start, false);
+        Err(last_err.unwrap_or(RatatoskrError::NoProvider))
     }
 
     // ========================================================================
@@ -379,6 +789,155 @@ impl ProviderRegistry {
     }
 
     // ========================================================================
+    // Metrics recording
+    // ========================================================================
+
+    /// Record request outcome metrics (counter + histogram) and update latency tracker.
+    fn record_request(&self, operation: &'static str, provider: &str, start: Instant, ok: bool) {
+        let elapsed = start.elapsed();
+        let status = if ok { "ok" } else { "error" };
+        metrics::counter!(telemetry::REQUESTS_TOTAL,
+            "provider" => provider.to_owned(),
+            "operation" => operation,
+            "status" => status,
+        )
+        .increment(1);
+        metrics::histogram!(telemetry::REQUEST_DURATION_SECONDS,
+            "provider" => provider.to_owned(),
+            "operation" => operation,
+        )
+        .record(elapsed.as_secs_f64());
+
+        // Update per-provider EWMA latency (pre-populated at registration time)
+        if let Some(tracker) = self.latency.get(provider) {
+            tracker.record(elapsed);
+        }
+    }
+
+    /// Record token usage metrics from a chat response.
+    fn record_token_usage(provider: &str, usage: &crate::types::Usage) {
+        metrics::counter!(telemetry::TOKENS_TOTAL,
+            "provider" => provider.to_owned(),
+            "direction" => "prompt",
+        )
+        .increment(usage.prompt_tokens);
+        metrics::counter!(telemetry::TOKENS_TOTAL,
+            "provider" => provider.to_owned(),
+            "direction" => "completion",
+        )
+        .increment(usage.completion_tokens);
+    }
+
+    // ========================================================================
+    // Retry wrapping helpers
+    // ========================================================================
+
+    /// Whether an error should trigger fallback to the next provider.
+    ///
+    /// `ModelNotAvailable` always triggers fallback. Transient errors only
+    /// trigger fallback when retry config is set — meaning the
+    /// `RetryingProvider` wrapper already exhausted its retry budget.
+    /// Without retry config, transient errors are terminal (no guarantee
+    /// that retries were attempted).
+    fn is_fallback_trigger(&self, e: &RatatoskrError) -> bool {
+        matches!(e, RatatoskrError::ModelNotAvailable)
+            || (self.retry_config.is_some() && e.is_transient())
+    }
+
+    /// Record a runtime parameter rejection in the discovery cache.
+    ///
+    /// Called in terminal error arms of dispatch methods. Only acts on
+    /// `UnsupportedParameter` errors when a discovery cache is configured.
+    fn record_parameter_discovery(&self, error: &RatatoskrError) {
+        if let (
+            Some(cache),
+            RatatoskrError::UnsupportedParameter {
+                param,
+                model,
+                provider,
+            },
+        ) = (&self.discovery_cache, error)
+        {
+            let pname: ParameterName = param.parse().unwrap(); // infallible
+            cache.record(crate::cache::DiscoveryRecord {
+                parameter: pname.clone(),
+                provider: provider.clone(),
+                model: model.clone(),
+                discovered_at: std::time::Instant::now(),
+                reason: error.to_string(),
+            });
+            metrics::counter!(
+                crate::telemetry::PARAMETER_DISCOVERIES_TOTAL,
+                "provider" => provider.clone(),
+                "model" => model.clone(),
+                "parameter" => param.clone(),
+            )
+            .increment(1);
+            info!(
+                %param, %model, %provider,
+                "recorded parameter discovery"
+            );
+        }
+    }
+
+    /// Wrap an embedding provider in retry decorator if config is set.
+    fn maybe_wrap_embedding(
+        &self,
+        provider: Arc<dyn EmbeddingProvider>,
+    ) -> Arc<dyn EmbeddingProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingEmbeddingProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap an NLI provider in retry decorator if config is set.
+    fn maybe_wrap_nli(&self, provider: Arc<dyn NliProvider>) -> Arc<dyn NliProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingNliProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap a chat provider in retry decorator if config is set.
+    fn maybe_wrap_chat(&self, provider: Arc<dyn ChatProvider>) -> Arc<dyn ChatProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingChatProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap a generate provider in retry decorator if config is set.
+    fn maybe_wrap_generate(
+        &self,
+        provider: Arc<dyn GenerateProvider>,
+    ) -> Arc<dyn GenerateProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingGenerateProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap a classify provider in retry decorator if config is set.
+    fn maybe_wrap_classify(
+        &self,
+        provider: Arc<dyn ClassifyProvider>,
+    ) -> Arc<dyn ClassifyProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingClassifyProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    /// Wrap a stance provider in retry decorator if config is set.
+    fn maybe_wrap_stance(&self, provider: Arc<dyn StanceProvider>) -> Arc<dyn StanceProvider> {
+        match &self.retry_config {
+            Some(config) => Arc::new(RetryingStanceProvider::new(provider, config.clone())),
+            None => provider,
+        }
+    }
+
+    // ========================================================================
     // Parameter validation
     // ========================================================================
 
@@ -393,17 +952,27 @@ impl ProviderRegistry {
         options: &ChatOptions,
     ) -> Result<()> {
         let supported = provider.supported_chat_parameters();
-
-        // If provider doesn't declare parameters, skip validation (legacy)
-        if supported.is_empty() {
-            return Ok(());
-        }
-
         let requested = options.set_parameters();
-        let unsupported: Vec<_> = requested
-            .iter()
-            .filter(|p| !supported.contains(p))
-            .collect();
+
+        // Collect statically unsupported params (skip if provider doesn't declare any)
+        let mut unsupported: Vec<ParameterName> = if supported.is_empty() {
+            Vec::new()
+        } else {
+            requested
+                .iter()
+                .filter(|p| !supported.contains(p))
+                .cloned()
+                .collect()
+        };
+
+        // Merge in runtime-discovered rejections
+        if let Some(ref cache) = self.discovery_cache {
+            for p in cache.known_unsupported_params(provider.name(), &options.model, &requested) {
+                if !unsupported.contains(&p) {
+                    unsupported.push(p);
+                }
+            }
+        }
 
         if unsupported.is_empty() {
             return Ok(());
@@ -440,17 +1009,27 @@ impl ProviderRegistry {
         options: &GenerateOptions,
     ) -> Result<()> {
         let supported = provider.supported_generate_parameters();
-
-        // If provider doesn't declare parameters, skip validation (legacy)
-        if supported.is_empty() {
-            return Ok(());
-        }
-
         let requested = options.set_parameters();
-        let unsupported: Vec<_> = requested
-            .iter()
-            .filter(|p| !supported.contains(p))
-            .collect();
+
+        // Collect statically unsupported params (skip if provider doesn't declare any)
+        let mut unsupported: Vec<ParameterName> = if supported.is_empty() {
+            Vec::new()
+        } else {
+            requested
+                .iter()
+                .filter(|p| !supported.contains(p))
+                .cloned()
+                .collect()
+        };
+
+        // Merge in runtime-discovered rejections
+        if let Some(ref cache) = self.discovery_cache {
+            for p in cache.known_unsupported_params(provider.name(), &options.model, &requested) {
+                if !unsupported.contains(&p) {
+                    unsupported.push(p);
+                }
+            }
+        }
 
         if unsupported.is_empty() {
             return Ok(());
@@ -587,7 +1166,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn registry_returns_no_provider_when_all_fail() {
+    async fn registry_returns_last_error_when_all_fail() {
         let mut registry = ProviderRegistry::new();
 
         registry.add_embedding(Arc::new(MockEmbeddingProvider {
@@ -596,9 +1175,10 @@ mod tests {
             dimensions: 128,
         }));
 
-        // Request unknown model
+        // Request unknown model — provider returns ModelNotAvailable,
+        // which becomes the last error in the fallback chain
         let result = registry.embed("test", "unknown-model").await;
-        assert!(matches!(result, Err(RatatoskrError::NoProvider)));
+        assert!(matches!(result, Err(RatatoskrError::ModelNotAvailable)));
     }
 
     #[tokio::test]

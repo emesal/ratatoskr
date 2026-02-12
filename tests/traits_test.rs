@@ -15,7 +15,7 @@ impl ModelGateway for MockGateway {
             Box<dyn futures_util::Stream<Item = ratatoskr::Result<ratatoskr::ChatEvent>> + Send>,
         >,
     > {
-        Err(RatatoskrError::NotImplemented("chat_stream"))
+        Err(RatatoskrError::NotImplemented("chat_stream".into()))
     }
 
     async fn chat(
@@ -24,7 +24,7 @@ impl ModelGateway for MockGateway {
         _tools: Option<&[ratatoskr::ToolDefinition]>,
         _options: &ratatoskr::ChatOptions,
     ) -> ratatoskr::Result<ratatoskr::ChatResponse> {
-        Err(RatatoskrError::NotImplemented("chat"))
+        Err(RatatoskrError::NotImplemented("chat".into()))
     }
 
     fn capabilities(&self) -> Capabilities {

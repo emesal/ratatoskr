@@ -39,3 +39,36 @@ impl Device {
 
 // Note: execution_provider helper will be implemented in Task 7 (ONNX NLI Provider)
 // when we actually need to configure ONNX Runtime sessions.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_is_cpu() {
+        assert_eq!(Device::default(), Device::Cpu);
+    }
+
+    #[test]
+    fn cpu_constructor() {
+        assert_eq!(Device::cpu(), Device::Cpu);
+    }
+
+    #[test]
+    fn cpu_name() {
+        assert_eq!(Device::Cpu.name(), "CPU");
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn cuda_constructor() {
+        let device = Device::cuda(0);
+        assert_eq!(device, Device::Cuda { device_id: 0 });
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn cuda_name() {
+        assert_eq!(Device::cuda(0).name(), "CUDA");
+    }
+}

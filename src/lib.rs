@@ -21,7 +21,7 @@
 //!             Message::user("What is the capital of France?"),
 //!         ],
 //!         None,
-//!         &ChatOptions::default().model("anthropic/claude-sonnet-4"),
+//!         &ChatOptions::new("anthropic/claude-sonnet-4"),
 //!     ).await?;
 //!
 //!     println!("{}", response.content);
@@ -79,6 +79,7 @@ pub mod gateway;
 pub mod model;
 pub mod providers;
 pub mod registry;
+pub mod telemetry;
 #[cfg(feature = "local-inference")]
 pub mod tokenizer;
 pub mod traits;
@@ -98,6 +99,8 @@ pub use client::ServiceClient;
 // Re-export main types at crate root
 pub use error::{RatatoskrError, Result};
 pub use gateway::{EmbeddedGateway, Ratatoskr, RatatoskrBuilder};
+pub use providers::RetryConfig;
+pub use providers::{ProviderCostInfo, ProviderLatency, RoutingConfig};
 pub use traits::ModelGateway;
 
 // Re-export tokenizer types when feature is enabled
@@ -116,10 +119,11 @@ pub use providers::{
 };
 
 // Re-export cache
-pub use cache::ModelCache;
+pub use cache::{CacheConfig, DiscoveryConfig, ModelCache, ResponseCache};
 
 // Re-export registry
 pub use registry::ModelRegistry;
+pub use registry::remote::RemoteRegistryConfig;
 
 // Re-export version info
 pub use version::{GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};
