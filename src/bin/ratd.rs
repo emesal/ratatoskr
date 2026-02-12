@@ -28,6 +28,14 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialise tracing with RUST_LOG env filter (default: info).
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
     let args = Args::parse();
 
     // Load configuration
@@ -43,13 +51,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ratatoskr::RatatoskrError::Configuration(format!("Invalid address: {e}"))
         })?;
 
-    info!(version = ratatoskr::version_string(), %addr, "ratd starting");
+    info!(
+        version = ratatoskr::version_string(),
+        %addr,
+        max_concurrent = config.limits.max_concurrent_requests,
+        timeout_secs = config.limits.request_timeout_secs,
+        "ratd starting",
+    );
 
     // Create gRPC service and start server
     let service = RatatoskrService::new(Arc::new(gateway));
     let server = RatatoskrServer::new(service);
 
-    Server::builder().add_service(server).serve(addr).await?;
+    let mut builder =
+        Server::builder().concurrency_limit_per_connection(config.limits.max_concurrent_requests);
+
+    // Apply request timeout from config
+    let timeout = std::time::Duration::from_secs(config.limits.request_timeout_secs);
+    builder = builder.timeout(timeout);
+
+    builder.add_service(server).serve(addr).await?;
 
     Ok(())
 }

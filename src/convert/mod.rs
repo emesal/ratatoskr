@@ -7,21 +7,34 @@ use llm::chat::ChatMessage as LlmMessage;
 
 use crate::{Message, MessageContent, Role, ToolCall, Usage as RataUsage};
 
+/// Extract text content from a message, returning an error for non-text variants.
+///
+/// `MessageContent` is `#[non_exhaustive]` and will gain variants (e.g. `Image`,
+/// `MultiPart`). The wildcard arm ensures graceful failure when that happens.
+fn extract_text(content: &MessageContent, role: &str) -> crate::Result<String> {
+    match content {
+        MessageContent::Text(text) => Ok(text.clone()),
+        #[allow(unreachable_patterns)]
+        other => Err(crate::RatatoskrError::InvalidInput(format!(
+            "{role} message content type not supported for llm conversion: {other:?}"
+        ))),
+    }
+}
+
 /// Convert our messages to llm crate messages
-pub fn to_llm_messages(messages: &[Message]) -> (Option<String>, Vec<LlmMessage>) {
+pub fn to_llm_messages(messages: &[Message]) -> crate::Result<(Option<String>, Vec<LlmMessage>)> {
     let mut system_prompt = None;
     let mut llm_messages = Vec::with_capacity(messages.len());
 
     for msg in messages {
         match &msg.role {
             Role::System => {
-                // llm crate handles system separately via builder
-                let MessageContent::Text(text) = &msg.content;
-                system_prompt = Some(text.clone());
+                let text = extract_text(&msg.content, "system")?;
+                system_prompt = Some(text);
             }
             Role::User => {
-                let MessageContent::Text(text) = &msg.content;
-                llm_messages.push(LlmMessage::user().content(text.clone()).build());
+                let text = extract_text(&msg.content, "user")?;
+                llm_messages.push(LlmMessage::user().content(text).build());
             }
             Role::Assistant => {
                 if let Some(tool_calls) = &msg.tool_calls {
@@ -46,12 +59,12 @@ pub fn to_llm_messages(messages: &[Message]) -> (Option<String>, Vec<LlmMessage>
                             .build(),
                     );
                 } else {
-                    let MessageContent::Text(text) = &msg.content;
-                    llm_messages.push(LlmMessage::assistant().content(text.clone()).build());
+                    let text = extract_text(&msg.content, "assistant")?;
+                    llm_messages.push(LlmMessage::assistant().content(text).build());
                 }
             }
             Role::Tool { tool_call_id } => {
-                let MessageContent::Text(text) = &msg.content;
+                let text = extract_text(&msg.content, "tool")?;
                 llm_messages.push(
                     LlmMessage::user()
                         .tool_result(vec![llm::ToolCall {
@@ -59,7 +72,7 @@ pub fn to_llm_messages(messages: &[Message]) -> (Option<String>, Vec<LlmMessage>
                             call_type: "function".to_string(),
                             function: llm::FunctionCall {
                                 name: String::new(), // Not needed for result
-                                arguments: text.clone(),
+                                arguments: text,
                             },
                         }])
                         .build(),
@@ -68,7 +81,7 @@ pub fn to_llm_messages(messages: &[Message]) -> (Option<String>, Vec<LlmMessage>
         }
     }
 
-    (system_prompt, llm_messages)
+    Ok((system_prompt, llm_messages))
 }
 
 /// Convert llm crate tool calls to our format

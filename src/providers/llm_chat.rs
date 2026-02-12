@@ -251,7 +251,7 @@ impl ChatProvider for LlmChatProvider {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
-        let (system_prompt, llm_messages) = to_llm_messages(messages);
+        let (system_prompt, llm_messages) = to_llm_messages(messages)?;
         let provider = self.build_provider(options, system_prompt.as_deref(), tools)?;
 
         let response = if tools.is_some() {
@@ -293,7 +293,7 @@ impl ChatProvider for LlmChatProvider {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
-        let (system_prompt, llm_messages) = to_llm_messages(messages);
+        let (system_prompt, llm_messages) = to_llm_messages(messages)?;
         let provider = self.build_provider(options, system_prompt.as_deref(), tools)?;
 
         let stream = provider

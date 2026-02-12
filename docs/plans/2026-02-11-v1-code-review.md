@@ -192,7 +192,7 @@ the gateway-specific fields (`ChatStreaming`, `ToolUse`, `TokenCounting`, `Local
 
 these address logic bugs, race conditions, and error handling gaps.
 
-### C1. `from_status` loses error context `[  ]`
+### C1. `from_status` loses error context `[x]`
 
 **File:** `src/client/service_client.rs` (~lines 55-68)
 **Severity:** MAJOR
@@ -209,7 +209,7 @@ the server's `to_status` encodes rich info into gRPC status messages, but `from_
 
 ---
 
-### C2. `LimitsConfig` parsed but never enforced `[  ]`
+### C2. `LimitsConfig` parsed but never enforced `[x]`
 
 **File:** `src/server/config.rs` (LimitsConfig), `src/bin/ratd.rs` (build_gateway)
 **Severity:** MAJOR
@@ -220,7 +220,7 @@ the server's `to_status` encodes rich info into gRPC status messages, but `from_
 
 ---
 
-### C3. no tracing subscriber init in `ratd` `[  ]`
+### C3. no tracing subscriber init in `ratd` `[x]`
 
 **File:** `src/bin/ratd.rs`
 **Severity:** MAJOR
@@ -231,7 +231,7 @@ the server's `to_status` encodes rich info into gRPC status messages, but `from_
 
 ---
 
-### C4. `apply_routing()` missing `stance` capability `[  ]`
+### C4. `apply_routing()` missing `stance` capability `[x]`
 
 **File:** `src/providers/registry.rs`, `src/providers/routing.rs`
 **Severity:** MAJOR
@@ -242,7 +242,7 @@ the server's `to_status` encodes rich info into gRPC status messages, but `from_
 
 ---
 
-### C5. `ProviderLatency::record()` race on first observation `[  ]`
+### C5. `ProviderLatency::record()` race on first observation `[x]`
 
 **File:** `src/providers/routing.rs`
 **Severity:** MAJOR
@@ -258,7 +258,7 @@ option (a) is pragmatic for v1.0. **(b)** is cleanest.
 
 ---
 
-### C6. `ModelCache` is unbounded `[  ]`
+### C6. `ModelCache` is unbounded `[x]`
 
 **File:** `src/cache/mod.rs`
 **Severity:** MAJOR
@@ -269,7 +269,7 @@ option (a) is pragmatic for v1.0. **(b)** is cleanest.
 
 ---
 
-### C7. tokenizer alias cycle → stack overflow `[  ]`
+### C7. tokenizer alias cycle → stack overflow `[x]`
 
 **File:** `src/tokenizer/mod.rs` (~lines 147-170)
 **Severity:** MAJOR
@@ -290,7 +290,7 @@ fn resolve_source_inner(&self, model: &str, depth: u8) -> Result<TokenizerSource
 
 ---
 
-### C8. TOCTOU race in `ModelManager` budget check `[  ]`
+### C8. TOCTOU race in `ModelManager` budget check `[x]`
 
 **File:** `src/model/manager.rs` (~lines 104-121)
 **Severity:** MAJOR
@@ -313,7 +313,7 @@ note: `can_load` reads `loaded_sizes` with a separate lock — restructure to av
 
 ---
 
-### C9. irrefutable pattern in `to_llm_messages` `[  ]`
+### C9. irrefutable pattern in `to_llm_messages` `[x]`
 
 **File:** `src/convert/mod.rs` (~lines 19, 24, 51, 56)
 **Severity:** MAJOR

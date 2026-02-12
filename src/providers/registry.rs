@@ -222,6 +222,9 @@ impl ProviderRegistry {
         if let Some(ref name) = config.classify {
             routing::promote_preferred(&mut self.classify, name);
         }
+        if let Some(ref name) = config.stance {
+            routing::promote_preferred(&mut self.stance, name);
+        }
     }
 
     // ========================================================================

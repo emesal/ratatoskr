@@ -29,6 +29,8 @@ pub struct Config {
     pub discovery: DiscoveryTomlConfig,
     #[serde(default)]
     pub registry: Option<RegistryTomlConfig>,
+    #[serde(default)]
+    pub limits: LimitsConfig,
 }
 
 /// Remote registry configuration (TOML section).

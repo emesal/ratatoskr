@@ -64,15 +64,59 @@ impl ServiceClient {
     }
 }
 
+/// Parse `retry_after` duration from a gRPC status message.
+///
+/// Expects format: `"Rate limited, retry after <N>s"` or `"Rate limited, retry after <N>.<M>s"`
+/// as encoded by `to_status` via `Duration`'s `Debug` format.
+fn parse_retry_after(message: &str) -> Option<std::time::Duration> {
+    // Server encodes: "Rate limited, retry after {d:?}" where d is a Duration.
+    // Duration's Debug format is e.g. "5s", "1.5s", "500ms", "2s".
+    let after_prefix = message.strip_prefix("Rate limited, retry after ")?;
+    // Try parsing as seconds (e.g. "5s", "1.5s")
+    if let Some(secs_str) = after_prefix.strip_suffix('s') {
+        if let Some(ms_str) = secs_str.strip_suffix('m') {
+            // milliseconds format: "500ms"
+            if let Ok(ms) = ms_str.parse::<u64>() {
+                return Some(std::time::Duration::from_millis(ms));
+            }
+        } else if let Ok(secs) = secs_str.parse::<f64>() {
+            return Some(std::time::Duration::from_secs_f64(secs));
+        }
+    }
+    None
+}
+
 /// Convert [`tonic::Status`] to [`RatatoskrError`].
+///
+/// Recovers structured error context from gRPC status messages encoded by
+/// [`to_status`](crate::server::service). Maps additional status codes
+/// (`PermissionDenied`, `OutOfRange`) and attempts to parse `retry_after`
+/// duration from rate-limit messages.
 fn from_status(status: tonic::Status) -> RatatoskrError {
     match status.code() {
         tonic::Code::NotFound => RatatoskrError::ModelNotFound(status.message().to_string()),
         tonic::Code::Unavailable => RatatoskrError::ModelNotAvailable,
-        tonic::Code::ResourceExhausted => RatatoskrError::RateLimited { retry_after: None },
+        tonic::Code::ResourceExhausted => {
+            // Attempt to parse "Rate limited, retry after <duration>" from server message.
+            let retry_after = parse_retry_after(status.message());
+            RatatoskrError::RateLimited { retry_after }
+        }
         tonic::Code::Unauthenticated => RatatoskrError::AuthenticationFailed,
         tonic::Code::InvalidArgument => RatatoskrError::InvalidInput(status.message().to_string()),
         tonic::Code::Unimplemented => RatatoskrError::NotImplemented(status.message().to_string()),
+        tonic::Code::PermissionDenied => RatatoskrError::ContentFiltered {
+            reason: status.message().to_string(),
+        },
+        tonic::Code::OutOfRange => {
+            // Attempt to parse limit from "context length exceeded: <N> tokens".
+            let limit = status
+                .message()
+                .split_whitespace()
+                .filter_map(|w| w.parse::<usize>().ok())
+                .last()
+                .unwrap_or(0);
+            RatatoskrError::ContextLengthExceeded { limit }
+        }
         _ => RatatoskrError::Http(status.message().to_string()),
     }
 }

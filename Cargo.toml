@@ -20,8 +20,8 @@ google = ["llm/google"]
 huggingface = []
 local-inference = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:hf-hub"]
 cuda = ["ort/cuda"]
-server = ["dep:tonic", "dep:prost", "dep:clap", "dep:toml"]
-client = ["dep:tonic", "dep:prost", "dep:clap"]
+server = ["dep:tonic", "dep:prost", "dep:clap", "dep:toml", "dep:tracing-subscriber"]
+client = ["dep:tonic", "dep:prost", "dep:clap", "dep:tracing-subscriber"]
 
 [dependencies]
 async-trait = "0.1"
@@ -46,6 +46,7 @@ hf-hub = { version = "0.4", optional = true }
 dirs = "5"
 
 # gRPC service mode (optional)
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter"] }
 tonic = { version = "0.13", optional = true }
 prost = { version = "0.13", optional = true }
 clap = { version = "4", features = ["derive", "env"], optional = true }

@@ -103,11 +103,6 @@ impl ModelManager {
             }
         }
 
-        // Check RAM budget before attempting to load
-        if !self.can_load(model_name) {
-            return Err(RatatoskrError::ModelNotAvailable);
-        }
-
         // Slow path: need to load (write lock)
         let mut models = self.embedding_models.write().map_err(|e| {
             RatatoskrError::Configuration(format!("Failed to acquire write lock: {}", e))
@@ -116,6 +111,11 @@ impl ModelManager {
         // Double-check after acquiring write lock
         if let Some(provider) = models.get(&key) {
             return Ok(Arc::clone(provider));
+        }
+
+        // Check RAM budget inside write lock to prevent TOCTOU race
+        if !self.can_load(model_name) {
+            return Err(RatatoskrError::ModelNotAvailable);
         }
 
         // Actually load the model
@@ -151,11 +151,6 @@ impl ModelManager {
             }
         }
 
-        // Check RAM budget before attempting to load
-        if !self.can_load(&model_name) {
-            return Err(RatatoskrError::ModelNotAvailable);
-        }
-
         // Slow path: need to load (write lock)
         let mut models = self.nli_models.write().map_err(|e| {
             RatatoskrError::Configuration(format!("Failed to acquire write lock: {}", e))
@@ -164,6 +159,11 @@ impl ModelManager {
         // Double-check after acquiring write lock
         if let Some(provider) = models.get(&key) {
             return Ok(Arc::clone(provider));
+        }
+
+        // Check RAM budget inside write lock to prevent TOCTOU race
+        if !self.can_load(&model_name) {
+            return Err(RatatoskrError::ModelNotAvailable);
         }
 
         // Actually load the model

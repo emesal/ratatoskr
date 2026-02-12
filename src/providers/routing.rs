@@ -66,6 +66,9 @@ pub struct RoutingConfig {
     /// Preferred classification provider name.
     #[serde(default)]
     pub classify: Option<String>,
+    /// Preferred stance detection provider name.
+    #[serde(default)]
+    pub stance: Option<String>,
 }
 
 impl RoutingConfig {
@@ -101,6 +104,12 @@ impl RoutingConfig {
     /// Set the preferred classification provider.
     pub fn classify(mut self, provider: impl Into<String>) -> Self {
         self.classify = Some(provider.into());
+        self
+    }
+
+    /// Set the preferred stance detection provider.
+    pub fn stance(mut self, provider: impl Into<String>) -> Self {
+        self.stance = Some(provider.into());
         self
     }
 }
@@ -164,6 +173,14 @@ impl ProviderLatency {
     }
 
     /// Record a request duration observation.
+    ///
+    /// # Concurrency note
+    ///
+    /// There is a benign race on the first observation: two threads can both
+    /// see `count == 0` and each initialise the EWMA independently. Since this
+    /// is observability-only data (used for latency-aware routing, not
+    /// correctness), the impact is bounded to a slightly inaccurate initial
+    /// EWMA value that converges after a few more observations.
     pub fn record(&self, duration: Duration) {
         let micros = duration.as_micros() as f64;
         loop {
