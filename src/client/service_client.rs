@@ -163,18 +163,33 @@ impl ModelGateway for ServiceClient {
     }
 
     fn capabilities(&self) -> Capabilities {
-        // ServiceClient reports all capabilities; the server determines actual availability.
-        Capabilities {
-            chat: true,
-            chat_streaming: true,
-            generate: true,
-            tool_use: true,
-            embed: true,
-            nli: true,
-            classify: true,
-            stance: true,
-            token_counting: true,
-            local_inference: false,
+        // Query the server for its actual capabilities via GetCapabilities RPC.
+        let rt = match tokio::runtime::Handle::try_current() {
+            Ok(rt) => rt,
+            Err(_) => return Capabilities::default(),
+        };
+
+        let mut client = self.inner.clone();
+        match block_in_place(|| {
+            rt.block_on(async { client.get_capabilities(proto::CapabilitiesRequest {}).await })
+        }) {
+            Ok(response) => {
+                let caps = response.into_inner();
+                Capabilities {
+                    chat: caps.chat,
+                    chat_streaming: caps.chat_streaming,
+                    generate: caps.generate,
+                    tool_use: caps.tool_use,
+                    embed: caps.embed,
+                    nli: caps.nli,
+                    classify: caps.classify,
+                    stance: caps.stance,
+                    token_counting: caps.token_counting,
+                    local_inference: caps.local_inference,
+                }
+            }
+            // Fall back to empty capabilities if the RPC fails (e.g. older server).
+            Err(_) => Capabilities::default(),
         }
     }
 

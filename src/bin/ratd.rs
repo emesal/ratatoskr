@@ -70,8 +70,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timeout = std::time::Duration::from_secs(config.limits.request_timeout_secs);
     builder = builder.timeout(timeout);
 
-    builder.add_service(server).serve(addr).await?;
+    // Graceful shutdown: drain connections on SIGTERM/SIGINT (systemd sends SIGTERM).
+    let shutdown = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install CTRL+C handler");
+        info!("shutdown signal received, draining connections");
+    };
 
+    builder
+        .add_service(server)
+        .serve_with_shutdown(addr, shutdown)
+        .await?;
+
+    info!("ratd stopped");
     Ok(())
 }
 
@@ -137,8 +149,7 @@ fn build_gateway(
             builder = builder.ram_budget(budget_mb * 1024 * 1024);
         }
 
-        // Enable default local models
-        // TODO: make this configurable per-model in config.toml
+        // Enable default local models (see #21 for per-model config)
         builder = builder.local_embeddings(LocalEmbeddingModel::AllMiniLmL6V2);
         builder = builder.local_nli(LocalNliModel::NliDebertaV3Small);
     }

@@ -129,6 +129,7 @@ impl GenerateOptions {
     /// Returns the list of parameters that are set (not None) in these options.
     ///
     /// Used by the registry for validation against provider-declared parameters.
+    /// See also [`ChatOptions::set_parameters`](crate::ChatOptions::set_parameters).
     pub fn set_parameters(&self) -> Vec<ParameterName> {
         let mut params = Vec::new();
         if self.max_tokens.is_some() {

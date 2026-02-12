@@ -458,14 +458,15 @@ impl GenerateProvider for LlmChatProvider {
         // Get streaming chat response
         let chat_stream = self.chat_stream(&messages, None, &chat_options).await?;
 
-        // Convert ChatEvent to GenerateEvent
-        let generate_stream = chat_stream.map(|result| {
-            result.map(|event| match event {
-                ChatEvent::Content(text) => GenerateEvent::Text(text),
-                ChatEvent::Done => GenerateEvent::Done,
-                // Ignore other events (reasoning, tool calls, usage) for generate
-                _ => GenerateEvent::Text(String::new()),
-            })
+        // Convert ChatEvent to GenerateEvent, filtering out non-content events.
+        let generate_stream = chat_stream.filter_map(|result| async {
+            match result {
+                Ok(ChatEvent::Content(text)) => Some(Ok(GenerateEvent::Text(text))),
+                Ok(ChatEvent::Done) => Some(Ok(GenerateEvent::Done)),
+                Err(e) => Some(Err(e)),
+                // Discard reasoning, tool calls, usage — not relevant for generate.
+                _ => None,
+            }
         });
 
         Ok(Box::pin(generate_stream))

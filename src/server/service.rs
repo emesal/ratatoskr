@@ -368,7 +368,7 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
     }
 
     // =========================================================================
-    // Health
+    // Health & Capabilities
     // =========================================================================
 
     async fn health(
@@ -379,6 +379,25 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
             healthy: true,
             version: crate::PKG_VERSION.to_string(),
             git_sha: Some(crate::GIT_SHA.to_string()),
+        }))
+    }
+
+    async fn get_capabilities(
+        &self,
+        _request: Request<proto::CapabilitiesRequest>,
+    ) -> GrpcResult<proto::CapabilitiesResponse> {
+        let caps = self.gateway.capabilities();
+        Ok(Response::new(proto::CapabilitiesResponse {
+            chat: caps.chat,
+            chat_streaming: caps.chat_streaming,
+            generate: caps.generate,
+            tool_use: caps.tool_use,
+            embed: caps.embed,
+            nli: caps.nli,
+            classify: caps.classify,
+            stance: caps.stance,
+            token_counting: caps.token_counting,
+            local_inference: caps.local_inference,
         }))
     }
 }

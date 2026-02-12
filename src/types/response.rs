@@ -50,14 +50,14 @@ pub enum ChatEvent {
     Done,
 }
 
-/// Token usage statistics
+/// Token usage statistics.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
-    pub prompt_tokens: u32,
-    pub completion_tokens: u32,
-    pub total_tokens: u32,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub total_tokens: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_tokens: Option<u32>,
+    pub reasoning_tokens: Option<u64>,
 }
 
 /// Reason the model stopped generating

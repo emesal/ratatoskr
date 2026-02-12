@@ -1,4 +1,4 @@
-use ratatoskr::{Capabilities, ModelGateway, ParameterName, Ratatoskr};
+use ratatoskr::{ModelGateway, ParameterName, Ratatoskr};
 
 #[test]
 fn test_builder_no_provider_error() {
@@ -13,14 +13,6 @@ fn test_builder_with_openrouter() {
 
     // Should succeed since we have a provider configured
     assert!(gateway.is_ok());
-}
-
-#[test]
-fn test_capabilities_chat_only() {
-    let caps = Capabilities::chat_only();
-    assert!(caps.chat);
-    assert!(caps.chat_streaming);
-    assert!(!caps.embed);
 }
 
 #[test]

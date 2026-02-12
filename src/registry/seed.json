@@ -1,4 +1,6 @@
-[
+{
+  "version": 1,
+  "models": [
   {
     "info": {
       "id": "anthropic/claude-opus-4",
@@ -184,4 +186,5 @@
     },
     "parameters": {}
   }
-]
+  ]
+}

@@ -99,9 +99,9 @@ pub fn from_llm_tool_calls(calls: &[llm::ToolCall]) -> Vec<ToolCall> {
 /// Convert llm crate usage to our format
 pub fn from_llm_usage(usage: &llm::chat::Usage) -> RataUsage {
     RataUsage {
-        prompt_tokens: usage.prompt_tokens,
-        completion_tokens: usage.completion_tokens,
-        total_tokens: usage.prompt_tokens + usage.completion_tokens,
+        prompt_tokens: usage.prompt_tokens as u64,
+        completion_tokens: usage.completion_tokens as u64,
+        total_tokens: (usage.prompt_tokens + usage.completion_tokens) as u64,
         reasoning_tokens: None, // llm crate doesn't expose this yet
     }
 }

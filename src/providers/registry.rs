@@ -820,12 +820,12 @@ impl ProviderRegistry {
             "provider" => provider.to_owned(),
             "direction" => "prompt",
         )
-        .increment(u64::from(usage.prompt_tokens));
+        .increment(usage.prompt_tokens);
         metrics::counter!(telemetry::TOKENS_TOTAL,
             "provider" => provider.to_owned(),
             "direction" => "completion",
         )
-        .increment(u64::from(usage.completion_tokens));
+        .increment(usage.completion_tokens);
     }
 
     // ========================================================================

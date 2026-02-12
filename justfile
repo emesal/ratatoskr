@@ -307,20 +307,22 @@ push-release version:
 
   echo "✓ Released v{{version}} and synced dev"
 
-# Update dependencies after release
+# Update dependencies after release (creates chore branch for review)
 update-deps:
   #!/usr/bin/env bash
   set -e
   git checkout dev
   git pull
+  branch="chore/update-deps-$(date +%Y%m%d)"
+  git checkout -b "$branch"
   echo "Updating dependencies..."
   cargo update
   cargo build
   cargo test
   git add Cargo.lock
-  git commit -m "chore: update dependencies post-release" -a
-  git push origin dev
-  echo "✓ Dependencies updated on dev"
+  git commit -m "chore: update dependencies post-release"
+  git push origin "$branch"
+  echo "✓ Dependencies updated on $branch — create a PR to dev"
 
 # === Archaeology Commands ===
 

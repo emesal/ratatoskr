@@ -35,7 +35,8 @@ pub struct StanceResult {
 impl StanceResult {
     /// Create a stance result from individual scores.
     ///
-    /// The label is automatically determined from the highest score.
+    /// The label is determined from the highest score. On ties, the priority
+    /// order is: `Favor` > `Against` > `Neutral`.
     pub fn from_scores(favor: f32, against: f32, neutral: f32, target: impl Into<String>) -> Self {
         let label = if favor >= against && favor >= neutral {
             StanceLabel::Favor

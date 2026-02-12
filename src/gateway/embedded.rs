@@ -51,7 +51,6 @@ pub struct EmbeddedGateway {
     /// so no other modules need changes.
     response_cache: Option<ResponseCache>,
     #[cfg(feature = "local-inference")]
-    #[allow(dead_code)] // used for model status queries
     model_manager: Arc<ModelManager>,
     #[cfg(feature = "local-inference")]
     tokenizer_registry: Arc<TokenizerRegistry>,

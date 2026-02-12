@@ -426,7 +426,7 @@ stale for feb 2026. missing newer models (claude opus 4, claude haiku 4, gpt-4o-
 
 nice-to-haves for a professional release. each is small and independent.
 
-### E1. graceful shutdown in `ratd` `[  ]`
+### E1. graceful shutdown in `ratd` `[x]`
 
 **File:** `src/bin/ratd.rs`
 
@@ -434,7 +434,7 @@ use `.serve_with_shutdown()` with a SIGTERM/SIGINT handler for clean connection 
 
 ---
 
-### E2. `ServiceClient::capabilities()` queries server `[  ]`
+### E2. `ServiceClient::capabilities()` queries server `[x]`
 
 **File:** `src/client/service_client.rs` (~lines 106-116)
 
@@ -442,7 +442,7 @@ currently hardcodes `local_inference: false`. should query the server (or cache 
 
 ---
 
-### E3. validate JSON in `ToolDefinition` conversion `[  ]`
+### E3. validate JSON in `ToolDefinition` conversion `[x]`
 
 **File:** `src/server/convert.rs` (~line 52)
 
@@ -450,7 +450,7 @@ currently hardcodes `local_inference: false`. should query the server (or cache 
 
 ---
 
-### E4. doc path discrepancy for secrets file `[  ]`
+### E4. doc path discrepancy for secrets file `[x]`
 
 **File:** `src/server/mod.rs`, `AGENTS.md`
 
@@ -458,7 +458,7 @@ currently hardcodes `local_inference: false`. should query the server (or cache 
 
 ---
 
-### E5. filter non-content events in `generate_stream` `[  ]`
+### E5. filter non-content events in `generate_stream` `[x]`
 
 **File:** `src/providers/llm_chat.rs`
 
@@ -466,7 +466,7 @@ non-content chat events (reasoning, tool calls, usage) are mapped to `GenerateEv
 
 ---
 
-### E6. document `retry_after` as forward-looking `[  ]`
+### E6. document `retry_after` as forward-looking `[x]`
 
 **File:** `src/error.rs`
 
@@ -474,7 +474,7 @@ non-content chat events (reasoning, tool calls, usage) are mapped to `GenerateEv
 
 ---
 
-### E7. document telemetry labels `[  ]`
+### E7. document telemetry labels `[x]`
 
 **File:** `src/telemetry.rs`
 
@@ -482,7 +482,7 @@ non-content chat events (reasoning, tool calls, usage) are mapped to `GenerateEv
 
 ---
 
-### E8. `save_cache` tmp file collision risk `[  ]`
+### E8. `save_cache` tmp file collision risk `[x]`
 
 **File:** `src/registry/remote.rs` (~line 154)
 
@@ -490,7 +490,7 @@ tmp path is `path.with_extension("json.tmp")` — deterministic, so concurrent p
 
 ---
 
-### E9. `fetch_remote` needs a timeout `[  ]`
+### E9. `fetch_remote` needs a timeout `[x]`
 
 **File:** `src/registry/remote.rs` (~line 176)
 
@@ -498,7 +498,7 @@ tmp path is `path.with_extension("json.tmp")` — deterministic, so concurrent p
 
 ---
 
-### E10. seed.json should use versioned format `[  ]`
+### E10. seed.json should use versioned format `[x]`
 
 **File:** `src/registry/seed.json`
 
@@ -506,7 +506,7 @@ currently uses legacy bare-array `[...]` format. should use canonical `{ "versio
 
 ---
 
-### E11. `RatatoskrError` can't be `Clone` `[  ]`
+### E11. `RatatoskrError` can't be `Clone` `[x]`
 
 **File:** `src/error.rs`
 
@@ -514,7 +514,7 @@ the `Json(#[from] serde_json::Error)` variant blocks `Clone`. consider wrapping 
 
 ---
 
-### E12. document `StanceResult::from_scores` tie-breaking `[  ]`
+### E12. document `StanceResult::from_scores` tie-breaking `[x]`
 
 **File:** `src/types/stance.rs` (~line 38)
 
@@ -522,7 +522,7 @@ doc says "label determined from highest score" but doesn't mention tie-breaking 
 
 ---
 
-### E13. `Usage` fields `u32` → `u64` `[  ]`
+### E13. `Usage` fields `u32` → `u64` `[x]`
 
 **File:** `src/types/response.rs` (~line 51)
 
@@ -530,7 +530,7 @@ doc says "label determined from highest score" but doesn't mention tie-breaking 
 
 ---
 
-### E14. `set_parameters()` duplication `[  ]`
+### E14. `set_parameters()` duplication `[x]` (partial — cross-reference docs added; macro deferred)
 
 **Files:** `src/types/options.rs`, `src/types/generate.rs`
 
@@ -538,7 +538,7 @@ both `ChatOptions::set_parameters()` and `GenerateOptions::set_parameters()` are
 
 ---
 
-### E15. clean up `#[allow(dead_code)]` in production code `[  ]`
+### E15. clean up `#[allow(dead_code)]` in production code `[x]`
 
 **Files:** `src/gateway/embedded.rs:54`, `src/providers/onnx_nli.rs:96`, `src/providers/openrouter_models.rs:35,59`
 
@@ -546,7 +546,7 @@ either use these fields or remove them. dead code annotations shouldn't ship in 
 
 ---
 
-### E16. resolve sole TODO in codebase `[  ]`
+### E16. resolve sole TODO in codebase `[x]`
 
 **File:** `src/bin/ratd.rs` (line 120)
 
@@ -558,7 +558,7 @@ either implement it or convert to a tracked issue and remove the TODO.
 
 ---
 
-### E17. remove duplicate test `[  ]`
+### E17. remove duplicate test `[x]`
 
 **Files:** `tests/capabilities_test.rs`, `tests/gateway_test.rs`
 
@@ -566,7 +566,7 @@ either implement it or convert to a tracked issue and remove the TODO.
 
 ---
 
-### E18. justfile `update-deps` safety `[  ]`
+### E18. justfile `update-deps` safety `[x]`
 
 **File:** `justfile` (line 322)
 
@@ -574,7 +574,7 @@ either implement it or convert to a tracked issue and remove the TODO.
 
 ---
 
-### E19. pre-release dependency audit `[  ]`
+### E19. pre-release dependency audit `[x]`
 
 **File:** `Cargo.toml`
 
@@ -583,7 +583,7 @@ either implement it or convert to a tracked issue and remove the TODO.
 
 ---
 
-### E20. strengthen `response_test.rs` assertions `[  ]`
+### E20. strengthen `response_test.rs` assertions `[x]`
 
 **File:** `tests/response_test.rs`
 

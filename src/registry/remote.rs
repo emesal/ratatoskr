@@ -94,7 +94,7 @@ enum RawPayload {
 /// Parse a registry payload, accepting both versioned and legacy formats.
 ///
 /// Returns an error if the version is unsupported.
-fn parse_payload(json: &str) -> Result<Vec<ModelMetadata>> {
+pub(crate) fn parse_payload(json: &str) -> Result<Vec<ModelMetadata>> {
     let payload: RawPayload = serde_json::from_str(json).map_err(|e| {
         RatatoskrError::Configuration(format!("failed to parse registry JSON: {e}"))
     })?;
@@ -149,8 +149,9 @@ pub fn save_cache(path: &Path, data: &[ModelMetadata]) -> Result<()> {
         })?;
     }
 
-    // Write to tmp file first, then rename for atomicity
-    let tmp_path = path.with_extension("json.tmp");
+    // Write to tmp file with PID suffix to avoid collisions between
+    // concurrent processes, then rename for atomicity.
+    let tmp_path = path.with_extension(format!("json.tmp.{}", std::process::id()));
     let registry = RemoteRegistry {
         version: 1,
         models: data.to_vec(),
@@ -179,8 +180,15 @@ pub fn save_cache(path: &Path, data: &[ModelMetadata]) -> Result<()> {
 // ============================================================================
 
 /// Fetch registry data from a remote URL.
+///
+/// Uses a 30-second timeout to prevent indefinite blocking.
 pub async fn fetch_remote(url: &str) -> Result<Vec<ModelMetadata>> {
-    let response = reqwest::get(url).await.map_err(|e| {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| RatatoskrError::Configuration(format!("failed to build HTTP client: {e}")))?;
+
+    let response = client.get(url).send().await.map_err(|e| {
         RatatoskrError::Configuration(format!("failed to fetch registry from {url}: {e}"))
     })?;
 
