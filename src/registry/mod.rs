@@ -126,7 +126,7 @@ impl ModelRegistry {
     /// fallback when live provider APIs are unreachable.
     pub fn with_embedded_seed() -> Self {
         let mut registry = Self::new();
-        match serde_json::from_str::<Vec<ModelMetadata>>(EMBEDDED_SEED) {
+        match crate::registry::remote::parse_payload(EMBEDDED_SEED) {
             Ok(entries) => {
                 for entry in entries {
                     registry.insert(entry);

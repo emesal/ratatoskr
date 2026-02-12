@@ -23,5 +23,6 @@ fn test_message_content_text() {
     let msg = Message::user("test content");
     match msg.content {
         MessageContent::Text(s) => assert_eq!(s, "test content"),
+        _ => panic!("unexpected content variant"),
     }
 }

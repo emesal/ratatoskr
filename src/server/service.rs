@@ -9,7 +9,7 @@ use std::sync::Arc;
 use futures_util::StreamExt;
 use tonic::{Request, Response, Status};
 
-use crate::ModelGateway;
+use crate::{ChatOptions, ModelGateway};
 
 use super::proto;
 use super::proto::ratatoskr_server::Ratatoskr;
@@ -68,7 +68,10 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
         let req = request.into_inner();
         let messages: Vec<_> = req.messages.into_iter().map(Into::into).collect();
         let tools: Vec<_> = req.tools.into_iter().map(Into::into).collect();
-        let options = req.options.map(Into::into).unwrap_or_default();
+        let options = req
+            .options
+            .map(Into::into)
+            .unwrap_or_else(|| ChatOptions::new(""));
 
         let tools_ref = if tools.is_empty() {
             None
@@ -94,7 +97,10 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
         let req = request.into_inner();
         let messages: Vec<_> = req.messages.into_iter().map(Into::into).collect();
         let tools: Vec<_> = req.tools.into_iter().map(Into::into).collect();
-        let options = req.options.map(Into::into).unwrap_or_default();
+        let options = req
+            .options
+            .map(Into::into)
+            .unwrap_or_else(|| ChatOptions::new(""));
 
         let tools_ref = if tools.is_empty() {
             None
@@ -362,7 +368,7 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
     }
 
     // =========================================================================
-    // Health
+    // Health & Capabilities
     // =========================================================================
 
     async fn health(
@@ -373,6 +379,25 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
             healthy: true,
             version: crate::PKG_VERSION.to_string(),
             git_sha: Some(crate::GIT_SHA.to_string()),
+        }))
+    }
+
+    async fn get_capabilities(
+        &self,
+        _request: Request<proto::CapabilitiesRequest>,
+    ) -> GrpcResult<proto::CapabilitiesResponse> {
+        let caps = self.gateway.capabilities();
+        Ok(Response::new(proto::CapabilitiesResponse {
+            chat: caps.chat,
+            chat_streaming: caps.chat_streaming,
+            generate: caps.generate,
+            tool_use: caps.tool_use,
+            embed: caps.embed,
+            nli: caps.nli,
+            classify: caps.classify,
+            stance: caps.stance,
+            token_counting: caps.token_counting,
+            local_inference: caps.local_inference,
         }))
     }
 }

@@ -200,7 +200,7 @@ With the `server` and `client` features enabled:
 - `rat` — CLI client with subcommands: `health`, `models`, `status`, `chat`, `embed`, `nli`, `tokens`, `metadata`, `update-registry`
 - `ServiceClient` — implements `ModelGateway` trait, transparently forwarding all calls over gRPC
 - TOML configuration with provider/routing/limits sections
-- Separate secrets file (`~/.config/ratatoskr/secrets.toml`) with 0600 permission enforcement
+- Separate secrets file (`~/.ratatoskr/secrets.toml`) with 0600 permission enforcement
 - Proto conversions centralized in `server::convert` (shared by both server and client)
 
 ### Model Intelligence (Phase 6)

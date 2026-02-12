@@ -21,45 +21,57 @@ pub mod response;
 pub use discovery::{DiscoveryConfig, DiscoveryRecord, ParameterDiscoveryCache};
 pub use response::{CacheConfig, ResponseCache};
 
-use std::collections::HashMap;
-use std::sync::RwLock;
-
 use crate::types::ModelMetadata;
+
+/// Default maximum number of entries in the model metadata cache.
+const DEFAULT_MODEL_CACHE_MAX: u64 = 1_000;
 
 /// Thread-safe ephemeral store for provider-fetched model metadata.
 ///
-/// Keyed on model ID. Entries are cloned on read to avoid holding
-/// locks across async boundaries.
+/// Keyed on model ID. Uses a bounded LRU cache (moka) to prevent unbounded
+/// growth in long-running processes. Default capacity: 1,000 entries.
 pub struct ModelCache {
-    entries: RwLock<HashMap<String, ModelMetadata>>,
+    entries: moka::sync::Cache<String, ModelMetadata>,
 }
 
 impl ModelCache {
-    /// Create an empty cache.
+    /// Create an empty cache with the default max capacity (1,000).
     pub fn new() -> Self {
+        Self::with_max_entries(DEFAULT_MODEL_CACHE_MAX)
+    }
+
+    /// Create a cache with a custom max capacity.
+    pub fn with_max_entries(max: u64) -> Self {
         Self {
-            entries: RwLock::new(HashMap::new()),
+            entries: moka::sync::Cache::new(max),
         }
     }
 
     /// Look up cached metadata for a model.
     ///
-    /// Returns `None` on cache miss. Clones the entry to release the
-    /// read lock immediately.
+    /// Returns `None` on cache miss.
     pub fn get(&self, model: &str) -> Option<ModelMetadata> {
-        self.entries
-            .read()
-            .expect("cache lock poisoned")
-            .get(model)
-            .cloned()
+        self.entries.get(model)
     }
 
     /// Insert (or overwrite) metadata, keyed on `metadata.info.id`.
     pub fn insert(&self, metadata: ModelMetadata) {
-        self.entries
-            .write()
-            .expect("cache lock poisoned")
-            .insert(metadata.info.id.clone(), metadata);
+        self.entries.insert(metadata.info.id.clone(), metadata);
+    }
+
+    /// Number of entries currently in the cache.
+    pub fn len(&self) -> u64 {
+        self.entries.entry_count()
+    }
+
+    /// Whether the cache is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Evict all entries.
+    pub fn clear(&self) {
+        self.entries.invalidate_all();
     }
 }
 

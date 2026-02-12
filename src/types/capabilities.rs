@@ -1,9 +1,13 @@
 //! Gateway capability reporting
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
+use super::model::ModelCapability;
+
 /// What capabilities a gateway supports.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Capabilities {
     /// Multi-turn chat conversations.
     pub chat: bool,
@@ -14,11 +18,13 @@ pub struct Capabilities {
     /// Tool/function calling support.
     pub tool_use: bool,
     /// Text embeddings.
-    pub embeddings: bool,
+    #[serde(alias = "embeddings")]
+    pub embed: bool,
     /// Natural language inference.
     pub nli: bool,
     /// Zero-shot classification.
-    pub classification: bool,
+    #[serde(alias = "classification")]
+    pub classify: bool,
     /// Stance detection toward target topics.
     pub stance: bool,
     /// Token counting for models.
@@ -46,9 +52,9 @@ impl Capabilities {
             chat_streaming: true,
             generate: true,
             tool_use: true,
-            embeddings: true,
+            embed: true,
             nli: true,
-            classification: true,
+            classify: true,
             stance: true,
             token_counting: true,
             local_inference: true,
@@ -58,7 +64,7 @@ impl Capabilities {
     /// Local inference only capabilities (no API needed)
     pub fn local_only() -> Self {
         Self {
-            embeddings: true,
+            embed: true,
             nli: true,
             token_counting: true,
             local_inference: true,
@@ -69,9 +75,9 @@ impl Capabilities {
     /// HuggingFace API capabilities (embeddings, NLI, classification)
     pub fn huggingface_only() -> Self {
         Self {
-            embeddings: true,
+            embed: true,
             nli: true,
-            classification: true,
+            classify: true,
             ..Default::default()
         }
     }
@@ -83,12 +89,51 @@ impl Capabilities {
             chat_streaming: self.chat_streaming || other.chat_streaming,
             generate: self.generate || other.generate,
             tool_use: self.tool_use || other.tool_use,
-            embeddings: self.embeddings || other.embeddings,
+            embed: self.embed || other.embed,
             nli: self.nli || other.nli,
-            classification: self.classification || other.classification,
+            classify: self.classify || other.classify,
             stance: self.stance || other.stance,
             token_counting: self.token_counting || other.token_counting,
             local_inference: self.local_inference || other.local_inference,
+        }
+    }
+}
+
+impl From<&Capabilities> for HashSet<ModelCapability> {
+    fn from(caps: &Capabilities) -> Self {
+        let pairs = [
+            (caps.chat, ModelCapability::Chat),
+            (caps.chat_streaming, ModelCapability::ChatStreaming),
+            (caps.generate, ModelCapability::Generate),
+            (caps.tool_use, ModelCapability::ToolUse),
+            (caps.embed, ModelCapability::Embed),
+            (caps.nli, ModelCapability::Nli),
+            (caps.classify, ModelCapability::Classify),
+            (caps.stance, ModelCapability::Stance),
+            (caps.token_counting, ModelCapability::TokenCounting),
+            (caps.local_inference, ModelCapability::LocalInference),
+        ];
+        pairs
+            .into_iter()
+            .filter(|(enabled, _)| *enabled)
+            .map(|(_, cap)| cap)
+            .collect()
+    }
+}
+
+impl From<&HashSet<ModelCapability>> for Capabilities {
+    fn from(set: &HashSet<ModelCapability>) -> Self {
+        Self {
+            chat: set.contains(&ModelCapability::Chat),
+            chat_streaming: set.contains(&ModelCapability::ChatStreaming),
+            generate: set.contains(&ModelCapability::Generate),
+            tool_use: set.contains(&ModelCapability::ToolUse),
+            embed: set.contains(&ModelCapability::Embed),
+            nli: set.contains(&ModelCapability::Nli),
+            classify: set.contains(&ModelCapability::Classify),
+            stance: set.contains(&ModelCapability::Stance),
+            token_counting: set.contains(&ModelCapability::TokenCounting),
+            local_inference: set.contains(&ModelCapability::LocalInference),
         }
     }
 }

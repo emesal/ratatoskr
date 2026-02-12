@@ -352,7 +352,7 @@ pub enum RatatoskrError {
 
     // Configuration
     Configuration(String),
-    NotImplemented(&'static str),
+    NotImplemented(String),
     Unsupported,
 
     // Soft errors

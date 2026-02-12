@@ -47,19 +47,75 @@ impl ServiceClient {
             .map_err(|e| RatatoskrError::Http(format!("failed to connect to {addr}: {e}")))?;
         Ok(Self { inner })
     }
+
+    /// Query the server's health status.
+    ///
+    /// Returns version, git SHA, and healthy flag from the `Health` RPC.
+    /// This method is not part of the [`ModelGateway`] trait since health
+    /// is a service-level concern, not a gateway abstraction.
+    pub async fn health(&self) -> Result<(bool, String, Option<String>)> {
+        let mut client = self.inner.clone();
+        let response = client
+            .health(proto::HealthRequest {})
+            .await
+            .map_err(from_status)?;
+        let health = response.into_inner();
+        Ok((health.healthy, health.version, health.git_sha))
+    }
+}
+
+/// Parse `retry_after` duration from a gRPC status message.
+///
+/// Expects format: `"Rate limited, retry after <N>s"` or `"Rate limited, retry after <N>.<M>s"`
+/// as encoded by `to_status` via `Duration`'s `Debug` format.
+fn parse_retry_after(message: &str) -> Option<std::time::Duration> {
+    // Server encodes: "Rate limited, retry after {d:?}" where d is a Duration.
+    // Duration's Debug format is e.g. "5s", "1.5s", "500ms", "2s".
+    let after_prefix = message.strip_prefix("Rate limited, retry after ")?;
+    // Try parsing as seconds (e.g. "5s", "1.5s")
+    if let Some(secs_str) = after_prefix.strip_suffix('s') {
+        if let Some(ms_str) = secs_str.strip_suffix('m') {
+            // milliseconds format: "500ms"
+            if let Ok(ms) = ms_str.parse::<u64>() {
+                return Some(std::time::Duration::from_millis(ms));
+            }
+        } else if let Ok(secs) = secs_str.parse::<f64>() {
+            return Some(std::time::Duration::from_secs_f64(secs));
+        }
+    }
+    None
 }
 
 /// Convert [`tonic::Status`] to [`RatatoskrError`].
+///
+/// Recovers structured error context from gRPC status messages encoded by
+/// [`to_status`](crate::server::service). Maps additional status codes
+/// (`PermissionDenied`, `OutOfRange`) and attempts to parse `retry_after`
+/// duration from rate-limit messages.
 fn from_status(status: tonic::Status) -> RatatoskrError {
     match status.code() {
         tonic::Code::NotFound => RatatoskrError::ModelNotFound(status.message().to_string()),
         tonic::Code::Unavailable => RatatoskrError::ModelNotAvailable,
-        tonic::Code::ResourceExhausted => RatatoskrError::RateLimited { retry_after: None },
+        tonic::Code::ResourceExhausted => {
+            // Attempt to parse "Rate limited, retry after <duration>" from server message.
+            let retry_after = parse_retry_after(status.message());
+            RatatoskrError::RateLimited { retry_after }
+        }
         tonic::Code::Unauthenticated => RatatoskrError::AuthenticationFailed,
         tonic::Code::InvalidArgument => RatatoskrError::InvalidInput(status.message().to_string()),
-        tonic::Code::Unimplemented => {
-            // Leak the string to get a &'static str — acceptable for error paths
-            RatatoskrError::NotImplemented(Box::leak(status.message().to_string().into_boxed_str()))
+        tonic::Code::Unimplemented => RatatoskrError::NotImplemented(status.message().to_string()),
+        tonic::Code::PermissionDenied => RatatoskrError::ContentFiltered {
+            reason: status.message().to_string(),
+        },
+        tonic::Code::OutOfRange => {
+            // Attempt to parse limit from "context length exceeded: <N> tokens".
+            let limit = status
+                .message()
+                .split_whitespace()
+                .filter_map(|w| w.parse::<usize>().ok())
+                .last()
+                .unwrap_or(0);
+            RatatoskrError::ContextLengthExceeded { limit }
         }
         _ => RatatoskrError::Http(status.message().to_string()),
     }
@@ -107,18 +163,33 @@ impl ModelGateway for ServiceClient {
     }
 
     fn capabilities(&self) -> Capabilities {
-        // ServiceClient reports all capabilities; the server determines actual availability.
-        Capabilities {
-            chat: true,
-            chat_streaming: true,
-            generate: true,
-            tool_use: true,
-            embeddings: true,
-            nli: true,
-            classification: true,
-            stance: true,
-            token_counting: true,
-            local_inference: false,
+        // Query the server for its actual capabilities via GetCapabilities RPC.
+        let rt = match tokio::runtime::Handle::try_current() {
+            Ok(rt) => rt,
+            Err(_) => return Capabilities::default(),
+        };
+
+        let mut client = self.inner.clone();
+        match block_in_place(|| {
+            rt.block_on(async { client.get_capabilities(proto::CapabilitiesRequest {}).await })
+        }) {
+            Ok(response) => {
+                let caps = response.into_inner();
+                Capabilities {
+                    chat: caps.chat,
+                    chat_streaming: caps.chat_streaming,
+                    generate: caps.generate,
+                    tool_use: caps.tool_use,
+                    embed: caps.embed,
+                    nli: caps.nli,
+                    classify: caps.classify,
+                    stance: caps.stance,
+                    token_counting: caps.token_counting,
+                    local_inference: caps.local_inference,
+                }
+            }
+            // Fall back to empty capabilities if the RPC fails (e.g. older server).
+            Err(_) => Capabilities::default(),
         }
     }
 

@@ -20,13 +20,13 @@ google = ["llm/google"]
 huggingface = []
 local-inference = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:hf-hub"]
 cuda = ["ort/cuda"]
-server = ["dep:tonic", "dep:prost", "dep:clap", "dep:toml"]
-client = ["dep:tonic", "dep:prost", "dep:clap"]
+server = ["dep:tonic", "dep:prost", "dep:clap", "dep:toml", "dep:tracing-subscriber"]
+client = ["dep:tonic", "dep:prost", "dep:clap", "dep:tracing-subscriber"]
 
 [dependencies]
 async-trait = "0.1"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
-llm = { git = "https://github.com/emesal/llm.git", branch = "emesal/ratatoskr" }
+llm = { git = "https://github.com/emesal/llm.git", rev = "a719365f6ce9a0ca31e4c7774b77b3bad57035f6" }
 pin-project-lite = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -40,12 +40,13 @@ moka = { version = "0.12", features = ["future", "sync"] }
 
 # Local inference (optional)
 fastembed = { version = "5", optional = true }
-ort = { version = "2.0.0-rc", optional = true, default-features = false }
+ort = { version = "2.0.0-rc.11", optional = true, default-features = false }  # no stable 2.0 yet; 1.x is yanked
 tokenizers = { version = "0.22", optional = true, default-features = false, features = ["http"] }
 hf-hub = { version = "0.4", optional = true }
 dirs = "5"
 
 # gRPC service mode (optional)
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter"] }
 tonic = { version = "0.13", optional = true }
 prost = { version = "0.13", optional = true }
 clap = { version = "4", features = ["derive", "env"], optional = true }
@@ -62,7 +63,7 @@ path = "src/bin/rat.rs"
 required-features = ["client"]
 
 [build-dependencies]
-vergen-gitcl = { version = "10.0.0-beta.5", features = ["build", "cargo"] }
+vergen-gitcl = { version = "10.0.0-beta.5", features = ["build", "cargo"] }  # 9.x stable has different API; beta tracks upstream
 tonic-build = "0.13"
 
 [dev-dependencies]

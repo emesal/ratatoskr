@@ -10,7 +10,7 @@ fn test_error_display() {
 
 #[test]
 fn test_not_implemented() {
-    let err = RatatoskrError::NotImplemented("embed");
+    let err = RatatoskrError::NotImplemented("embed".into());
     assert!(err.to_string().contains("not implemented"));
 }
 

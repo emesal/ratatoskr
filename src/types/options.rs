@@ -5,7 +5,7 @@ use super::tool::ToolChoice;
 use serde::{Deserialize, Serialize};
 
 /// Options for chat requests (provider-agnostic)
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatOptions {
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -43,6 +43,27 @@ pub struct ChatOptions {
 }
 
 impl ChatOptions {
+    /// Create options with the specified model.
+    pub fn new(model: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            temperature: None,
+            max_tokens: None,
+            top_p: None,
+            top_k: None,
+            stop: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            seed: None,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            response_format: None,
+            cache_prompt: None,
+            reasoning: None,
+            raw_provider_options: None,
+        }
+    }
+
     pub fn model(mut self, model: impl Into<String>) -> Self {
         self.model = model.into();
         self
@@ -116,6 +137,7 @@ impl ChatOptions {
     /// Returns the list of parameters that are set (not None) in these options.
     ///
     /// Used by the registry for validation against provider-declared parameters.
+    /// See also [`GenerateOptions::set_parameters`](crate::GenerateOptions::set_parameters).
     pub fn set_parameters(&self) -> Vec<ParameterName> {
         let mut params = Vec::new();
         if self.temperature.is_some() {
@@ -162,7 +184,7 @@ impl ChatOptions {
 }
 
 /// Reasoning configuration for extended thinking models
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReasoningConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<ReasoningEffort>,
@@ -178,6 +200,7 @@ pub struct ReasoningConfig {
 /// levels (e.g. only low/medium/high) should map to the nearest equivalent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum ReasoningEffort {
     None,
     Minimal,
@@ -188,8 +211,9 @@ pub enum ReasoningEffort {
 }
 
 /// Response format configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ResponseFormat {
     Text,
     JsonObject,

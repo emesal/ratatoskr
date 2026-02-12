@@ -41,12 +41,12 @@ pub trait ModelGateway: Send + Sync {
 
     /// Generate embeddings for text
     async fn embed(&self, _text: &str, _model: &str) -> Result<Embedding> {
-        Err(RatatoskrError::NotImplemented("embed"))
+        Err(RatatoskrError::NotImplemented("embed".into()))
     }
 
     /// Batch embedding generation
     async fn embed_batch(&self, _texts: &[&str], _model: &str) -> Result<Vec<Embedding>> {
-        Err(RatatoskrError::NotImplemented("embed_batch"))
+        Err(RatatoskrError::NotImplemented("embed_batch".into()))
     }
 
     /// Natural language inference
@@ -56,7 +56,7 @@ pub trait ModelGateway: Send + Sync {
         _hypothesis: &str,
         _model: &str,
     ) -> Result<NliResult> {
-        Err(RatatoskrError::NotImplemented("infer_nli"))
+        Err(RatatoskrError::NotImplemented("infer_nli".into()))
     }
 
     /// Zero-shot classification
@@ -66,12 +66,12 @@ pub trait ModelGateway: Send + Sync {
         _labels: &[&str],
         _model: &str,
     ) -> Result<ClassifyResult> {
-        Err(RatatoskrError::NotImplemented("classify_zero_shot"))
+        Err(RatatoskrError::NotImplemented("classify_zero_shot".into()))
     }
 
     /// Count tokens for a given model
     fn count_tokens(&self, _text: &str, _model: &str) -> Result<usize> {
-        Err(RatatoskrError::NotImplemented("count_tokens"))
+        Err(RatatoskrError::NotImplemented("count_tokens".into()))
     }
 
     /// Batch NLI inference — more efficient for multiple pairs
@@ -90,7 +90,7 @@ pub trait ModelGateway: Send + Sync {
         _prompt: &str,
         _options: &GenerateOptions,
     ) -> Result<GenerateResponse> {
-        Err(RatatoskrError::NotImplemented("generate"))
+        Err(RatatoskrError::NotImplemented("generate".into()))
     }
 
     /// Streaming text generation
@@ -99,7 +99,7 @@ pub trait ModelGateway: Send + Sync {
         _prompt: &str,
         _options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
-        Err(RatatoskrError::NotImplemented("generate_stream"))
+        Err(RatatoskrError::NotImplemented("generate_stream".into()))
     }
 
     // ===== Phase 5: Extended capabilities =====
@@ -114,12 +114,12 @@ pub trait ModelGateway: Send + Sync {
         _target: &str,
         _model: &str,
     ) -> Result<StanceResult> {
-        Err(RatatoskrError::NotImplemented("classify_stance"))
+        Err(RatatoskrError::NotImplemented("classify_stance".into()))
     }
 
     /// Tokenize text into detailed Token objects with IDs, text, and byte offsets.
     fn tokenize(&self, _text: &str, _model: &str) -> Result<Vec<Token>> {
-        Err(RatatoskrError::NotImplemented("tokenize"))
+        Err(RatatoskrError::NotImplemented("tokenize".into()))
     }
 
     /// List all available models and their capabilities.
@@ -151,6 +151,8 @@ pub trait ModelGateway: Send + Sync {
     /// and returns the result. Use [`model_metadata`](Self::model_metadata) for
     /// cached/registry lookups without network I/O.
     async fn fetch_model_metadata(&self, _model: &str) -> Result<ModelMetadata> {
-        Err(RatatoskrError::NotImplemented("fetch_model_metadata"))
+        Err(RatatoskrError::NotImplemented(
+            "fetch_model_metadata".into(),
+        ))
     }
 }

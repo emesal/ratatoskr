@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 /// Ratatoskr error types
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[non_exhaustive]
 pub enum RatatoskrError {
     // Provider/network errors
     #[error("HTTP error: {0}")]
@@ -12,6 +13,12 @@ pub enum RatatoskrError {
     #[error("API error ({status}): {message}")]
     Api { status: u16, message: String },
 
+    /// Rate limited by the provider.
+    ///
+    /// `retry_after` is populated when the provider or gRPC status encodes a
+    /// duration. Currently `None` for errors originating from the `llm` crate
+    /// (which doesn't expose `Retry-After` headers yet); populated for
+    /// HuggingFace 429 responses and gRPC round-trips.
     #[error("rate limited, retry after {retry_after:?}")]
     RateLimited { retry_after: Option<Duration> },
 
@@ -27,7 +34,7 @@ pub enum RatatoskrError {
 
     // Data errors
     #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
+    Json(String),
 
     #[error("invalid input: {0}")]
     InvalidInput(String),
@@ -45,7 +52,7 @@ pub enum RatatoskrError {
     Configuration(String),
 
     #[error("operation not implemented: {0}")]
-    NotImplemented(&'static str),
+    NotImplemented(String),
 
     #[error("provider does not support this operation")]
     Unsupported,
@@ -134,6 +141,11 @@ impl RatatoskrError {
     }
 }
 
+impl From<serde_json::Error> for RatatoskrError {
+    fn from(err: serde_json::Error) -> Self {
+        RatatoskrError::Json(err.to_string())
+    }
+}
 impl From<llm::error::LLMError> for RatatoskrError {
     fn from(err: llm::error::LLMError) -> Self {
         // Map llm errors to our error types

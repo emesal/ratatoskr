@@ -8,13 +8,18 @@ use serde::{Deserialize, Serialize};
 
 use super::parameter::{ParameterAvailability, ParameterName};
 
-/// A capability that a model may support.
+/// A capability that a model or gateway may support.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ModelCapability {
     /// Multi-turn chat conversations.
     Chat,
+    /// Streaming chat responses.
+    ChatStreaming,
     /// Single-turn text generation.
     Generate,
+    /// Tool/function calling support.
+    ToolUse,
     /// Text embeddings.
     Embed,
     /// Natural language inference.
@@ -23,10 +28,14 @@ pub enum ModelCapability {
     Classify,
     /// Stance detection.
     Stance,
+    /// Token counting for models.
+    TokenCounting,
+    /// Local inference (no API calls needed).
+    LocalInference,
 }
 
 /// Information about an available model.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelInfo {
     /// Model identifier (e.g., "all-MiniLM-L6-v2", "anthropic/claude-sonnet-4").
     pub id: String,
@@ -75,6 +84,7 @@ impl ModelInfo {
 
 /// Runtime status of a model.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ModelStatus {
     /// Model is available and can be loaded.
     Available,

@@ -17,6 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// Serializes as a flat string (e.g. `"temperature"`, `"logit_bias"`) so it
 /// works both as JSON values and as JSON object keys in `HashMap<ParameterName, _>`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ParameterName {
     Temperature,
     TopP,
@@ -145,6 +146,7 @@ impl ParameterRange {
 /// or whether it's fixed/unsupported.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "availability", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ParameterAvailability {
     /// Consumer can set this freely within range.
     Mutable {

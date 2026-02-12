@@ -29,6 +29,8 @@ pub struct Config {
     pub discovery: DiscoveryTomlConfig,
     #[serde(default)]
     pub registry: Option<RegistryTomlConfig>,
+    #[serde(default)]
+    pub limits: LimitsConfig,
 }
 
 /// Remote registry configuration (TOML section).
@@ -405,6 +407,7 @@ mod tests {
             providers: ProvidersConfig::default(),
             routing: RoutingConfig::default(),
             discovery: DiscoveryTomlConfig::default(),
+            registry: None,
         };
         assert_eq!(config.server.address, "127.0.0.1:9741");
         assert_eq!(config.server.limits.max_concurrent_requests, 100);

@@ -86,9 +86,7 @@ mod tests {
 
     #[test]
     fn test_openrouter_parallel_true() {
-        let opts = ChatOptions::default()
-            .model("openai/gpt-4o")
-            .parallel_tool_calls(true);
+        let opts = ChatOptions::new("openai/gpt-4o").parallel_tool_calls(true);
         let adj = compute_adjustments(&LLMBackend::OpenRouter, &opts).unwrap();
         assert_eq!(
             adj.extra_body.unwrap()["parallel_tool_calls"],
@@ -99,9 +97,7 @@ mod tests {
 
     #[test]
     fn test_openrouter_parallel_false() {
-        let opts = ChatOptions::default()
-            .model("openai/gpt-4o")
-            .parallel_tool_calls(false);
+        let opts = ChatOptions::new("openai/gpt-4o").parallel_tool_calls(false);
         let adj = compute_adjustments(&LLMBackend::OpenRouter, &opts).unwrap();
         assert_eq!(
             adj.extra_body.unwrap()["parallel_tool_calls"],
@@ -111,9 +107,7 @@ mod tests {
 
     #[test]
     fn test_mistral_parallel_native() {
-        let opts = ChatOptions::default()
-            .model("mistral-large")
-            .parallel_tool_calls(true);
+        let opts = ChatOptions::new("mistral-large").parallel_tool_calls(true);
         let adj = compute_adjustments(&LLMBackend::Mistral, &opts).unwrap();
         assert_eq!(adj.native_parallel_tool_calls, Some(true));
         assert!(adj.extra_body.is_none());
@@ -121,9 +115,7 @@ mod tests {
 
     #[test]
     fn test_anthropic_direct_errors() {
-        let opts = ChatOptions::default()
-            .model("claude-3.5-sonnet")
-            .parallel_tool_calls(false);
+        let opts = ChatOptions::new("claude-3.5-sonnet").parallel_tool_calls(false);
         let err = compute_adjustments(&LLMBackend::Anthropic, &opts).unwrap_err();
         assert!(
             matches!(err, RatatoskrError::UnsupportedParameter { ref param, .. } if param == "parallel_tool_calls")
@@ -133,9 +125,7 @@ mod tests {
     #[test]
     fn test_google_ollama_ignored() {
         for backend in [LLMBackend::Google, LLMBackend::Ollama] {
-            let opts = ChatOptions::default()
-                .model("test")
-                .parallel_tool_calls(true);
+            let opts = ChatOptions::new("test").parallel_tool_calls(true);
             let adj = compute_adjustments(&backend, &opts).unwrap();
             assert!(adj.extra_body.is_none());
             assert!(adj.native_parallel_tool_calls.is_none());
@@ -144,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_raw_provider_options_passthrough() {
-        let mut opts = ChatOptions::default().model("openai/gpt-4o");
+        let mut opts = ChatOptions::new("openai/gpt-4o");
         opts.raw_provider_options = Some(json!({"custom_key": "custom_value"}));
         let adj = compute_adjustments(&LLMBackend::OpenRouter, &opts).unwrap();
         let extra = adj.extra_body.unwrap();
@@ -153,9 +143,7 @@ mod tests {
 
     #[test]
     fn test_parallel_overrides_raw() {
-        let mut opts = ChatOptions::default()
-            .model("openai/gpt-4o")
-            .parallel_tool_calls(true);
+        let mut opts = ChatOptions::new("openai/gpt-4o").parallel_tool_calls(true);
         opts.raw_provider_options = Some(json!({"parallel_tool_calls": false, "other": 42}));
         let adj = compute_adjustments(&LLMBackend::OpenRouter, &opts).unwrap();
         let extra = adj.extra_body.unwrap();
@@ -166,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_no_options_no_adjustments() {
-        let opts = ChatOptions::default().model("gpt-4o");
+        let opts = ChatOptions::new("gpt-4o");
         let adj = compute_adjustments(&LLMBackend::OpenRouter, &opts).unwrap();
         assert!(adj.extra_body.is_none());
         assert!(adj.native_parallel_tool_calls.is_none());

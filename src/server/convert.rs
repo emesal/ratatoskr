@@ -60,7 +60,14 @@ impl From<proto::ToolDefinition> for ToolDefinition {
         ToolDefinition {
             name: p.name,
             description: p.description,
-            parameters: serde_json::from_str(&p.parameters_json).unwrap_or_default(),
+            parameters: serde_json::from_str(&p.parameters_json).unwrap_or_else(|e| {
+                tracing::warn!(
+                    tool = %p.name,
+                    error = %e,
+                    "malformed parameters_json in ToolDefinition, using empty object"
+                );
+                serde_json::Value::Object(Default::default())
+            }),
         }
     }
 }
@@ -196,10 +203,10 @@ impl From<ToolCall> for proto::ToolCall {
 impl From<Usage> for proto::Usage {
     fn from(u: Usage) -> Self {
         proto::Usage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-            reasoning_tokens: u.reasoning_tokens,
+            prompt_tokens: u.prompt_tokens as u32,
+            completion_tokens: u.completion_tokens as u32,
+            total_tokens: u.total_tokens as u32,
+            reasoning_tokens: u.reasoning_tokens.map(|t| t as u32),
         }
     }
 }
@@ -359,13 +366,15 @@ impl From<ModelInfo> for proto::ModelInfo {
             capabilities: m
                 .capabilities
                 .into_iter()
-                .map(|c| match c {
-                    ModelCapability::Chat => proto::ModelCapability::Chat as i32,
-                    ModelCapability::Generate => proto::ModelCapability::Generate as i32,
-                    ModelCapability::Embed => proto::ModelCapability::Embed as i32,
-                    ModelCapability::Nli => proto::ModelCapability::Nli as i32,
-                    ModelCapability::Classify => proto::ModelCapability::Classify as i32,
-                    ModelCapability::Stance => proto::ModelCapability::Stance as i32,
+                .filter_map(|c| match c {
+                    ModelCapability::Chat => Some(proto::ModelCapability::Chat as i32),
+                    ModelCapability::Generate => Some(proto::ModelCapability::Generate as i32),
+                    ModelCapability::Embed => Some(proto::ModelCapability::Embed as i32),
+                    ModelCapability::Nli => Some(proto::ModelCapability::Nli as i32),
+                    ModelCapability::Classify => Some(proto::ModelCapability::Classify as i32),
+                    ModelCapability::Stance => Some(proto::ModelCapability::Stance as i32),
+                    // Gateway-level capabilities have no proto equivalent
+                    _ => None,
                 })
                 .collect(),
             context_window: m.context_window.map(|w| w as u32),
@@ -507,10 +516,10 @@ impl From<proto::ChatEvent> for ChatEvent {
 impl From<proto::Usage> for Usage {
     fn from(u: proto::Usage) -> Self {
         Usage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-            reasoning_tokens: u.reasoning_tokens,
+            prompt_tokens: u.prompt_tokens as u64,
+            completion_tokens: u.completion_tokens as u64,
+            total_tokens: u.total_tokens as u64,
+            reasoning_tokens: u.reasoning_tokens.map(|t| t as u64),
         }
     }
 }

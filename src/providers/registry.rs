@@ -222,6 +222,9 @@ impl ProviderRegistry {
         if let Some(ref name) = config.classify {
             routing::promote_preferred(&mut self.classify, name);
         }
+        if let Some(ref name) = config.stance {
+            routing::promote_preferred(&mut self.stance, name);
+        }
     }
 
     // ========================================================================
@@ -718,7 +721,7 @@ impl ProviderRegistry {
                     return Ok(metadata);
                 }
                 Err(RatatoskrError::NotImplemented(_)) => {
-                    last_err = Some(RatatoskrError::NotImplemented("fetch_metadata"));
+                    last_err = Some(RatatoskrError::NotImplemented("fetch_metadata".into()));
                     continue;
                 }
                 Err(e) if self.is_fallback_trigger(&e) => {
@@ -817,12 +820,12 @@ impl ProviderRegistry {
             "provider" => provider.to_owned(),
             "direction" => "prompt",
         )
-        .increment(u64::from(usage.prompt_tokens));
+        .increment(usage.prompt_tokens);
         metrics::counter!(telemetry::TOKENS_TOTAL,
             "provider" => provider.to_owned(),
             "direction" => "completion",
         )
-        .increment(u64::from(usage.completion_tokens));
+        .increment(usage.completion_tokens);
     }
 
     // ========================================================================

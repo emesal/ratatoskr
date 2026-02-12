@@ -51,7 +51,6 @@ pub struct EmbeddedGateway {
     /// so no other modules need changes.
     response_cache: Option<ResponseCache>,
     #[cfg(feature = "local-inference")]
-    #[allow(dead_code)] // used for model status queries
     model_manager: Arc<ModelManager>,
     #[cfg(feature = "local-inference")]
     tokenizer_registry: Arc<TokenizerRegistry>,
@@ -123,9 +122,9 @@ impl ModelGateway for EmbeddedGateway {
             chat_streaming: self.registry.has_chat(),
             generate: self.registry.has_generate(),
             tool_use: self.registry.has_chat(),
-            embeddings: self.registry.has_embedding(),
+            embed: self.registry.has_embedding(),
             nli: self.registry.has_nli(),
-            classification: self.registry.has_classify(),
+            classify: self.registry.has_classify(),
             stance: self.registry.has_stance(),
             #[cfg(feature = "local-inference")]
             token_counting,

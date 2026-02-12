@@ -36,8 +36,9 @@ service Ratatoskr {
     rpc GetModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
     rpc FetchModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
 
-    // Service health
+    // Service info
     rpc Health(HealthRequest) returns (HealthResponse);
+    rpc GetCapabilities(CapabilitiesRequest) returns (CapabilitiesResponse);
 }
 
 // =============================================================================
@@ -493,4 +494,23 @@ message HealthResponse {
     bool healthy = 1;
     string version = 2;
     optional string git_sha = 3;
+}
+
+// =============================================================================
+// Capabilities Types
+// =============================================================================
+
+message CapabilitiesRequest {}
+
+message CapabilitiesResponse {
+    bool chat = 1;
+    bool chat_streaming = 2;
+    bool generate = 3;
+    bool tool_use = 4;
+    bool embed = 5;
+    bool nli = 6;
+    bool classify = 7;
+    bool stance = 8;
+    bool token_counting = 9;
+    bool local_inference = 10;
 }

@@ -251,7 +251,7 @@ impl ChatProvider for LlmChatProvider {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
-        let (system_prompt, llm_messages) = to_llm_messages(messages);
+        let (system_prompt, llm_messages) = to_llm_messages(messages)?;
         let provider = self.build_provider(options, system_prompt.as_deref(), tools)?;
 
         let response = if tools.is_some() {
@@ -293,7 +293,7 @@ impl ChatProvider for LlmChatProvider {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
-        let (system_prompt, llm_messages) = to_llm_messages(messages);
+        let (system_prompt, llm_messages) = to_llm_messages(messages)?;
         let provider = self.build_provider(options, system_prompt.as_deref(), tools)?;
 
         let stream = provider
@@ -396,7 +396,7 @@ impl GenerateProvider for LlmChatProvider {
     #[instrument(name = "llm.generate", skip(self, prompt, options), fields(model = %options.model, provider = %self.name))]
     async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
         // Build chat options for the provider
-        let mut chat_options = ChatOptions::default().model(&options.model);
+        let mut chat_options = ChatOptions::new(&options.model);
         if let Some(temp) = options.temperature {
             chat_options = chat_options.temperature(temp);
         }
@@ -444,7 +444,7 @@ impl GenerateProvider for LlmChatProvider {
         // by wrapping the prompt in a user message
         let messages = vec![Message::user(prompt)];
 
-        let mut chat_options = ChatOptions::default().model(&options.model);
+        let mut chat_options = ChatOptions::new(&options.model);
         if let Some(temp) = options.temperature {
             chat_options = chat_options.temperature(temp);
         }
@@ -458,14 +458,15 @@ impl GenerateProvider for LlmChatProvider {
         // Get streaming chat response
         let chat_stream = self.chat_stream(&messages, None, &chat_options).await?;
 
-        // Convert ChatEvent to GenerateEvent
-        let generate_stream = chat_stream.map(|result| {
-            result.map(|event| match event {
-                ChatEvent::Content(text) => GenerateEvent::Text(text),
-                ChatEvent::Done => GenerateEvent::Done,
-                // Ignore other events (reasoning, tool calls, usage) for generate
-                _ => GenerateEvent::Text(String::new()),
-            })
+        // Convert ChatEvent to GenerateEvent, filtering out non-content events.
+        let generate_stream = chat_stream.filter_map(|result| async {
+            match result {
+                Ok(ChatEvent::Content(text)) => Some(Ok(GenerateEvent::Text(text))),
+                Ok(ChatEvent::Done) => Some(Ok(GenerateEvent::Done)),
+                Err(e) => Some(Err(e)),
+                // Discard reasoning, tool calls, usage — not relevant for generate.
+                _ => None,
+            }
         });
 
         Ok(Box::pin(generate_stream))

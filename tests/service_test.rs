@@ -104,6 +104,7 @@ async fn test_client_model_status() {
         | ratatoskr::ModelStatus::Available
         | ratatoskr::ModelStatus::Loading
         | ratatoskr::ModelStatus::Unavailable { .. } => {}
+        _ => panic!("unexpected model status variant"),
     }
 }
 
@@ -173,7 +174,7 @@ async fn test_live_chat() {
         .chat(
             &[Message::user("Say hello in exactly 3 words.")],
             None,
-            &ChatOptions::default().model("anthropic/claude-sonnet-4"),
+            &ChatOptions::new("anthropic/claude-sonnet-4"),
         )
         .await
         .expect("chat request failed");

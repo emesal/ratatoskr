@@ -22,7 +22,7 @@ async fn test_live_chat_openrouter() {
                 Message::user("What is 2 + 2?"),
             ],
             None,
-            &ChatOptions::default().model("anthropic/claude-3-haiku-20240307"),
+            &ChatOptions::new("anthropic/claude-3-haiku-20240307"),
         )
         .await
         .expect("Chat failed");
@@ -50,7 +50,7 @@ async fn test_live_streaming_openrouter() {
         .chat_stream(
             &[Message::user("Say 'hello world' and nothing else.")],
             None,
-            &ChatOptions::default().model("anthropic/claude-3-haiku-20240307"),
+            &ChatOptions::new("anthropic/claude-3-haiku-20240307"),
         )
         .await
         .expect("Stream failed");

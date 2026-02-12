@@ -93,8 +93,6 @@ pub struct OnnxNliProvider {
     session: Session,
     tokenizer: tokenizers::Tokenizer,
     model_info: NliModelInfo,
-    #[allow(dead_code)]
-    device: Device,
 }
 
 impl OnnxNliProvider {
@@ -114,7 +112,6 @@ impl OnnxNliProvider {
             session,
             tokenizer,
             model_info: (&model).into(),
-            device,
         })
     }
 
