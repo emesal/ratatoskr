@@ -1,6 +1,26 @@
 [
   {
     "info": {
+      "id": "anthropic/claude-opus-4",
+      "provider": "openrouter",
+      "capabilities": ["Chat"],
+      "context_window": 200000,
+      "dimensions": null
+    },
+    "parameters": {
+      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
+      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
+      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
+      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 32000.0 } },
+      "stop": { "availability": "mutable", "range": {} },
+      "reasoning": { "availability": "mutable", "range": {} },
+      "parallel_tool_calls": { "availability": "mutable", "range": {} }
+    },
+    "pricing": { "prompt_cost_per_mtok": 15.0, "completion_cost_per_mtok": 75.0 },
+    "max_output_tokens": 32000
+  },
+  {
+    "info": {
       "id": "anthropic/claude-sonnet-4",
       "provider": "openrouter",
       "capabilities": ["Chat"],
@@ -21,6 +41,26 @@
   },
   {
     "info": {
+      "id": "anthropic/claude-haiku-4",
+      "provider": "openrouter",
+      "capabilities": ["Chat"],
+      "context_window": 200000,
+      "dimensions": null
+    },
+    "parameters": {
+      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
+      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
+      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
+      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
+      "stop": { "availability": "mutable", "range": {} },
+      "reasoning": { "availability": "mutable", "range": {} },
+      "parallel_tool_calls": { "availability": "mutable", "range": {} }
+    },
+    "pricing": { "prompt_cost_per_mtok": 0.80, "completion_cost_per_mtok": 4.0 },
+    "max_output_tokens": 8192
+  },
+  {
+    "info": {
       "id": "anthropic/claude-haiku-3.5",
       "provider": "openrouter",
       "capabilities": ["Chat"],
@@ -32,6 +72,7 @@
       "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
       "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
       "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
+      "stop": { "availability": "mutable", "range": {} },
       "parallel_tool_calls": { "availability": "mutable", "range": {} }
     },
     "pricing": { "prompt_cost_per_mtok": 0.80, "completion_cost_per_mtok": 4.0 },
@@ -51,11 +92,69 @@
       "frequency_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
       "presence_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
       "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 16384.0 } },
+      "stop": { "availability": "mutable", "range": {} },
       "seed": { "availability": "mutable", "range": {} },
       "parallel_tool_calls": { "availability": "mutable", "range": {} }
     },
     "pricing": { "prompt_cost_per_mtok": 2.50, "completion_cost_per_mtok": 10.0 },
     "max_output_tokens": 16384
+  },
+  {
+    "info": {
+      "id": "openai/gpt-4o-mini",
+      "provider": "openrouter",
+      "capabilities": ["Chat"],
+      "context_window": 128000,
+      "dimensions": null
+    },
+    "parameters": {
+      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
+      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
+      "frequency_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
+      "presence_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
+      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 16384.0 } },
+      "stop": { "availability": "mutable", "range": {} },
+      "seed": { "availability": "mutable", "range": {} },
+      "parallel_tool_calls": { "availability": "mutable", "range": {} }
+    },
+    "pricing": { "prompt_cost_per_mtok": 0.15, "completion_cost_per_mtok": 0.60 },
+    "max_output_tokens": 16384
+  },
+  {
+    "info": {
+      "id": "google/gemini-2.5-flash",
+      "provider": "openrouter",
+      "capabilities": ["Chat"],
+      "context_window": 1048576,
+      "dimensions": null
+    },
+    "parameters": {
+      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
+      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
+      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
+      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
+      "stop": { "availability": "mutable", "range": {} }
+    },
+    "pricing": { "prompt_cost_per_mtok": 0.15, "completion_cost_per_mtok": 0.60 },
+    "max_output_tokens": 8192
+  },
+  {
+    "info": {
+      "id": "google/gemini-2.0-pro",
+      "provider": "openrouter",
+      "capabilities": ["Chat"],
+      "context_window": 1048576,
+      "dimensions": null
+    },
+    "parameters": {
+      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
+      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
+      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
+      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
+      "stop": { "availability": "mutable", "range": {} }
+    },
+    "pricing": { "prompt_cost_per_mtok": 1.25, "completion_cost_per_mtok": 5.0 },
+    "max_output_tokens": 8192
   },
   {
     "info": {
@@ -69,7 +168,8 @@
       "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
       "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
       "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } }
+      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
+      "stop": { "availability": "mutable", "range": {} }
     },
     "pricing": { "prompt_cost_per_mtok": 0.10, "completion_cost_per_mtok": 0.40 },
     "max_output_tokens": 8192

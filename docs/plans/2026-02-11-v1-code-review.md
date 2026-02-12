@@ -340,7 +340,7 @@ let text = match &msg.content {
 
 dependency hygiene, test coverage gaps, stale data.
 
-### D1. pin `llm` dependency to a specific rev `[  ]`
+### D1. pin `llm` dependency to a specific rev `[x]`
 
 **File:** `Cargo.toml` (line 29)
 **Severity:** MAJOR
@@ -358,7 +358,7 @@ or better: get changes merged upstream / publish the fork.
 
 ---
 
-### D2. add integration tests for `ParameterDiscoveryCache` `[  ]`
+### D2. add integration tests for `ParameterDiscoveryCache` `[x]`
 
 **Severity:** MAJOR
 
@@ -372,7 +372,7 @@ no integration tests for builder integration, runtime recording, cache consultat
 
 ---
 
-### D3. add integration tests for `RemoteRegistry` `[  ]`
+### D3. add integration tests for `RemoteRegistry` `[x]`
 
 **Severity:** MAJOR
 
@@ -387,7 +387,7 @@ no integration tests for cache roundtrip, versioned format parsing, legacy fallb
 
 ---
 
-### D4. add tests for tokenizer, convert, and device modules `[  ]`
+### D4. add tests for tokenizer, convert, and device modules `[x]`
 
 **Severity:** MAJOR
 
@@ -408,7 +408,7 @@ all three modules have zero test coverage.
 
 ---
 
-### D5. update `seed.json` with current models `[  ]`
+### D5. update `seed.json` with current models `[x]`
 
 **File:** `src/registry/seed.json`
 **Severity:** MAJOR
