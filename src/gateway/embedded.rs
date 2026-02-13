@@ -119,7 +119,13 @@ impl ModelGateway for EmbeddedGateway {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
-        self.registry.chat_stream(messages, tools, options).await
+        let model = self.resolve_model(&options.model)?;
+        if model == options.model {
+            self.registry.chat_stream(messages, tools, options).await
+        } else {
+            let resolved = ChatOptions { model, ..options.clone() };
+            self.registry.chat_stream(messages, tools, &resolved).await
+        }
     }
 
     #[instrument(name = "gateway.chat", skip(self, messages, tools, options), fields(model = %options.model))]
@@ -129,7 +135,13 @@ impl ModelGateway for EmbeddedGateway {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
-        self.registry.chat(messages, tools, options).await
+        let model = self.resolve_model(&options.model)?;
+        if model == options.model {
+            self.registry.chat(messages, tools, options).await
+        } else {
+            let resolved = ChatOptions { model, ..options.clone() };
+            self.registry.chat(messages, tools, &resolved).await
+        }
     }
 
     fn capabilities(&self) -> Capabilities {
