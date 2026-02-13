@@ -57,6 +57,9 @@ pub struct EmbeddedGateway {
 }
 
 impl EmbeddedGateway {
+    /// Prefix for preset model URIs.
+    const PRESET_PREFIX: &str = "ratatoskr:";
+
     /// Create a new EmbeddedGateway with the given registries.
     pub(crate) fn new(
         registry: ProviderRegistry,
@@ -76,6 +79,34 @@ impl EmbeddedGateway {
             #[cfg(feature = "local-inference")]
             tokenizer_registry,
         }
+    }
+
+    /// Resolve a model string, expanding `ratatoskr:<tier>/<capability>` preset
+    /// URIs to concrete model IDs. Non-preset strings pass through unchanged.
+    fn resolve_model(&self, model: &str) -> Result<String> {
+        let Some(rest) = model.strip_prefix(Self::PRESET_PREFIX) else {
+            return Ok(model.to_string());
+        };
+
+        let Some((tier, capability)) = rest.split_once('/') else {
+            return Err(crate::RatatoskrError::InvalidInput(format!(
+                "preset URI must be `ratatoskr:<tier>/<capability>`, got `{model}`"
+            )));
+        };
+
+        if tier.is_empty() || capability.is_empty() {
+            return Err(crate::RatatoskrError::InvalidInput(format!(
+                "preset URI must be `ratatoskr:<tier>/<capability>`, got `{model}`"
+            )));
+        }
+
+        self.model_registry
+            .preset(tier, capability)
+            .map(String::from)
+            .ok_or_else(|| crate::RatatoskrError::PresetNotFound {
+                tier: tier.to_string(),
+                capability: capability.to_string(),
+            })
     }
 }
 
@@ -340,5 +371,84 @@ impl ModelGateway for EmbeddedGateway {
         self.model_registry
             .preset(tier, capability)
             .map(String::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Ratatoskr, RatatoskrError};
+
+    /// Build a minimal gateway with the embedded seed registry (has presets).
+    fn test_gateway() -> EmbeddedGateway {
+        let registry = crate::providers::ProviderRegistry::new();
+        let model_registry = ModelRegistry::with_embedded_seed();
+        let model_cache = Arc::new(ModelCache::new());
+        EmbeddedGateway::new(
+            registry,
+            model_registry,
+            model_cache,
+            None,
+            #[cfg(feature = "local-inference")]
+            Arc::new(crate::model::ModelManager::new(std::path::PathBuf::from("/tmp"), None)),
+            #[cfg(feature = "local-inference")]
+            Arc::new(crate::tokenizer::TokenizerRegistry::new()),
+        )
+    }
+
+    #[test]
+    fn test_resolve_preset_uri() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("ratatoskr:free/text-generation").unwrap();
+        assert_eq!(resolved, "google/gemini-2.0-flash-001");
+    }
+
+    #[test]
+    fn test_resolve_preset_uri_agentic() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("ratatoskr:free/agentic").unwrap();
+        assert_eq!(resolved, "google/gemini-2.0-flash-001");
+    }
+
+    #[test]
+    fn test_resolve_preset_uri_premium() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("ratatoskr:premium/agentic").unwrap();
+        assert_eq!(resolved, "anthropic/claude-sonnet-4");
+    }
+
+    #[test]
+    fn test_resolve_plain_model_passthrough() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("anthropic/claude-sonnet-4").unwrap();
+        assert_eq!(resolved, "anthropic/claude-sonnet-4");
+    }
+
+    #[test]
+    fn test_resolve_preset_unknown_tier() {
+        let gw = test_gateway();
+        let err = gw.resolve_model("ratatoskr:nonexistent/agentic").unwrap_err();
+        assert!(matches!(err, RatatoskrError::PresetNotFound { .. }));
+    }
+
+    #[test]
+    fn test_resolve_preset_unknown_capability() {
+        let gw = test_gateway();
+        let err = gw.resolve_model("ratatoskr:free/nonexistent").unwrap_err();
+        assert!(matches!(err, RatatoskrError::PresetNotFound { .. }));
+    }
+
+    #[test]
+    fn test_resolve_preset_missing_capability() {
+        let gw = test_gateway();
+        let err = gw.resolve_model("ratatoskr:free").unwrap_err();
+        assert!(matches!(err, RatatoskrError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn test_resolve_preset_empty_after_prefix() {
+        let gw = test_gateway();
+        let err = gw.resolve_model("ratatoskr:").unwrap_err();
+        assert!(matches!(err, RatatoskrError::InvalidInput(_)));
     }
 }
