@@ -12,10 +12,11 @@
 
 pub mod remote;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use tracing::{info, warn};
 
+use crate::types::CostTier;
 use crate::{ModelCapability, ModelMetadata};
 
 /// Centralised model metadata registry.
@@ -25,6 +26,8 @@ use crate::{ModelCapability, ModelMetadata};
 #[derive(Debug, Clone, Default)]
 pub struct ModelRegistry {
     entries: HashMap<String, ModelMetadata>,
+    /// Autoconfig presets: `(cost_tier, capability_string) → model_id`.
+    presets: BTreeMap<CostTier, BTreeMap<String, String>>,
 }
 
 impl ModelRegistry {
@@ -107,14 +110,70 @@ impl ModelRegistry {
         self.entries.is_empty()
     }
 
+    // ===== Presets =====
+
+    /// Look up a preset model ID for the given tier and capability.
+    pub fn preset(&self, tier: CostTier, capability: &str) -> Option<&str> {
+        self.presets
+            .get(&tier)
+            .and_then(|cap_map| cap_map.get(capability))
+            .map(String::as_str)
+    }
+
+    /// Get all presets for a cost tier.
+    pub fn presets_for_tier(&self, tier: CostTier) -> Option<&BTreeMap<String, String>> {
+        self.presets.get(&tier)
+    }
+
+    /// Insert or update a single preset.
+    pub fn set_preset(&mut self, tier: CostTier, capability: &str, model_id: &str) {
+        self.presets
+            .entry(tier)
+            .or_default()
+            .insert(capability.to_owned(), model_id.to_owned());
+    }
+
+    /// Merge incoming presets (incoming overrides existing per-key).
+    pub fn merge_presets(&mut self, incoming: BTreeMap<CostTier, BTreeMap<String, String>>) {
+        for (tier, cap_map) in incoming {
+            let existing = self.presets.entry(tier).or_default();
+            for (capability, model_id) in cap_map {
+                existing.insert(capability, model_id);
+            }
+        }
+    }
+
+    /// Warn about preset model IDs that aren't present in the registry entries.
+    ///
+    /// This is advisory — the model may still be resolvable at runtime via provider APIs.
+    fn validate_presets(&self) {
+        for (tier, cap_map) in &self.presets {
+            for (capability, model_id) in cap_map {
+                if !self.entries.contains_key(model_id) {
+                    warn!(
+                        tier = %tier,
+                        capability = %capability,
+                        model_id = %model_id,
+                        "preset references model not in registry"
+                    );
+                }
+            }
+        }
+    }
+
     /// Load cached remote registry data and merge into this registry.
     ///
     /// Reads from the local cache file only (no network I/O). If the file
     /// is missing or corrupt, this is a no-op (logged at warn level).
     pub fn with_cached_remote(mut self, path: &std::path::Path) -> Self {
-        if let Some(models) = remote::load_cached(path) {
-            info!(count = models.len(), "loaded cached remote registry");
-            self.merge_batch(models);
+        if let Some(payload) = remote::load_cached(path) {
+            info!(
+                count = payload.models.len(),
+                "loaded cached remote registry"
+            );
+            self.merge_batch(payload.models);
+            self.merge_presets(payload.presets);
+            self.validate_presets();
         }
         self
     }
@@ -127,10 +186,12 @@ impl ModelRegistry {
     pub fn with_embedded_seed() -> Self {
         let mut registry = Self::new();
         match crate::registry::remote::parse_payload(EMBEDDED_SEED) {
-            Ok(entries) => {
-                for entry in entries {
+            Ok(payload) => {
+                for entry in payload.models {
                     registry.insert(entry);
                 }
+                registry.merge_presets(payload.presets);
+                registry.validate_presets();
             }
             Err(e) => {
                 // This should never happen — seed is compiled in and tested.

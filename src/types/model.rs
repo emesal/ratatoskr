@@ -99,6 +99,34 @@ pub enum ModelStatus {
     },
 }
 
+/// Cost tier for autoconfig presets.
+///
+/// Maps to a price-quality tradeoff: consumers choose the tier, and the
+/// registry resolves a concrete model ID per capability.
+///
+/// Ordered from cheapest (`Free`) to most expensive (`Premium`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum CostTier {
+    /// Free-tier models (community/experimental, e.g. `:free` suffixed).
+    Free,
+    /// Low-cost models optimised for throughput over quality.
+    Budget,
+    /// High-quality models for demanding tasks.
+    Premium,
+}
+
+impl std::fmt::Display for CostTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Free => write!(f, "free"),
+            Self::Budget => write!(f, "budget"),
+            Self::Premium => write!(f, "premium"),
+        }
+    }
+}
+
 impl ModelStatus {
     /// Create an unavailable status with a reason.
     pub fn unavailable(reason: impl Into<String>) -> Self {

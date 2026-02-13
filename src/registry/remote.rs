@@ -13,12 +13,13 @@
 //!
 //! Embedded seed → cached remote → live provider data.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use crate::types::ModelMetadata;
+use crate::types::{CostTier, ModelMetadata};
 use crate::{RatatoskrError, Result};
 
 /// Default URL for the curated remote registry.
@@ -77,6 +78,9 @@ pub struct RemoteRegistry {
     pub version: u32,
     /// Model metadata entries.
     pub models: Vec<ModelMetadata>,
+    /// Autoconfig presets: `cost_tier → { capability → model_id }`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub presets: BTreeMap<CostTier, BTreeMap<String, String>>,
 }
 
 /// Accept both versioned and bare-array formats.
@@ -91,10 +95,19 @@ enum RawPayload {
     Legacy(Vec<ModelMetadata>),
 }
 
+/// Parsed registry data: models + optional presets.
+#[derive(Debug, Clone)]
+pub struct RegistryPayload {
+    /// Model metadata entries.
+    pub models: Vec<ModelMetadata>,
+    /// Autoconfig presets (empty if not present or legacy format).
+    pub presets: BTreeMap<CostTier, BTreeMap<String, String>>,
+}
+
 /// Parse a registry payload, accepting both versioned and legacy formats.
 ///
 /// Returns an error if the version is unsupported.
-pub(crate) fn parse_payload(json: &str) -> Result<Vec<ModelMetadata>> {
+pub(crate) fn parse_payload(json: &str) -> Result<RegistryPayload> {
     let payload: RawPayload = serde_json::from_str(json).map_err(|e| {
         RatatoskrError::Configuration(format!("failed to parse registry JSON: {e}"))
     })?;
@@ -106,9 +119,15 @@ pub(crate) fn parse_payload(json: &str) -> Result<Vec<ModelMetadata>> {
                     registry.version
                 )));
             }
-            Ok(registry.models)
+            Ok(RegistryPayload {
+                models: registry.models,
+                presets: registry.presets,
+            })
         }
-        RawPayload::Legacy(models) => Ok(models),
+        RawPayload::Legacy(models) => Ok(RegistryPayload {
+            models,
+            presets: BTreeMap::new(),
+        }),
     }
 }
 
@@ -119,7 +138,7 @@ pub(crate) fn parse_payload(json: &str) -> Result<Vec<ModelMetadata>> {
 /// Load cached registry data from disk.
 ///
 /// Returns `None` on missing or corrupt file (logs a warning on corrupt).
-pub fn load_cached(path: &Path) -> Option<Vec<ModelMetadata>> {
+pub fn load_cached(path: &Path) -> Option<RegistryPayload> {
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
@@ -129,7 +148,7 @@ pub fn load_cached(path: &Path) -> Option<Vec<ModelMetadata>> {
         }
     };
     match parse_payload(&content) {
-        Ok(models) => Some(models),
+        Ok(payload) => Some(payload),
         Err(e) => {
             warn!(path = %path.display(), error = %e, "corrupt cached registry");
             None
@@ -138,7 +157,7 @@ pub fn load_cached(path: &Path) -> Option<Vec<ModelMetadata>> {
 }
 
 /// Save registry data to the local cache (atomic write via tmp + rename).
-pub fn save_cache(path: &Path, data: &[ModelMetadata]) -> Result<()> {
+pub fn save_cache(path: &Path, payload: &RegistryPayload) -> Result<()> {
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
@@ -154,7 +173,8 @@ pub fn save_cache(path: &Path, data: &[ModelMetadata]) -> Result<()> {
     let tmp_path = path.with_extension(format!("json.tmp.{}", std::process::id()));
     let registry = RemoteRegistry {
         version: 1,
-        models: data.to_vec(),
+        models: payload.models.to_vec(),
+        presets: payload.presets.clone(),
     };
     let json = serde_json::to_string_pretty(&registry)
         .map_err(|e| RatatoskrError::Configuration(format!("failed to serialize registry: {e}")))?;
@@ -182,7 +202,7 @@ pub fn save_cache(path: &Path, data: &[ModelMetadata]) -> Result<()> {
 /// Fetch registry data from a remote URL.
 ///
 /// Uses a 30-second timeout to prevent indefinite blocking.
-pub async fn fetch_remote(url: &str) -> Result<Vec<ModelMetadata>> {
+pub async fn fetch_remote(url: &str) -> Result<RegistryPayload> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
@@ -208,18 +228,18 @@ pub async fn fetch_remote(url: &str) -> Result<Vec<ModelMetadata>> {
 
 /// Fetch remote registry and save to local cache.
 ///
-/// Returns the fetched model metadata. This is the high-level entrypoint
+/// Returns the fetched payload. This is the high-level entrypoint
 /// used by `rat update-registry`.
-pub async fn update_registry(config: &RemoteRegistryConfig) -> Result<Vec<ModelMetadata>> {
+pub async fn update_registry(config: &RemoteRegistryConfig) -> Result<RegistryPayload> {
     info!(url = %config.url, "fetching remote registry");
-    let models = fetch_remote(&config.url).await?;
-    save_cache(&config.cache_path, &models)?;
+    let payload = fetch_remote(&config.url).await?;
+    save_cache(&config.cache_path, &payload)?;
     info!(
-        count = models.len(),
+        count = payload.models.len(),
         path = %config.cache_path.display(),
         "saved remote registry to cache"
     );
-    Ok(models)
+    Ok(payload)
 }
 
 #[cfg(test)]
@@ -243,24 +263,33 @@ mod tests {
         }
     }
 
+    fn sample_payload(models: Vec<ModelMetadata>) -> RegistryPayload {
+        RegistryPayload {
+            models,
+            presets: BTreeMap::new(),
+        }
+    }
+
     #[test]
     fn parse_versioned_format() {
         let json = serde_json::to_string(&RemoteRegistry {
             version: 1,
             models: vec![sample_metadata("model-a")],
+            presets: BTreeMap::new(),
         })
         .unwrap();
-        let models = parse_payload(&json).unwrap();
-        assert_eq!(models.len(), 1);
-        assert_eq!(models[0].info.id, "model-a");
+        let payload = parse_payload(&json).unwrap();
+        assert_eq!(payload.models.len(), 1);
+        assert_eq!(payload.models[0].info.id, "model-a");
     }
 
     #[test]
     fn parse_legacy_bare_array() {
         let json = serde_json::to_string(&vec![sample_metadata("model-b")]).unwrap();
-        let models = parse_payload(&json).unwrap();
-        assert_eq!(models.len(), 1);
-        assert_eq!(models[0].info.id, "model-b");
+        let payload = parse_payload(&json).unwrap();
+        assert_eq!(payload.models.len(), 1);
+        assert_eq!(payload.models[0].info.id, "model-b");
+        assert!(payload.presets.is_empty());
     }
 
     #[test]
@@ -283,13 +312,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("registry.json");
 
-        let models = vec![sample_metadata("model-a"), sample_metadata("model-b")];
-        save_cache(&path, &models).unwrap();
+        let payload = sample_payload(vec![sample_metadata("model-a"), sample_metadata("model-b")]);
+        save_cache(&path, &payload).unwrap();
 
         let loaded = load_cached(&path).unwrap();
-        assert_eq!(loaded.len(), 2);
-        assert_eq!(loaded[0].info.id, "model-a");
-        assert_eq!(loaded[1].info.id, "model-b");
+        assert_eq!(loaded.models.len(), 2);
+        assert_eq!(loaded.models[0].info.id, "model-a");
+        assert_eq!(loaded.models[1].info.id, "model-b");
     }
 
     #[test]
@@ -313,7 +342,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("deep").join("nested").join("registry.json");
 
-        save_cache(&path, &[sample_metadata("model-a")]).unwrap();
+        save_cache(&path, &sample_payload(vec![sample_metadata("model-a")])).unwrap();
         assert!(path.exists());
     }
 

@@ -5,9 +5,9 @@ use futures_util::Stream;
 use std::pin::Pin;
 
 use crate::{
-    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, GenerateEvent,
-    GenerateOptions, GenerateResponse, Message, ModelInfo, ModelMetadata, ModelStatus, NliResult,
-    RatatoskrError, Result, StanceResult, Token, ToolDefinition,
+    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, CostTier, Embedding,
+    GenerateEvent, GenerateOptions, GenerateResponse, Message, ModelInfo, ModelMetadata,
+    ModelStatus, NliResult, RatatoskrError, Result, StanceResult, Token, ToolDefinition,
 };
 
 /// The core gateway trait that all implementations must provide.
@@ -154,5 +154,14 @@ pub trait ModelGateway: Send + Sync {
         Err(RatatoskrError::NotImplemented(
             "fetch_model_metadata".into(),
         ))
+    }
+
+    // ===== Autoconfig presets =====
+
+    /// Resolve a preset model ID for the given cost tier and capability.
+    ///
+    /// Returns `None` if no preset is configured for this combination.
+    fn resolve_preset(&self, _tier: CostTier, _capability: &str) -> Option<String> {
+        None
     }
 }

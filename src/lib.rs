@@ -130,10 +130,10 @@ pub use version::{BUILD_TIMESTAMP, GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, 
 
 // Re-export all types
 pub use types::{
-    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason,
-    GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent, ModelCapability,
-    ModelInfo, ModelMetadata, ModelStatus, NliLabel, NliResult, ParameterAvailability,
-    ParameterName, ParameterRange, ParameterValidationPolicy, PricingInfo, ReasoningConfig,
-    ReasoningEffort, ResponseFormat, Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice,
-    ToolDefinition, Usage,
+    Capabilities, ChatEvent, ChatOptions, ChatResponse, ClassifyResult, CostTier, Embedding,
+    FinishReason, GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent,
+    ModelCapability, ModelInfo, ModelMetadata, ModelStatus, NliLabel, NliResult,
+    ParameterAvailability, ParameterName, ParameterRange, ParameterValidationPolicy, PricingInfo,
+    ReasoningConfig, ReasoningEffort, ResponseFormat, Role, StanceLabel, StanceResult, Token,
+    ToolCall, ToolChoice, ToolDefinition, Usage,
 };
