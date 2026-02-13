@@ -97,3 +97,38 @@ fn test_builder_methods_compile() {
         )
         .timeout(60);
 }
+
+// ===== Preset URI resolution =====
+
+#[test]
+fn test_preset_uri_resolves_in_model_metadata() {
+    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+
+    // preset URI should resolve to the same metadata as the concrete model
+    let via_preset = gateway.model_metadata("ratatoskr:free/text-generation");
+    let via_direct = gateway.model_metadata("google/gemini-2.0-flash-001");
+
+    assert!(via_preset.is_some(), "preset should resolve to metadata");
+    assert_eq!(
+        via_preset.unwrap().info.id,
+        via_direct.unwrap().info.id,
+        "preset and direct should yield same model"
+    );
+}
+
+#[test]
+fn test_preset_uri_resolve_preset_still_works() {
+    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+
+    // the resolve_preset trait method should still work independently
+    let model = gateway.resolve_preset("free", "agentic");
+    assert!(model.is_some());
+    assert_eq!(model.unwrap(), "google/gemini-2.0-flash-001");
+}
+
+#[test]
+fn test_preset_uri_unknown_tier_returns_error() {
+    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+    let result = gateway.model_metadata("ratatoskr:nonexistent/agentic");
+    assert!(result.is_none(), "unknown preset tier should return None from model_metadata");
+}
