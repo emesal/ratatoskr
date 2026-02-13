@@ -155,4 +155,13 @@ pub trait ModelGateway: Send + Sync {
             "fetch_model_metadata".into(),
         ))
     }
+
+    // ===== Autoconfig presets =====
+
+    /// Resolve a preset model ID for the given cost tier and capability.
+    ///
+    /// Returns `None` if no preset is configured for this combination.
+    fn resolve_preset(&self, _tier: &str, _capability: &str) -> Option<String> {
+        None
+    }
 }

@@ -335,4 +335,10 @@ impl ModelGateway for EmbeddedGateway {
         self.model_cache.insert(metadata.clone());
         Ok(metadata)
     }
+
+    fn resolve_preset(&self, tier: &str, capability: &str) -> Option<String> {
+        self.model_registry
+            .preset(tier, capability)
+            .map(String::from)
+    }
 }

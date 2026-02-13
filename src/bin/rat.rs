@@ -120,8 +120,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         };
 
-        let models = ratatoskr::registry::remote::update_registry(&config).await?;
-        println!("fetched {} model entries", models.len());
+        let payload = ratatoskr::registry::remote::update_registry(&config).await?;
+        println!("fetched {} model entries", payload.models.len());
         println!("saved to {}", config.cache_path.display());
         return Ok(());
     }

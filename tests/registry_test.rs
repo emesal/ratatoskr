@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use ratatoskr::{
     ModelCapability, ModelInfo, ModelMetadata, ModelRegistry, ParameterAvailability, ParameterName,
     ParameterRange,
@@ -291,4 +293,136 @@ fn embedded_seed_merge_over_seed() {
     assert_eq!(claude.max_output_tokens, Some(32768));
     // Original parameters should be preserved.
     assert!(claude.parameters.contains_key(&ParameterName::Temperature));
+}
+
+// ============================================================================
+// Preset tests
+// ============================================================================
+
+#[test]
+fn preset_lookup_hit() {
+    let mut registry = ModelRegistry::new();
+    registry.set_preset("free", "text-generation", "free/model");
+
+    assert_eq!(
+        registry.preset("free", "text-generation"),
+        Some("free/model")
+    );
+}
+
+#[test]
+fn preset_lookup_miss() {
+    let registry = ModelRegistry::new();
+    assert_eq!(registry.preset("free", "nonexistent"), None);
+    assert_eq!(registry.preset("premium", "text-generation"), None);
+}
+
+#[test]
+fn presets_for_tier_returns_correct_map() {
+    let mut registry = ModelRegistry::new();
+    registry.set_preset("budget", "text-generation", "budget/chat");
+    registry.set_preset("budget", "embedding", "budget/embed");
+    registry.set_preset("premium", "agentic", "premium/agent");
+
+    let budget = registry.presets_for_tier("budget").unwrap();
+    assert_eq!(budget.len(), 2);
+    assert_eq!(budget["text-generation"], "budget/chat");
+    assert_eq!(budget["embedding"], "budget/embed");
+
+    assert!(registry.presets_for_tier("free").is_none());
+}
+
+#[test]
+fn set_preset_insert_and_update() {
+    let mut registry = ModelRegistry::new();
+
+    // Insert
+    registry.set_preset("free", "agentic", "old/model");
+    assert_eq!(registry.preset("free", "agentic"), Some("old/model"));
+
+    // Update
+    registry.set_preset("free", "agentic", "new/model");
+    assert_eq!(registry.preset("free", "agentic"), Some("new/model"));
+}
+
+#[test]
+fn merge_presets_incoming_overrides_existing() {
+    let mut registry = ModelRegistry::new();
+    registry.set_preset("free", "text-generation", "old/model");
+    registry.set_preset("free", "embedding", "old/embed");
+
+    let mut incoming = BTreeMap::new();
+    let mut free_map = BTreeMap::new();
+    free_map.insert("text-generation".to_owned(), "new/model".to_owned());
+    free_map.insert("agentic".to_owned(), "new/agent".to_owned());
+    incoming.insert("free".to_owned(), free_map);
+
+    registry.merge_presets(incoming);
+
+    // Overridden
+    assert_eq!(
+        registry.preset("free", "text-generation"),
+        Some("new/model")
+    );
+    // Preserved (not in incoming)
+    assert_eq!(registry.preset("free", "embedding"), Some("old/embed"));
+    // Added
+    assert_eq!(registry.preset("free", "agentic"), Some("new/agent"));
+}
+
+#[test]
+fn embedded_seed_loads_with_presets() {
+    let registry = ModelRegistry::with_embedded_seed();
+
+    // Seed should have presets for all three tiers.
+    assert!(registry.presets_for_tier("free").is_some());
+    assert!(registry.presets_for_tier("budget").is_some());
+    assert!(registry.presets_for_tier("premium").is_some());
+
+    // Check a known preset value.
+    assert_eq!(
+        registry.preset("premium", "text-generation"),
+        Some("anthropic/claude-sonnet-4")
+    );
+    assert_eq!(
+        registry.preset("premium", "embedding"),
+        Some("sentence-transformers/all-MiniLM-L6-v2")
+    );
+}
+
+#[test]
+fn cached_remote_merges_presets_over_seed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("registry.json");
+
+    // Write a cache file with an overriding preset.
+    let mut presets = BTreeMap::new();
+    let mut premium_map = BTreeMap::new();
+    premium_map.insert(
+        "text-generation".to_owned(),
+        "anthropic/claude-opus-4".to_owned(),
+    );
+    presets.insert("premium".to_owned(), premium_map);
+
+    let payload = ratatoskr::registry::remote::RegistryPayload {
+        models: vec![],
+        presets,
+    };
+    ratatoskr::registry::remote::save_cache(&path, &payload).unwrap();
+
+    // Build registry: seed first, then cached remote on top.
+    let registry = ModelRegistry::with_embedded_seed().with_cached_remote(&path);
+
+    // Premium text-generation should be overridden by cache.
+    assert_eq!(
+        registry.preset("premium", "text-generation"),
+        Some("anthropic/claude-opus-4")
+    );
+
+    // Other seed presets should be preserved.
+    assert_eq!(
+        registry.preset("premium", "embedding"),
+        Some("sentence-transformers/all-MiniLM-L6-v2")
+    );
+    assert!(registry.preset("free", "text-generation").is_some());
 }

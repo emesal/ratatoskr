@@ -126,7 +126,7 @@ pub use registry::ModelRegistry;
 pub use registry::remote::RemoteRegistryConfig;
 
 // Re-export version info
-pub use version::{GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};
+pub use version::{BUILD_TIMESTAMP, GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};
 
 // Re-export all types
 pub use types::{
