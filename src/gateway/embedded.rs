@@ -260,7 +260,13 @@ impl ModelGateway for EmbeddedGateway {
 
     #[instrument(name = "gateway.generate", skip(self, prompt, options), fields(model = %options.model))]
     async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
-        self.registry.generate(prompt, options).await
+        let model = self.resolve_model(&options.model)?;
+        if model == options.model {
+            self.registry.generate(prompt, options).await
+        } else {
+            let resolved = GenerateOptions { model, ..options.clone() };
+            self.registry.generate(prompt, &resolved).await
+        }
     }
 
     #[instrument(name = "gateway.generate_stream", skip(self, prompt, options), fields(model = %options.model))]
@@ -269,7 +275,13 @@ impl ModelGateway for EmbeddedGateway {
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
-        self.registry.generate_stream(prompt, options).await
+        let model = self.resolve_model(&options.model)?;
+        if model == options.model {
+            self.registry.generate_stream(prompt, options).await
+        } else {
+            let resolved = GenerateOptions { model, ..options.clone() };
+            self.registry.generate_stream(prompt, &resolved).await
+        }
     }
 
     #[instrument(name = "gateway.classify_stance", skip(self, text, target))]
