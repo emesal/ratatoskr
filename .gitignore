@@ -8,6 +8,7 @@
 *.swp
 *.swo
 *~
+.chibi/
 
 # OS
 .DS_Store
