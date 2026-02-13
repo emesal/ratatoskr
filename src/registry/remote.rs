@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use crate::types::{CostTier, ModelMetadata};
+use crate::types::ModelMetadata;
 use crate::{RatatoskrError, Result};
 
 /// Default URL for the curated remote registry.
@@ -80,7 +80,7 @@ pub struct RemoteRegistry {
     pub models: Vec<ModelMetadata>,
     /// Autoconfig presets: `cost_tier → { capability → model_id }`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub presets: BTreeMap<CostTier, BTreeMap<String, String>>,
+    pub presets: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// Accept both versioned and bare-array formats.
@@ -101,7 +101,7 @@ pub struct RegistryPayload {
     /// Model metadata entries.
     pub models: Vec<ModelMetadata>,
     /// Autoconfig presets (empty if not present or legacy format).
-    pub presets: BTreeMap<CostTier, BTreeMap<String, String>>,
+    pub presets: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// Parse a registry payload, accepting both versioned and legacy formats.

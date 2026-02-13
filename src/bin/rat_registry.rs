@@ -13,7 +13,7 @@ use clap::{Parser, Subcommand};
 use dialoguer::Confirm;
 
 use ratatoskr::registry::remote::RemoteRegistry;
-use ratatoskr::{CostTier, EmbeddedGateway, ModelGateway, PricingInfo, Ratatoskr};
+use ratatoskr::{EmbeddedGateway, ModelGateway, PricingInfo, Ratatoskr};
 
 // ── CLI ─────────────────────────────────────────────────────────────
 
@@ -62,8 +62,8 @@ enum ModelCommand {
 enum PresetCommand {
     /// set a preset entry: tier → slot → model
     Set {
-        /// cost tier (free, budget, premium)
-        tier: CostTier,
+        /// cost tier (e.g. "free", "budget", "premium", or any custom tier)
+        tier: String,
         /// capability slot (e.g. "chat", "agentic", "embed")
         slot: String,
         /// model identifier (must already be in the registry)
@@ -74,7 +74,7 @@ enum PresetCommand {
     /// remove an entire cost tier from presets
     Remove {
         /// cost tier to remove
-        tier: CostTier,
+        tier: String,
     },
 }
 
@@ -268,7 +268,7 @@ fn model_remove(path: &Path, model_id: &str) -> Result<(), Box<dyn std::error::E
 
 fn preset_set(
     path: &Path,
-    tier: CostTier,
+    tier: &str,
     slot: &str,
     model_id: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -294,7 +294,7 @@ fn preset_set(
     }
 
     // warn if tier has no presets yet
-    if !registry.presets.contains_key(&tier)
+    if !registry.presets.contains_key(tier)
         && !confirm(&format!("tier '{tier}' has no presets yet. create it?"))
     {
         println!("aborted.");
@@ -303,7 +303,7 @@ fn preset_set(
 
     registry
         .presets
-        .entry(tier)
+        .entry(tier.to_owned())
         .or_default()
         .insert(slot.to_string(), model_id.to_string());
 
@@ -344,21 +344,21 @@ fn preset_list(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn preset_remove(path: &Path, tier: CostTier) -> Result<(), Box<dyn std::error::Error>> {
+fn preset_remove(path: &Path, tier: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut registry = load_registry(path)?;
 
-    if !registry.presets.contains_key(&tier) {
+    if !registry.presets.contains_key(tier) {
         eprintln!("tier '{tier}' has no presets.");
         process::exit(1);
     }
 
-    let slot_count = registry.presets[&tier].len();
+    let slot_count = registry.presets[tier].len();
     if !confirm(&format!("remove tier '{tier}' ({slot_count} slot(s))?")) {
         println!("aborted.");
         return Ok(());
     }
 
-    registry.presets.remove(&tier);
+    registry.presets.remove(tier);
     save_registry(path, &registry)?;
     println!("removed tier '{tier}'.");
     Ok(())
@@ -386,9 +386,9 @@ async fn main() {
             tier,
             ref slot,
             ref model_id,
-        }) => preset_set(path, tier, slot, model_id),
+        }) => preset_set(path, &tier, slot, model_id),
         Command::Preset(PresetCommand::List) => preset_list(path),
-        Command::Preset(PresetCommand::Remove { tier }) => preset_remove(path, tier),
+        Command::Preset(PresetCommand::Remove { tier }) => preset_remove(path, &tier),
     };
 
     if let Err(e) = result {

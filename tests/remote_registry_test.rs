@@ -7,7 +7,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use ratatoskr::registry::remote::{self, RegistryPayload, RemoteRegistry, RemoteRegistryConfig};
-use ratatoskr::{CostTier, ModelInfo, ModelMetadata};
+use ratatoskr::{ModelInfo, ModelMetadata};
 
 fn sample_metadata(id: &str) -> ModelMetadata {
     ModelMetadata {
@@ -112,11 +112,11 @@ fn presets_survive_save_load_roundtrip() {
     let mut free_map = BTreeMap::new();
     free_map.insert("text-generation".to_owned(), "some/free-model".to_owned());
     free_map.insert("embedding".to_owned(), "embed/model".to_owned());
-    presets.insert(CostTier::Free, free_map);
+    presets.insert("free".to_owned(), free_map);
 
     let mut premium_map = BTreeMap::new();
     premium_map.insert("agentic".to_owned(), "big/model".to_owned());
-    presets.insert(CostTier::Premium, premium_map);
+    presets.insert("premium".to_owned(), premium_map);
 
     let payload = RegistryPayload {
         models: vec![sample_metadata("some/free-model")],
@@ -127,11 +127,17 @@ fn presets_survive_save_load_roundtrip() {
     let loaded = remote::load_cached(&path).unwrap();
     assert_eq!(loaded.presets.len(), 2);
     assert_eq!(
-        loaded.presets[&CostTier::Free]["text-generation"],
+        loaded.presets[&"free".to_owned()]["text-generation"],
         "some/free-model"
     );
-    assert_eq!(loaded.presets[&CostTier::Free]["embedding"], "embed/model");
-    assert_eq!(loaded.presets[&CostTier::Premium]["agentic"], "big/model");
+    assert_eq!(
+        loaded.presets[&"free".to_owned()]["embedding"],
+        "embed/model"
+    );
+    assert_eq!(
+        loaded.presets[&"premium".to_owned()]["agentic"],
+        "big/model"
+    );
 }
 
 #[test]

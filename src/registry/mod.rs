@@ -16,7 +16,6 @@ use std::collections::{BTreeMap, HashMap};
 
 use tracing::{info, warn};
 
-use crate::types::CostTier;
 use crate::{ModelCapability, ModelMetadata};
 
 /// Centralised model metadata registry.
@@ -27,7 +26,7 @@ use crate::{ModelCapability, ModelMetadata};
 pub struct ModelRegistry {
     entries: HashMap<String, ModelMetadata>,
     /// Autoconfig presets: `(cost_tier, capability_string) → model_id`.
-    presets: BTreeMap<CostTier, BTreeMap<String, String>>,
+    presets: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 impl ModelRegistry {
@@ -113,28 +112,28 @@ impl ModelRegistry {
     // ===== Presets =====
 
     /// Look up a preset model ID for the given tier and capability.
-    pub fn preset(&self, tier: CostTier, capability: &str) -> Option<&str> {
+    pub fn preset(&self, tier: &str, capability: &str) -> Option<&str> {
         self.presets
-            .get(&tier)
+            .get(tier)
             .and_then(|cap_map| cap_map.get(capability))
             .map(String::as_str)
     }
 
     /// Get all presets for a cost tier.
-    pub fn presets_for_tier(&self, tier: CostTier) -> Option<&BTreeMap<String, String>> {
-        self.presets.get(&tier)
+    pub fn presets_for_tier(&self, tier: &str) -> Option<&BTreeMap<String, String>> {
+        self.presets.get(tier)
     }
 
     /// Insert or update a single preset.
-    pub fn set_preset(&mut self, tier: CostTier, capability: &str, model_id: &str) {
+    pub fn set_preset(&mut self, tier: &str, capability: &str, model_id: &str) {
         self.presets
-            .entry(tier)
+            .entry(tier.to_owned())
             .or_default()
             .insert(capability.to_owned(), model_id.to_owned());
     }
 
     /// Merge incoming presets (incoming overrides existing per-key).
-    pub fn merge_presets(&mut self, incoming: BTreeMap<CostTier, BTreeMap<String, String>>) {
+    pub fn merge_presets(&mut self, incoming: BTreeMap<String, BTreeMap<String, String>>) {
         for (tier, cap_map) in incoming {
             let existing = self.presets.entry(tier).or_default();
             for (capability, model_id) in cap_map {

@@ -17,7 +17,7 @@ use crate::cache::{ModelCache, ResponseCache};
 use crate::providers::ProviderRegistry;
 use crate::registry::ModelRegistry;
 use crate::{
-    Capabilities, ChatEvent, ChatOptions, ChatResponse, CostTier, GenerateEvent, GenerateOptions,
+    Capabilities, ChatEvent, ChatOptions, ChatResponse, GenerateEvent, GenerateOptions,
     GenerateResponse, Message, ModelCapability, ModelGateway, ModelInfo, ModelMetadata,
     ModelStatus, Result, StanceResult, ToolDefinition,
 };
@@ -336,7 +336,7 @@ impl ModelGateway for EmbeddedGateway {
         Ok(metadata)
     }
 
-    fn resolve_preset(&self, tier: CostTier, capability: &str) -> Option<String> {
+    fn resolve_preset(&self, tier: &str, capability: &str) -> Option<String> {
         self.model_registry
             .preset(tier, capability)
             .map(String::from)

@@ -17,7 +17,7 @@ pub use capabilities::Capabilities;
 pub use generate::{GenerateEvent, GenerateOptions, GenerateResponse};
 pub use inference::{ClassifyResult, Embedding, NliLabel, NliResult};
 pub use message::{Message, MessageContent, Role};
-pub use model::{CostTier, ModelCapability, ModelInfo, ModelMetadata, ModelStatus, PricingInfo};
+pub use model::{ModelCapability, ModelInfo, ModelMetadata, ModelStatus, PricingInfo};
 pub use options::{ChatOptions, ReasoningConfig, ReasoningEffort, ResponseFormat};
 pub use parameter::{ParameterAvailability, ParameterName, ParameterRange};
 pub use response::{ChatEvent, ChatResponse, FinishReason, Usage};
