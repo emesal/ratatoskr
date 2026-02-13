@@ -127,6 +127,21 @@ impl std::fmt::Display for CostTier {
     }
 }
 
+impl std::str::FromStr for CostTier {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "free" => Ok(Self::Free),
+            "budget" => Ok(Self::Budget),
+            "premium" => Ok(Self::Premium),
+            _ => Err(format!(
+                "unknown cost tier: '{s}' (expected: free, budget, premium)"
+            )),
+        }
+    }
+}
+
 impl ModelStatus {
     /// Create an unavailable status with a reason.
     pub fn unavailable(reason: impl Into<String>) -> Self {
