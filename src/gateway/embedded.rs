@@ -377,16 +377,18 @@ impl ModelGateway for EmbeddedGateway {
     }
 
     fn model_metadata(&self, model: &str) -> Option<ModelMetadata> {
+        let resolved = self.resolve_model(model).ok()?;
         // Registry (curated) takes priority over cache (ephemeral)
         self.model_registry
-            .get(model)
+            .get(&resolved)
             .cloned()
-            .or_else(|| self.model_cache.get(model))
+            .or_else(|| self.model_cache.get(&resolved))
     }
 
     #[instrument(name = "gateway.fetch_model_metadata", skip(self))]
     async fn fetch_model_metadata(&self, model: &str) -> Result<ModelMetadata> {
-        let metadata = self.registry.fetch_chat_metadata(model).await?;
+        let resolved = self.resolve_model(model)?;
+        let metadata = self.registry.fetch_chat_metadata(&resolved).await?;
         self.model_cache.insert(metadata.clone());
         Ok(metadata)
     }
