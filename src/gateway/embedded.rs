@@ -57,6 +57,9 @@ pub struct EmbeddedGateway {
 }
 
 impl EmbeddedGateway {
+    /// Prefix for preset model URIs.
+    const PRESET_PREFIX: &str = "ratatoskr:";
+
     /// Create a new EmbeddedGateway with the given registries.
     pub(crate) fn new(
         registry: ProviderRegistry,
@@ -77,6 +80,34 @@ impl EmbeddedGateway {
             tokenizer_registry,
         }
     }
+
+    /// Resolve a model string, expanding `ratatoskr:<tier>/<capability>` preset
+    /// URIs to concrete model IDs. Non-preset strings pass through unchanged.
+    fn resolve_model(&self, model: &str) -> Result<String> {
+        let Some(rest) = model.strip_prefix(Self::PRESET_PREFIX) else {
+            return Ok(model.to_string());
+        };
+
+        let Some((tier, capability)) = rest.split_once('/') else {
+            return Err(crate::RatatoskrError::InvalidInput(format!(
+                "preset URI must be `ratatoskr:<tier>/<capability>`, got `{model}`"
+            )));
+        };
+
+        if tier.is_empty() || capability.is_empty() {
+            return Err(crate::RatatoskrError::InvalidInput(format!(
+                "preset URI must be `ratatoskr:<tier>/<capability>`, got `{model}`"
+            )));
+        }
+
+        self.model_registry
+            .preset(tier, capability)
+            .map(String::from)
+            .ok_or_else(|| crate::RatatoskrError::PresetNotFound {
+                tier: tier.to_string(),
+                capability: capability.to_string(),
+            })
+    }
 }
 
 #[async_trait]
@@ -88,7 +119,16 @@ impl ModelGateway for EmbeddedGateway {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
-        self.registry.chat_stream(messages, tools, options).await
+        let model = self.resolve_model(&options.model)?;
+        if model == options.model {
+            self.registry.chat_stream(messages, tools, options).await
+        } else {
+            let resolved = ChatOptions {
+                model,
+                ..options.clone()
+            };
+            self.registry.chat_stream(messages, tools, &resolved).await
+        }
     }
 
     #[instrument(name = "gateway.chat", skip(self, messages, tools, options), fields(model = %options.model))]
@@ -98,7 +138,16 @@ impl ModelGateway for EmbeddedGateway {
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
     ) -> Result<ChatResponse> {
-        self.registry.chat(messages, tools, options).await
+        let model = self.resolve_model(&options.model)?;
+        if model == options.model {
+            self.registry.chat(messages, tools, options).await
+        } else {
+            let resolved = ChatOptions {
+                model,
+                ..options.clone()
+            };
+            self.registry.chat(messages, tools, &resolved).await
+        }
     }
 
     fn capabilities(&self) -> Capabilities {
@@ -217,7 +266,16 @@ impl ModelGateway for EmbeddedGateway {
 
     #[instrument(name = "gateway.generate", skip(self, prompt, options), fields(model = %options.model))]
     async fn generate(&self, prompt: &str, options: &GenerateOptions) -> Result<GenerateResponse> {
-        self.registry.generate(prompt, options).await
+        let model = self.resolve_model(&options.model)?;
+        if model == options.model {
+            self.registry.generate(prompt, options).await
+        } else {
+            let resolved = GenerateOptions {
+                model,
+                ..options.clone()
+            };
+            self.registry.generate(prompt, &resolved).await
+        }
     }
 
     #[instrument(name = "gateway.generate_stream", skip(self, prompt, options), fields(model = %options.model))]
@@ -226,7 +284,16 @@ impl ModelGateway for EmbeddedGateway {
         prompt: &str,
         options: &GenerateOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
-        self.registry.generate_stream(prompt, options).await
+        let model = self.resolve_model(&options.model)?;
+        if model == options.model {
+            self.registry.generate_stream(prompt, options).await
+        } else {
+            let resolved = GenerateOptions {
+                model,
+                ..options.clone()
+            };
+            self.registry.generate_stream(prompt, &resolved).await
+        }
     }
 
     #[instrument(name = "gateway.classify_stance", skip(self, text, target))]
@@ -322,16 +389,18 @@ impl ModelGateway for EmbeddedGateway {
     }
 
     fn model_metadata(&self, model: &str) -> Option<ModelMetadata> {
+        let resolved = self.resolve_model(model).ok()?;
         // Registry (curated) takes priority over cache (ephemeral)
         self.model_registry
-            .get(model)
+            .get(&resolved)
             .cloned()
-            .or_else(|| self.model_cache.get(model))
+            .or_else(|| self.model_cache.get(&resolved))
     }
 
     #[instrument(name = "gateway.fetch_model_metadata", skip(self))]
     async fn fetch_model_metadata(&self, model: &str) -> Result<ModelMetadata> {
-        let metadata = self.registry.fetch_chat_metadata(model).await?;
+        let resolved = self.resolve_model(model)?;
+        let metadata = self.registry.fetch_chat_metadata(&resolved).await?;
         self.model_cache.insert(metadata.clone());
         Ok(metadata)
     }
@@ -340,5 +409,89 @@ impl ModelGateway for EmbeddedGateway {
         self.model_registry
             .preset(tier, capability)
             .map(String::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::RatatoskrError;
+
+    /// Build a minimal gateway with the embedded seed registry (has presets).
+    fn test_gateway() -> EmbeddedGateway {
+        let registry = crate::providers::ProviderRegistry::new();
+        let model_registry = ModelRegistry::with_embedded_seed();
+        let model_cache = Arc::new(ModelCache::new());
+        EmbeddedGateway::new(
+            registry,
+            model_registry,
+            model_cache,
+            None,
+            #[cfg(feature = "local-inference")]
+            Arc::new(crate::model::ModelManager::new(
+                std::path::PathBuf::from("/tmp"),
+                None,
+            )),
+            #[cfg(feature = "local-inference")]
+            Arc::new(crate::tokenizer::TokenizerRegistry::new()),
+        )
+    }
+
+    #[test]
+    fn test_resolve_preset_uri() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("ratatoskr:free/text-generation").unwrap();
+        assert_eq!(resolved, "google/gemini-2.0-flash-001");
+    }
+
+    #[test]
+    fn test_resolve_preset_uri_agentic() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("ratatoskr:free/agentic").unwrap();
+        assert_eq!(resolved, "google/gemini-2.0-flash-001");
+    }
+
+    #[test]
+    fn test_resolve_preset_uri_premium() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("ratatoskr:premium/agentic").unwrap();
+        assert_eq!(resolved, "anthropic/claude-sonnet-4");
+    }
+
+    #[test]
+    fn test_resolve_plain_model_passthrough() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("anthropic/claude-sonnet-4").unwrap();
+        assert_eq!(resolved, "anthropic/claude-sonnet-4");
+    }
+
+    #[test]
+    fn test_resolve_preset_unknown_tier() {
+        let gw = test_gateway();
+        let err = gw
+            .resolve_model("ratatoskr:nonexistent/agentic")
+            .unwrap_err();
+        assert!(matches!(err, RatatoskrError::PresetNotFound { .. }));
+    }
+
+    #[test]
+    fn test_resolve_preset_unknown_capability() {
+        let gw = test_gateway();
+        let err = gw.resolve_model("ratatoskr:free/nonexistent").unwrap_err();
+        assert!(matches!(err, RatatoskrError::PresetNotFound { .. }));
+    }
+
+    #[test]
+    fn test_resolve_preset_missing_capability() {
+        let gw = test_gateway();
+        let err = gw.resolve_model("ratatoskr:free").unwrap_err();
+        assert!(matches!(err, RatatoskrError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn test_resolve_preset_empty_after_prefix() {
+        let gw = test_gateway();
+        let err = gw.resolve_model("ratatoskr:").unwrap_err();
+        assert!(matches!(err, RatatoskrError::InvalidInput(_)));
     }
 }

@@ -28,6 +28,9 @@ pub enum RatatoskrError {
     #[error("model not found: {0}")]
     ModelNotFound(String),
 
+    #[error("preset not found: tier '{tier}', capability '{capability}'")]
+    PresetNotFound { tier: String, capability: String },
+
     // Streaming errors
     #[error("stream error: {0}")]
     Stream(String),
@@ -116,6 +119,7 @@ impl RatatoskrError {
             Self::Json(_)
             | Self::AuthenticationFailed
             | Self::ModelNotFound(_)
+            | Self::PresetNotFound { .. }
             | Self::InvalidInput(_)
             | Self::NoProvider
             | Self::ModelNotAvailable
