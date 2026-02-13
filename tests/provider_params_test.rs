@@ -6,7 +6,7 @@ use ratatoskr::providers::traits::GenerateProvider;
 
 #[test]
 fn llm_chat_provider_declares_chat_parameters() {
-    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "key", "openrouter");
+    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("key"), "openrouter");
     let params = ChatProvider::supported_chat_parameters(&provider);
     assert!(params.contains(&ParameterName::Temperature));
     assert!(params.contains(&ParameterName::MaxTokens));
@@ -19,7 +19,7 @@ fn llm_chat_provider_declares_chat_parameters() {
 
 #[test]
 fn llm_chat_provider_declares_generate_parameters() {
-    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "key", "openrouter");
+    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("key"), "openrouter");
     let params = GenerateProvider::supported_generate_parameters(&provider);
     assert!(params.contains(&ParameterName::Temperature));
     assert!(params.contains(&ParameterName::MaxTokens));
@@ -34,7 +34,7 @@ fn default_supported_parameters_is_empty() {
     // Verify the default trait implementation returns empty
     // (indirectly tested — any provider that doesn't override returns [])
     // We verify LlmChatProvider explicitly returns non-empty above.
-    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "key", "openrouter");
+    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("key"), "openrouter");
     let chat_params = ChatProvider::supported_chat_parameters(&provider);
     let gen_params = GenerateProvider::supported_generate_parameters(&provider);
     assert!(

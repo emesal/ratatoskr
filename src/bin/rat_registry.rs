@@ -97,7 +97,7 @@ fn build_gateway() -> Result<EmbeddedGateway, Box<dyn std::error::Error>> {
     let mut builder = Ratatoskr::builder();
 
     if let Ok(key) = env::var("OPENROUTER_API_KEY") {
-        builder = builder.openrouter(key);
+        builder = builder.openrouter(Some(key));
     }
     if let Ok(key) = env::var("HF_API_KEY") {
         builder = builder.huggingface(key);

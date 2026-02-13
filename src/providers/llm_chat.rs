@@ -36,11 +36,11 @@ use super::traits::{ChatProvider, GenerateProvider};
 /// use llm::builder::LLMBackend;
 /// use ratatoskr::providers::LlmChatProvider;
 ///
-/// let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "your-key", "openrouter");
+/// let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("your-key"), "openrouter");
 /// ```
 pub struct LlmChatProvider {
     backend: LLMBackend,
-    api_key: String,
+    api_key: Option<String>,
     name: String,
     /// Ollama base URL (only used for Ollama backend)
     ollama_url: Option<String>,
@@ -58,9 +58,13 @@ impl LlmChatProvider {
     /// # Arguments
     ///
     /// * `backend` - The LLM backend to use (OpenRouter, Anthropic, etc.)
-    /// * `api_key` - API key for the backend
+    /// * `api_key` - API key for the backend (`None` for keyless access)
     /// * `name` - Human-readable name for logging/debugging (e.g., "openrouter", "anthropic")
-    pub fn new(backend: LLMBackend, api_key: impl Into<String>, name: impl Into<String>) -> Self {
+    pub fn new(
+        backend: LLMBackend,
+        api_key: Option<impl Into<String>>,
+        name: impl Into<String>,
+    ) -> Self {
         Self::with_http_client(backend, api_key, name, reqwest::Client::new())
     }
 
@@ -70,13 +74,13 @@ impl LlmChatProvider {
     /// share a connection pool (e.g. from the builder).
     pub fn with_http_client(
         backend: LLMBackend,
-        api_key: impl Into<String>,
+        api_key: Option<impl Into<String>>,
         name: impl Into<String>,
         http_client: reqwest::Client,
     ) -> Self {
         Self {
             backend,
-            api_key: api_key.into(),
+            api_key: api_key.map(|k| k.into()),
             name: name.into(),
             ollama_url: None,
             timeout_secs: 120,
@@ -117,9 +121,11 @@ impl LlmChatProvider {
 
         let mut builder = LLMBuilder::new()
             .backend(self.backend.clone())
-            .api_key(&self.api_key)
             .model(&options.model)
             .timeout_seconds(self.timeout_secs);
+        if let Some(ref key) = self.api_key {
+            builder = builder.api_key(key);
+        }
 
         // Add system prompt if present
         if let Some(sys) = system_prompt {
@@ -354,10 +360,11 @@ impl ChatProvider for LlmChatProvider {
             .as_deref()
             .unwrap_or("https://openrouter.ai");
         let url = format!("{base}/api/v1/models");
-        let response = self
-            .http_client
-            .get(url)
-            .bearer_auth(&self.api_key)
+        let mut request = self.http_client.get(url);
+        if let Some(ref key) = self.api_key {
+            request = request.bearer_auth(key);
+        }
+        let response = request
             .send()
             .await
             .map_err(|e| RatatoskrError::Http(e.to_string()))?;
@@ -488,13 +495,14 @@ mod tests {
 
     #[test]
     fn test_provider_name() {
-        let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "test-key", "test-provider");
+        let provider =
+            LlmChatProvider::new(LLMBackend::OpenRouter, Some("test-key"), "test-provider");
         assert_eq!(ChatProvider::name(&provider), "test-provider");
     }
 
     #[test]
     fn test_ollama_url_builder() {
-        let provider = LlmChatProvider::new(LLMBackend::Ollama, "ollama", "ollama")
+        let provider = LlmChatProvider::new(LLMBackend::Ollama, Some("ollama"), "ollama")
             .ollama_url("http://localhost:11434");
         assert_eq!(
             provider.ollama_url,
@@ -504,8 +512,8 @@ mod tests {
 
     #[test]
     fn test_timeout_builder() {
-        let provider =
-            LlmChatProvider::new(LLMBackend::OpenRouter, "key", "openrouter").timeout_secs(60);
+        let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("key"), "openrouter")
+            .timeout_secs(60);
         assert_eq!(provider.timeout_secs, 60);
     }
 }

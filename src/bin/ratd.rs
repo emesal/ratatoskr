@@ -94,11 +94,9 @@ fn build_gateway(
 ) -> Result<ratatoskr::EmbeddedGateway, ratatoskr::RatatoskrError> {
     let mut builder = Ratatoskr::builder();
 
-    // Configure API providers — only register when section is present AND key is available
+    // OpenRouter: register when section is present; key is optional (keyless = free tier)
     if config.providers.openrouter.is_some() {
-        if let Some(key) = secrets.api_key("openrouter") {
-            builder = builder.openrouter(key);
-        }
+        builder = builder.openrouter(secrets.api_key("openrouter"));
     }
 
     if config.providers.anthropic.is_some() {

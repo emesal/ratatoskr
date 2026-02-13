@@ -228,7 +228,7 @@ async fn test_live_generate_stream_openrouter() {
         std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set for live tests");
 
     let gateway = Ratatoskr::builder()
-        .openrouter(api_key)
+        .openrouter(Some(api_key))
         .build()
         .expect("Failed to build gateway");
 

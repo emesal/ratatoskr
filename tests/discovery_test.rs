@@ -18,7 +18,7 @@ use ratatoskr::{
 
 #[test]
 fn builder_enables_discovery_by_default() {
-    let gw = Ratatoskr::builder().openrouter("test-key").build();
+    let gw = Ratatoskr::builder().openrouter(Some("test-key")).build();
     assert!(gw.is_ok());
 }
 
@@ -29,7 +29,7 @@ fn builder_accepts_custom_discovery_config() {
         .ttl(Duration::from_secs(3600));
 
     let gw = Ratatoskr::builder()
-        .openrouter("test-key")
+        .openrouter(Some("test-key"))
         .discovery(config)
         .build();
     assert!(gw.is_ok());
@@ -38,7 +38,7 @@ fn builder_accepts_custom_discovery_config() {
 #[test]
 fn builder_disable_parameter_discovery() {
     let gw = Ratatoskr::builder()
-        .openrouter("test-key")
+        .openrouter(Some("test-key"))
         .disable_parameter_discovery()
         .build();
     assert!(gw.is_ok());
@@ -51,7 +51,7 @@ fn builder_disable_parameter_discovery() {
 /// Create a registry with an OpenRouter provider, Error validation, and a
 /// wired discovery cache.
 fn registry_with_discovery() -> (ProviderRegistry, Arc<ParameterDiscoveryCache>) {
-    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "test-key", "openrouter");
+    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("test-key"), "openrouter");
     let cache = Arc::new(ParameterDiscoveryCache::new(&DiscoveryConfig::new()));
 
     let mut registry = ProviderRegistry::new();
@@ -94,7 +94,7 @@ async fn discovery_cache_not_consulted_when_disabled() {
     // Registry without discovery cache — temperature IS statically supported by
     // LlmChatProvider. Without a discovery cache, it should pass validation
     // (and fail later at the API level).
-    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "test-key", "openrouter");
+    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("test-key"), "openrouter");
     let mut registry = ProviderRegistry::new();
     registry.add_chat(Arc::new(provider));
     registry.set_validation_policy(ParameterValidationPolicy::Error);
@@ -237,7 +237,7 @@ fn list_discoveries_returns_all_active() {
 fn static_validation_still_works_with_discovery_cache() {
     // Sanity check: statically unsupported params (top_k for LlmChatProvider)
     // are still rejected even when discovery cache is empty.
-    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "test-key", "openrouter");
+    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("test-key"), "openrouter");
     let cache = Arc::new(ParameterDiscoveryCache::new(&DiscoveryConfig::new()));
 
     let mut registry = ProviderRegistry::new();

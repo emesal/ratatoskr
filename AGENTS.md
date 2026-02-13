@@ -144,7 +144,7 @@ contrib/
 
 ```rust
 Ratatoskr::builder()
-    .openrouter(api_key)
+    .openrouter(Some(api_key))         // or None::<String> for keyless free-tier
     .anthropic(anthropic_key)
     .ollama("http://localhost:11434")
     .huggingface(hf_key)              // requires `huggingface` feature

@@ -252,7 +252,7 @@ async fn test_live_gateway_count_tokens() {
     use ratatoskr::{ModelGateway, Ratatoskr};
 
     let gateway = Ratatoskr::builder()
-        .openrouter("dummy-key-for-chat") // Need at least one provider
+        .openrouter(Some("dummy-key-for-chat")) // Need at least one provider
         .build()
         .expect("Failed to build gateway");
 

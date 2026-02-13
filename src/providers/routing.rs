@@ -13,7 +13,7 @@
 //!
 //! ```rust,ignore
 //! Ratatoskr::builder()
-//!     .openrouter(key)
+//!     .openrouter(Some(key))
 //!     .anthropic(anthropic_key)
 //!     .routing(RoutingConfig::new().chat("anthropic"))
 //!     .build()?
