@@ -25,7 +25,7 @@ pub enum RatatoskrError {
     #[error("authentication failed")]
     AuthenticationFailed,
 
-        #[error("model not found: {0}")]
+    #[error("model not found: {0}")]
     ModelNotFound(String),
 
     #[error("preset not found: tier '{tier}', capability '{capability}'")]

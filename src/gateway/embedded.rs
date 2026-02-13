@@ -123,7 +123,10 @@ impl ModelGateway for EmbeddedGateway {
         if model == options.model {
             self.registry.chat_stream(messages, tools, options).await
         } else {
-            let resolved = ChatOptions { model, ..options.clone() };
+            let resolved = ChatOptions {
+                model,
+                ..options.clone()
+            };
             self.registry.chat_stream(messages, tools, &resolved).await
         }
     }
@@ -139,7 +142,10 @@ impl ModelGateway for EmbeddedGateway {
         if model == options.model {
             self.registry.chat(messages, tools, options).await
         } else {
-            let resolved = ChatOptions { model, ..options.clone() };
+            let resolved = ChatOptions {
+                model,
+                ..options.clone()
+            };
             self.registry.chat(messages, tools, &resolved).await
         }
     }
@@ -264,7 +270,10 @@ impl ModelGateway for EmbeddedGateway {
         if model == options.model {
             self.registry.generate(prompt, options).await
         } else {
-            let resolved = GenerateOptions { model, ..options.clone() };
+            let resolved = GenerateOptions {
+                model,
+                ..options.clone()
+            };
             self.registry.generate(prompt, &resolved).await
         }
     }
@@ -279,7 +288,10 @@ impl ModelGateway for EmbeddedGateway {
         if model == options.model {
             self.registry.generate_stream(prompt, options).await
         } else {
-            let resolved = GenerateOptions { model, ..options.clone() };
+            let resolved = GenerateOptions {
+                model,
+                ..options.clone()
+            };
             self.registry.generate_stream(prompt, &resolved).await
         }
     }
@@ -403,7 +415,7 @@ impl ModelGateway for EmbeddedGateway {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Ratatoskr, RatatoskrError};
+    use crate::RatatoskrError;
 
     /// Build a minimal gateway with the embedded seed registry (has presets).
     fn test_gateway() -> EmbeddedGateway {
@@ -416,7 +428,10 @@ mod tests {
             model_cache,
             None,
             #[cfg(feature = "local-inference")]
-            Arc::new(crate::model::ModelManager::new(std::path::PathBuf::from("/tmp"), None)),
+            Arc::new(crate::model::ModelManager::new(
+                std::path::PathBuf::from("/tmp"),
+                None,
+            )),
             #[cfg(feature = "local-inference")]
             Arc::new(crate::tokenizer::TokenizerRegistry::new()),
         )
@@ -453,7 +468,9 @@ mod tests {
     #[test]
     fn test_resolve_preset_unknown_tier() {
         let gw = test_gateway();
-        let err = gw.resolve_model("ratatoskr:nonexistent/agentic").unwrap_err();
+        let err = gw
+            .resolve_model("ratatoskr:nonexistent/agentic")
+            .unwrap_err();
         assert!(matches!(err, RatatoskrError::PresetNotFound { .. }));
     }
 

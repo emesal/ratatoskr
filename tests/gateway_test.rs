@@ -130,5 +130,8 @@ fn test_preset_uri_resolve_preset_still_works() {
 fn test_preset_uri_unknown_tier_returns_error() {
     let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
     let result = gateway.model_metadata("ratatoskr:nonexistent/agentic");
-    assert!(result.is_none(), "unknown preset tier should return None from model_metadata");
+    assert!(
+        result.is_none(),
+        "unknown preset tier should return None from model_metadata"
+    );
 }
