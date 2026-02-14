@@ -31,6 +31,7 @@ impl Ratatoskr {
 
 /// Builder for configuring gateway instances.
 pub struct RatatoskrBuilder {
+    openrouter_enabled: bool,
     openrouter_key: Option<String>,
     anthropic_key: Option<String>,
     openai_key: Option<String>,
@@ -64,6 +65,7 @@ pub struct RatatoskrBuilder {
 impl RatatoskrBuilder {
     pub fn new() -> Self {
         Self {
+            openrouter_enabled: false,
             openrouter_key: None,
             anthropic_key: None,
             openai_key: None,
@@ -96,8 +98,12 @@ impl RatatoskrBuilder {
     }
 
     /// Configure OpenRouter provider (routes to many models).
-    pub fn openrouter(mut self, api_key: impl Into<String>) -> Self {
-        self.openrouter_key = Some(api_key.into());
+    ///
+    /// Pass `Some(key)` for authenticated access or `None` for keyless
+    /// free-tier access.
+    pub fn openrouter(mut self, api_key: Option<impl Into<String>>) -> Self {
+        self.openrouter_key = api_key.map(|k| k.into());
+        self.openrouter_enabled = true;
         self
     }
 
@@ -217,7 +223,7 @@ impl RatatoskrBuilder {
     /// # use ratatoskr::{Ratatoskr, CacheConfig};
     /// # use std::time::Duration;
     /// Ratatoskr::builder()
-    ///     .openrouter("key")
+    ///     .openrouter(Some("key"))
     ///     .response_cache(CacheConfig::new().max_entries(10_000).ttl(Duration::from_secs(3600)))
     ///     .build()?;
     /// ```
@@ -267,7 +273,7 @@ impl RatatoskrBuilder {
     /// ```rust,ignore
     /// # use ratatoskr::{Ratatoskr, RoutingConfig};
     /// Ratatoskr::builder()
-    ///     .openrouter("key")
+    ///     .openrouter(Some("key"))
     ///     .anthropic("key")
     ///     .routing(RoutingConfig::new().chat("anthropic").embed("local"))
     ///     .build()?;
@@ -292,7 +298,7 @@ impl RatatoskrBuilder {
 
     /// Check if at least one chat provider is configured.
     fn has_chat_provider(&self) -> bool {
-        self.openrouter_key.is_some()
+        self.openrouter_enabled
             || self.anthropic_key.is_some()
             || self.openai_key.is_some()
             || self.google_key.is_some()
@@ -413,14 +419,22 @@ impl RatatoskrBuilder {
         // Helper: build an LlmChatProvider with the shared http client
         let make_provider = |backend, key: String, name: &str| -> Arc<LlmChatProvider> {
             Arc::new(
-                LlmChatProvider::with_http_client(backend, key, name, http_client.clone())
+                LlmChatProvider::with_http_client(backend, Some(key), name, http_client.clone())
                     .timeout_secs(timeout_secs),
             )
         };
 
         // OpenRouter (routes to many models, good default)
-        if let Some(ref key) = self.openrouter_key {
-            let provider = make_provider(LLMBackend::OpenRouter, key.clone(), "openrouter");
+        if self.openrouter_enabled {
+            let provider = Arc::new(
+                LlmChatProvider::with_http_client(
+                    LLMBackend::OpenRouter,
+                    self.openrouter_key.clone(),
+                    "openrouter",
+                    http_client.clone(),
+                )
+                .timeout_secs(timeout_secs),
+            );
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
@@ -451,7 +465,7 @@ impl RatatoskrBuilder {
             let provider = Arc::new(
                 LlmChatProvider::with_http_client(
                     LLMBackend::Ollama,
-                    "ollama",
+                    Some("ollama"),
                     "ollama",
                     http_client.clone(),
                 )

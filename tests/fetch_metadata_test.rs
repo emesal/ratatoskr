@@ -8,8 +8,8 @@ use ratatoskr::{ModelCapability, ModelGateway, ParameterName, Ratatoskr};
 
 use llm::builder::LLMBackend;
 use std::sync::Arc;
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::matchers::{header, method, path};
+use wiremock::{Match, Mock, MockServer, ResponseTemplate};
 
 /// Sample OpenRouter `/api/v1/models` response with one model.
 fn sample_models_json() -> serde_json::Value {
@@ -32,7 +32,7 @@ fn sample_models_json() -> serde_json::Value {
 /// Build a `ProviderRegistry` with a single OpenRouter provider pointed at wiremock.
 fn registry_with_mock(mock_url: &str) -> ProviderRegistry {
     let provider = Arc::new(
-        LlmChatProvider::new(LLMBackend::OpenRouter, "test-key", "openrouter")
+        LlmChatProvider::new(LLMBackend::OpenRouter, Some("test-key"), "openrouter")
             .models_base_url(mock_url),
     );
     let mut registry = ProviderRegistry::new();
@@ -114,7 +114,7 @@ async fn fetch_metadata_non_openrouter_returns_no_provider() {
     // Anthropic backend should return ModelNotAvailable, causing NoProvider
     let provider = Arc::new(LlmChatProvider::new(
         LLMBackend::Anthropic,
-        "test-key",
+        Some("test-key"),
         "anthropic",
     ));
     let mut registry = ProviderRegistry::new();
@@ -130,7 +130,10 @@ async fn embedded_gateway_fetch_populates_cache() {
     // Use a real EmbeddedGateway but we can't inject wiremock URL through the builder.
     // Instead, verify the cache interaction: model_metadata returns None before fetch,
     // and the trait method exists (compile-time check).
-    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("fake-key"))
+        .build()
+        .unwrap();
 
     // Unknown model should not be in registry or cache
     assert!(gateway.model_metadata("test-vendor/test-model").is_none());
@@ -146,11 +149,78 @@ async fn registry_priority_curated_over_cache() {
     // model_metadata prefers ModelRegistry (curated) over ModelCache.
     // claude-sonnet-4 is in the embedded seed, so even after a fetch that
     // might cache different data, model_metadata should return the seed entry.
-    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("fake-key"))
+        .build()
+        .unwrap();
 
     let metadata = gateway
         .model_metadata("anthropic/claude-sonnet-4")
         .expect("should find in registry");
 
     assert_eq!(metadata.info.id, "anthropic/claude-sonnet-4");
+}
+
+// -- Keyless vs keyed auth header tests --
+
+/// Matcher that asserts the `Authorization` header is absent.
+struct NoAuthHeader;
+
+impl Match for NoAuthHeader {
+    fn matches(&self, request: &wiremock::Request) -> bool {
+        !request.headers.contains_key("Authorization")
+    }
+}
+
+/// Build a keyless registry with a single OpenRouter provider pointed at wiremock.
+fn keyless_registry_with_mock(mock_url: &str) -> ProviderRegistry {
+    let provider = Arc::new(
+        LlmChatProvider::new(LLMBackend::OpenRouter, None::<String>, "openrouter")
+            .models_base_url(mock_url),
+    );
+    let mut registry = ProviderRegistry::new();
+    registry.add_chat(provider);
+    registry
+}
+
+#[tokio::test]
+async fn fetch_metadata_keyless_sends_no_auth_header() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v1/models"))
+        .and(NoAuthHeader)
+        .respond_with(ResponseTemplate::new(200).set_body_json(sample_models_json()))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let registry = keyless_registry_with_mock(&server.uri());
+    let metadata = registry
+        .fetch_chat_metadata("test-vendor/test-model")
+        .await
+        .expect("keyless fetch should succeed");
+
+    assert_eq!(metadata.info.id, "test-vendor/test-model");
+}
+
+#[tokio::test]
+async fn fetch_metadata_keyed_sends_auth_header() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v1/models"))
+        .and(header("Authorization", "Bearer test-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(sample_models_json()))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let registry = registry_with_mock(&server.uri());
+    let metadata = registry
+        .fetch_chat_metadata("test-vendor/test-model")
+        .await
+        .expect("keyed fetch should succeed");
+
+    assert_eq!(metadata.info.id, "test-vendor/test-model");
 }

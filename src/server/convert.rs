@@ -58,7 +58,7 @@ impl From<proto::ToolCall> for ToolCall {
 impl From<proto::ToolDefinition> for ToolDefinition {
     fn from(p: proto::ToolDefinition) -> Self {
         ToolDefinition {
-            name: p.name,
+            name: p.name.clone(),
             description: p.description,
             parameters: serde_json::from_str(&p.parameters_json).unwrap_or_else(|e| {
                 tracing::warn!(

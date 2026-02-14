@@ -34,7 +34,7 @@ async fn start_test_server() -> String {
     // Minimal gateway with a fake API key — won't make real calls
     // but is enough for health, models, and capabilities tests.
     let gateway = Ratatoskr::builder()
-        .openrouter("test-key")
+        .openrouter(Some("test-key"))
         .build()
         .expect("failed to build test gateway");
 

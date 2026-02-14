@@ -213,7 +213,7 @@ async fn batch_insert_then_individual_hit() {
 #[test]
 fn builder_with_response_cache_compiles() {
     let gateway = ratatoskr::Ratatoskr::builder()
-        .openrouter("fake-key")
+        .openrouter(Some("fake-key"))
         .response_cache(
             CacheConfig::new()
                 .max_entries(100)
@@ -227,7 +227,7 @@ fn builder_with_response_cache_compiles() {
 #[test]
 fn builder_without_response_cache_compiles() {
     let gateway = ratatoskr::Ratatoskr::builder()
-        .openrouter("fake-key")
+        .openrouter(Some("fake-key"))
         .build();
 
     assert!(gateway.is_ok());

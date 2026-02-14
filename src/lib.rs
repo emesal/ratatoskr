@@ -12,7 +12,7 @@
 //! #[tokio::main]
 //! async fn main() -> ratatoskr::Result<()> {
 //!     let gateway = Ratatoskr::builder()
-//!         .openrouter("sk-or-your-key")
+//!         .openrouter(Some("sk-or-your-key"))
 //!         .build()?;
 //!
 //!     let response = gateway.chat(

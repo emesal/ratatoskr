@@ -9,7 +9,9 @@ fn test_builder_no_provider_error() {
 #[test]
 fn test_builder_with_openrouter() {
     // Test that builder accepts the key and can build (no network call)
-    let gateway = Ratatoskr::builder().openrouter("sk-or-test-key").build();
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("sk-or-test-key"))
+        .build();
 
     // Should succeed since we have a provider configured
     assert!(gateway.is_ok());
@@ -33,7 +35,7 @@ fn test_builder_with_huggingface() {
 #[cfg(feature = "huggingface")]
 fn test_builder_openrouter_and_huggingface() {
     let gateway = Ratatoskr::builder()
-        .openrouter("sk-or-test")
+        .openrouter(Some("sk-or-test"))
         .huggingface("hf_test")
         .build()
         .expect("should build with both providers");
@@ -47,7 +49,10 @@ fn test_builder_openrouter_and_huggingface() {
 
 #[test]
 fn test_embedded_gateway_model_metadata() {
-    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("fake-key"))
+        .build()
+        .unwrap();
 
     // the embedded seed should provide metadata
     let metadata = gateway.model_metadata("anthropic/claude-sonnet-4");
@@ -67,7 +72,10 @@ fn test_embedded_gateway_model_metadata() {
 
 #[test]
 fn test_embedded_gateway_model_metadata_unknown() {
-    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("fake-key"))
+        .build()
+        .unwrap();
 
     assert!(gateway.model_metadata("totally-fake-model-xyz").is_none());
 }
@@ -84,7 +92,7 @@ fn test_builder_methods_compile() {
     // We don't actually build because that requires chat OR local providers,
     // and we don't want to load models in unit tests.
     let _builder = Ratatoskr::builder()
-        .openrouter("test-key")
+        .openrouter(Some("test-key"))
         .local_embeddings(LocalEmbeddingModel::AllMiniLmL6V2)
         .local_nli(LocalNliModel::NliDebertaV3Small)
         .device(Device::Cpu)
@@ -102,7 +110,10 @@ fn test_builder_methods_compile() {
 
 #[test]
 fn test_preset_uri_resolves_in_model_metadata() {
-    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("fake-key"))
+        .build()
+        .unwrap();
 
     // preset URI should resolve to the same metadata as the concrete model
     let via_preset = gateway.model_metadata("ratatoskr:free/text-generation");
@@ -118,7 +129,10 @@ fn test_preset_uri_resolves_in_model_metadata() {
 
 #[test]
 fn test_preset_uri_resolve_preset_still_works() {
-    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("fake-key"))
+        .build()
+        .unwrap();
 
     // the resolve_preset trait method should still work independently
     let model = gateway.resolve_preset("free", "agentic");
@@ -127,8 +141,31 @@ fn test_preset_uri_resolve_preset_still_works() {
 }
 
 #[test]
+fn test_builder_keyless_openrouter() {
+    // keyless openrouter should build successfully
+    let gateway = Ratatoskr::builder().openrouter(None::<String>).build();
+    assert!(gateway.is_ok(), "keyless openrouter should build");
+}
+
+#[test]
+fn test_builder_keyless_openrouter_has_chat() {
+    let gateway = Ratatoskr::builder()
+        .openrouter(None::<String>)
+        .build()
+        .unwrap();
+    let caps = gateway.capabilities();
+    assert!(
+        caps.chat,
+        "keyless openrouter should provide chat capability"
+    );
+}
+
+#[test]
 fn test_preset_uri_unknown_tier_returns_error() {
-    let gateway = Ratatoskr::builder().openrouter("fake-key").build().unwrap();
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("fake-key"))
+        .build()
+        .unwrap();
     let result = gateway.model_metadata("ratatoskr:nonexistent/agentic");
     assert!(
         result.is_none(),

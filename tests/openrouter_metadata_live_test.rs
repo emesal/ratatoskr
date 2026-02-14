@@ -8,7 +8,7 @@ use ratatoskr::{ModelGateway, ParameterName, Ratatoskr};
 fn build_gateway() -> impl ModelGateway {
     let key = std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
     Ratatoskr::builder()
-        .openrouter(key)
+        .openrouter(Some(key))
         .build()
         .expect("failed to build gateway")
 }

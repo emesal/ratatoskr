@@ -100,7 +100,7 @@ fn unsupported_parameter_error_accessible() {
 
 /// Helper to create a registry with a provider and validation policy.
 fn registry_with_policy(policy: ParameterValidationPolicy) -> ProviderRegistry {
-    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, "test-key", "openrouter");
+    let provider = LlmChatProvider::new(LLMBackend::OpenRouter, Some("test-key"), "openrouter");
     let mut registry = ProviderRegistry::new();
     registry.add_chat(Arc::new(provider));
     registry.set_validation_policy(policy);
