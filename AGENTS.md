@@ -157,6 +157,7 @@ Ratatoskr::builder()
     .response_cache(CacheConfig::default())          // phase 7: cache embed/NLI responses
     .discovery(DiscoveryConfig::new().ttl(Duration::from_secs(12 * 3600)))  // optional: tune discovery
     // .disable_parameter_discovery()                 // opt-out: disable runtime discovery
+    // .disable_registry_refresh()                      // opt-out: no background registry refresh
     .registry_url("https://...")                     // optional: remote registry (loads cached only)
     // .remote_registry(RemoteRegistryConfig::default()) // full control over URL + cache path
     .build()?
