@@ -492,9 +492,12 @@ impl RatatoskrBuilder {
         }
 
         let mut model_registry = crate::registry::ModelRegistry::with_embedded_seed();
-        if let Some(ref config) = self.registry_config {
-            model_registry = model_registry.with_cached_remote(&config.cache_path);
-        }
+        let cache_path = self
+            .registry_config
+            .as_ref()
+            .map(|c| c.cache_path.clone())
+            .unwrap_or_else(|| RemoteRegistryConfig::default().cache_path);
+        model_registry = model_registry.with_cached_remote(&cache_path);
         let model_cache = Arc::new(ModelCache::new());
 
         let response_cache = self
