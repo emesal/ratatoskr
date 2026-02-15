@@ -28,7 +28,7 @@ registry-tool = ["dep:clap", "dep:dialoguer", "dep:tracing-subscriber",
 [dependencies]
 async-trait = "0.1"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
-llm = { git = "https://github.com/emesal/llm.git", rev = "a719365f6ce9a0ca31e4c7774b77b3bad57035f6" }
+llm = { git = "https://github.com/emesal/llm.git", branch = "emesal/ratatoskr" }
 pin-project-lite = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
