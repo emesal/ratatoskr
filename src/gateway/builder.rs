@@ -520,22 +520,23 @@ impl RatatoskrBuilder {
         // Fire-and-forget background refresh: current instance uses whatever
         // is cached, next startup benefits from the fresh fetch.
         if !self.registry_refresh_disabled
-            && let Ok(_handle) = tokio::runtime::Handle::try_current() {
-                let config = self.registry_config.clone().unwrap_or_default();
-                tokio::spawn(async move {
-                    match crate::registry::remote::update_registry(&config).await {
-                        Ok(payload) => {
-                            tracing::info!(
-                                count = payload.models.len(),
-                                "background registry refresh complete"
-                            );
-                        }
-                        Err(e) => {
-                            tracing::warn!(error = %e, "background registry refresh failed");
-                        }
+            && let Ok(_handle) = tokio::runtime::Handle::try_current()
+        {
+            let config = self.registry_config.clone().unwrap_or_default();
+            tokio::spawn(async move {
+                match crate::registry::remote::update_registry(&config).await {
+                    Ok(payload) => {
+                        tracing::info!(
+                            count = payload.models.len(),
+                            "background registry refresh complete"
+                        );
                     }
-                });
-            }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "background registry refresh failed");
+                    }
+                }
+            });
+        }
 
         Ok(EmbeddedGateway::new(
             registry,
