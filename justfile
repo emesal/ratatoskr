@@ -37,6 +37,10 @@ default:
   @echo "📚 Documentation:"
   @echo "  just rustdoc              → Build & open docs locally"
   @echo ""
+  @echo "📦 Registry:"
+  @echo "  just sync-seed            → Sync embedded seed from live registry"
+  @echo "  just check-seed           → Verify seed matches live registry (CI)"
+  @echo ""
   @echo "🛠️  Utility:"
   @echo "  just clean                → Remove build artifacts"
   @echo "  just rebuild              → Clean + rebuild release"
@@ -238,7 +242,7 @@ test:
   cargo nextest run --all-targets --locked
 
 # Full pre-push check (format, clippy, tests)
-pre-push: check-freeze lint test
+pre-push: check-freeze check-seed lint test
   @echo "✓ All checks passed, ready to push"
 
 # Push with freeze check and all validations
@@ -381,6 +385,33 @@ list-features:
   @echo ""
   @echo "=== Bugfix tags ==="
   @git tag -l 'bugfix/*'
+
+# === Registry Seed ===
+
+# registry source of truth
+registry_url := "https://raw.githubusercontent.com/emesal/ratatoskr-registry/main/registry.json"
+seed_path    := "src/registry/seed.json"
+
+# Sync embedded seed from the live registry
+sync-seed:
+  #!/usr/bin/env bash
+  set -e
+  curl -fsSL "{{registry_url}}" -o "{{seed_path}}"
+  echo "✓ seed.json synced from remote registry"
+
+# Check that embedded seed matches the live registry (for CI)
+check-seed:
+  #!/usr/bin/env bash
+  set -e
+  LIVE=$(mktemp)
+  trap 'rm -f "$LIVE"' EXIT
+  curl -fsSL "{{registry_url}}" -o "$LIVE"
+  if ! diff -q "$LIVE" "{{seed_path}}" >/dev/null 2>&1; then
+    echo "❌ seed.json is stale — run 'just sync-seed' to update"
+    diff --color=auto "$LIVE" "{{seed_path}}" || true
+    exit 1
+  fi
+  echo "✓ seed.json matches remote registry"
 
 # === Utility Commands ===
 

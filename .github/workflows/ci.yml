@@ -18,6 +18,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  check-seed:
+    name: Check registry seed
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify seed.json matches remote registry
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/emesal/ratatoskr-registry/main/registry.json" -o /tmp/registry.json
+          diff -q /tmp/registry.json src/registry/seed.json || {
+            echo "::error::seed.json is stale — run 'just sync-seed' to update"
+            diff --color=auto /tmp/registry.json src/registry/seed.json || true
+            exit 1
+          }
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

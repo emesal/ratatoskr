@@ -1,195 +1,529 @@
 {
   "version": 1,
   "models": [
-  {
-    "info": {
-      "id": "anthropic/claude-opus-4",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 200000,
-      "dimensions": null
+    {
+      "info": {
+        "id": "anthropic/claude-sonnet-4",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 200000,
+        "dimensions": null
+      },
+      "parameters": {
+        "top_k": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0
+          }
+        },
+        "parallel_tool_calls": {
+          "availability": "mutable",
+          "range": {}
+        },
+        "reasoning": {
+          "availability": "mutable",
+          "range": {}
+        },
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        },
+        "stop": {
+          "availability": "mutable",
+          "range": {}
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        },
+        "max_tokens": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0,
+            "max": 16384.0
+          }
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 3.0,
+        "completion_cost_per_mtok": 15.0
+      },
+      "max_output_tokens": 16384
     },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
-      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 32000.0 } },
-      "stop": { "availability": "mutable", "range": {} },
-      "reasoning": { "availability": "mutable", "range": {} },
-      "parallel_tool_calls": { "availability": "mutable", "range": {} }
+    {
+      "info": {
+        "id": "anthropic/claude-haiku-3.5",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 200000,
+        "dimensions": null
+      },
+      "parameters": {
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        },
+        "parallel_tool_calls": {
+          "availability": "mutable",
+          "range": {}
+        },
+        "max_tokens": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0,
+            "max": 8192.0
+          }
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "top_k": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0
+          }
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 0.8,
+        "completion_cost_per_mtok": 4.0
+      },
+      "max_output_tokens": 8192
     },
-    "pricing": { "prompt_cost_per_mtok": 15.0, "completion_cost_per_mtok": 75.0 },
-    "max_output_tokens": 32000
-  },
-  {
-    "info": {
-      "id": "anthropic/claude-sonnet-4",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 200000,
-      "dimensions": null
+    {
+      "info": {
+        "id": "deepseek/deepseek-r1-0528:free",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 163840,
+        "dimensions": null
+      },
+      "parameters": {
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "min_p": {
+          "availability": "opaque"
+        },
+        "stop": {
+          "availability": "opaque"
+        },
+        "include_reasoning": {
+          "availability": "opaque"
+        },
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 2.0
+          }
+        },
+        "top_k": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0
+          }
+        },
+        "presence_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0
+          }
+        },
+        "repetition_penalty": {
+          "availability": "opaque"
+        },
+        "max_tokens": {
+          "availability": "opaque"
+        },
+        "frequency_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0
+          }
+        },
+        "reasoning": {
+          "availability": "opaque"
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 0.0,
+        "completion_cost_per_mtok": 0.0
+      },
+      "max_output_tokens": 163840
     },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
-      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 16384.0 } },
-      "stop": { "availability": "mutable", "range": {} },
-      "reasoning": { "availability": "mutable", "range": {} },
-      "parallel_tool_calls": { "availability": "mutable", "range": {} }
+    {
+      "info": {
+        "id": "openai/gpt-4o",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 128000,
+        "dimensions": null
+      },
+      "parameters": {
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 2.0,
+            "default": 1.0
+          }
+        },
+        "max_tokens": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0,
+            "max": 16384.0
+          }
+        },
+        "parallel_tool_calls": {
+          "availability": "mutable",
+          "range": {}
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "seed": {
+          "availability": "mutable",
+          "range": {}
+        },
+        "frequency_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0,
+            "default": 0.0
+          }
+        },
+        "presence_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0,
+            "default": 0.0
+          }
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 2.5,
+        "completion_cost_per_mtok": 10.0
+      },
+      "max_output_tokens": 16384
     },
-    "pricing": { "prompt_cost_per_mtok": 3.0, "completion_cost_per_mtok": 15.0 },
-    "max_output_tokens": 16384
-  },
-  {
-    "info": {
-      "id": "anthropic/claude-haiku-4",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 200000,
-      "dimensions": null
+    {
+      "info": {
+        "id": "google/gemini-2.0-flash-001",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 1048576,
+        "dimensions": null
+      },
+      "parameters": {
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 2.0,
+            "default": 1.0
+          }
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "max_tokens": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0,
+            "max": 8192.0
+          }
+        },
+        "top_k": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0
+          }
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 0.1,
+        "completion_cost_per_mtok": 0.4
+      },
+      "max_output_tokens": 8192
     },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
-      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
-      "stop": { "availability": "mutable", "range": {} },
-      "reasoning": { "availability": "mutable", "range": {} },
-      "parallel_tool_calls": { "availability": "mutable", "range": {} }
+    {
+      "info": {
+        "id": "mistralai/mistral-nemo",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 131072,
+        "dimensions": null
+      },
+      "parameters": {
+        "tools": {
+          "availability": "opaque"
+        },
+        "presence_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0
+          }
+        },
+        "seed": {
+          "availability": "opaque"
+        },
+        "top_k": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0
+          }
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "repetition_penalty": {
+          "availability": "opaque"
+        },
+        "frequency_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0
+          }
+        },
+        "min_p": {
+          "availability": "opaque"
+        },
+        "response_format": {
+          "availability": "opaque"
+        },
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 2.0
+          }
+        },
+        "tool_choice": {
+          "availability": "opaque"
+        },
+        "max_tokens": {
+          "availability": "opaque"
+        },
+        "stop": {
+          "availability": "opaque"
+        },
+        "structured_outputs": {
+          "availability": "opaque"
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 0.02,
+        "completion_cost_per_mtok": 0.04
+      },
+      "max_output_tokens": 16384
     },
-    "pricing": { "prompt_cost_per_mtok": 0.80, "completion_cost_per_mtok": 4.0 },
-    "max_output_tokens": 8192
-  },
-  {
-    "info": {
-      "id": "anthropic/claude-haiku-3.5",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 200000,
-      "dimensions": null
+    {
+      "info": {
+        "id": "openai/gpt-oss-120b:free",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 131072,
+        "dimensions": null
+      },
+      "parameters": {
+        "max_tokens": {
+          "availability": "opaque"
+        },
+        "include_reasoning": {
+          "availability": "opaque"
+        },
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 2.0
+          }
+        },
+        "stop": {
+          "availability": "opaque"
+        },
+        "tools": {
+          "availability": "opaque"
+        },
+        "reasoning": {
+          "availability": "opaque"
+        },
+        "seed": {
+          "availability": "opaque"
+        },
+        "tool_choice": {
+          "availability": "opaque"
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 0.0,
+        "completion_cost_per_mtok": 0.0
+      },
+      "max_output_tokens": 131072
     },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
-      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
-      "stop": { "availability": "mutable", "range": {} },
-      "parallel_tool_calls": { "availability": "mutable", "range": {} }
+    {
+      "info": {
+        "id": "sentence-transformers/all-MiniLM-L6-v2",
+        "provider": "huggingface",
+        "capabilities": [
+          "Embed"
+        ],
+        "context_window": 512,
+        "dimensions": 384
+      },
+      "parameters": {}
     },
-    "pricing": { "prompt_cost_per_mtok": 0.80, "completion_cost_per_mtok": 4.0 },
-    "max_output_tokens": 8192
-  },
-  {
-    "info": {
-      "id": "openai/gpt-4o",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 128000,
-      "dimensions": null
-    },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
-      "frequency_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
-      "presence_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 16384.0 } },
-      "stop": { "availability": "mutable", "range": {} },
-      "seed": { "availability": "mutable", "range": {} },
-      "parallel_tool_calls": { "availability": "mutable", "range": {} }
-    },
-    "pricing": { "prompt_cost_per_mtok": 2.50, "completion_cost_per_mtok": 10.0 },
-    "max_output_tokens": 16384
-  },
-  {
-    "info": {
-      "id": "openai/gpt-4o-mini",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 128000,
-      "dimensions": null
-    },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
-      "frequency_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
-      "presence_penalty": { "availability": "mutable", "range": { "min": -2.0, "max": 2.0, "default": 0.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 16384.0 } },
-      "stop": { "availability": "mutable", "range": {} },
-      "seed": { "availability": "mutable", "range": {} },
-      "parallel_tool_calls": { "availability": "mutable", "range": {} }
-    },
-    "pricing": { "prompt_cost_per_mtok": 0.15, "completion_cost_per_mtok": 0.60 },
-    "max_output_tokens": 16384
-  },
-  {
-    "info": {
-      "id": "google/gemini-2.5-flash",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 1048576,
-      "dimensions": null
-    },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
-      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
-      "stop": { "availability": "mutable", "range": {} }
-    },
-    "pricing": { "prompt_cost_per_mtok": 0.15, "completion_cost_per_mtok": 0.60 },
-    "max_output_tokens": 8192
-  },
-  {
-    "info": {
-      "id": "google/gemini-2.0-pro",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 1048576,
-      "dimensions": null
-    },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
-      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
-      "stop": { "availability": "mutable", "range": {} }
-    },
-    "pricing": { "prompt_cost_per_mtok": 1.25, "completion_cost_per_mtok": 5.0 },
-    "max_output_tokens": 8192
-  },
-  {
-    "info": {
-      "id": "google/gemini-2.0-flash-001",
-      "provider": "openrouter",
-      "capabilities": ["Chat"],
-      "context_window": 1048576,
-      "dimensions": null
-    },
-    "parameters": {
-      "temperature": { "availability": "mutable", "range": { "min": 0.0, "max": 2.0, "default": 1.0 } },
-      "top_p": { "availability": "mutable", "range": { "min": 0.0, "max": 1.0 } },
-      "top_k": { "availability": "mutable", "range": { "min": 1.0 } },
-      "max_tokens": { "availability": "mutable", "range": { "min": 1.0, "max": 8192.0 } },
-      "stop": { "availability": "mutable", "range": {} }
-    },
-    "pricing": { "prompt_cost_per_mtok": 0.10, "completion_cost_per_mtok": 0.40 },
-    "max_output_tokens": 8192
-  },
-  {
-    "info": {
-      "id": "sentence-transformers/all-MiniLM-L6-v2",
-      "provider": "huggingface",
-      "capabilities": ["Embed"],
-      "context_window": 512,
-      "dimensions": 384
-    },
-    "parameters": {}
-  }
+    {
+      "info": {
+        "id": "xiaomi/mimo-v2-flash",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 262144,
+        "dimensions": null
+      },
+      "parameters": {
+        "seed": {
+          "availability": "opaque"
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "repetition_penalty": {
+          "availability": "opaque"
+        },
+        "include_reasoning": {
+          "availability": "opaque"
+        },
+        "reasoning": {
+          "availability": "opaque"
+        },
+        "response_format": {
+          "availability": "opaque"
+        },
+        "stop": {
+          "availability": "opaque"
+        },
+        "tools": {
+          "availability": "opaque"
+        },
+        "presence_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0
+          }
+        },
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 2.0
+          }
+        },
+        "top_k": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0
+          }
+        },
+        "structured_outputs": {
+          "availability": "opaque"
+        },
+        "tool_choice": {
+          "availability": "opaque"
+        },
+        "frequency_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0
+          }
+        },
+        "max_tokens": {
+          "availability": "opaque"
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 0.09,
+        "completion_cost_per_mtok": 0.29
+      }
+    }
   ],
   "presets": {
-    "free":    { "text-generation": "google/gemini-2.0-flash-001", "agentic": "google/gemini-2.0-flash-001", "embedding": "sentence-transformers/all-MiniLM-L6-v2" },
-    "budget":  { "text-generation": "openai/gpt-4o-mini",          "agentic": "openai/gpt-4o-mini",          "embedding": "sentence-transformers/all-MiniLM-L6-v2" },
-    "premium": { "text-generation": "anthropic/claude-sonnet-4",   "agentic": "anthropic/claude-sonnet-4",   "embedding": "sentence-transformers/all-MiniLM-L6-v2" }
+    "budget": {
+      "agentic": "xiaomi/mimo-v2-flash",
+      "embedding": "sentence-transformers/all-MiniLM-L6-v2",
+      "text-generation": "mistralai/mistral-nemo"
+    },
+    "free": {
+      "agentic": "openai/gpt-oss-120b:free",
+      "embedding": "sentence-transformers/all-MiniLM-L6-v2",
+      "text-generation": "deepseek/deepseek-r1-0528:free"
+    },
+    "premium": {
+      "agentic": "anthropic/claude-sonnet-4",
+      "embedding": "sentence-transformers/all-MiniLM-L6-v2",
+      "text-generation": "anthropic/claude-sonnet-4"
+    }
   }
 }
