@@ -46,6 +46,7 @@ pub struct RatatoskrBuilder {
     discovery_config: Option<DiscoveryConfig>,
     discovery_disabled: bool,
     registry_config: Option<RemoteRegistryConfig>,
+    registry_refresh_disabled: bool,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -80,6 +81,7 @@ impl RatatoskrBuilder {
             discovery_config: Some(DiscoveryConfig::default()),
             discovery_disabled: false,
             registry_config: None,
+            registry_refresh_disabled: false,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -246,6 +248,16 @@ impl RatatoskrBuilder {
     /// subsequent requests may repeat the same unsupported parameter.
     pub fn disable_parameter_discovery(mut self) -> Self {
         self.discovery_disabled = true;
+        self
+    }
+
+    /// Disable automatic background registry refresh at startup.
+    ///
+    /// By default, `build()` spawns a fire-and-forget task that refreshes the
+    /// cached remote registry so the next startup benefits from fresh data.
+    /// Disable this for offline/hermetic environments or testing.
+    pub fn disable_registry_refresh(mut self) -> Self {
+        self.registry_refresh_disabled = true;
         self
     }
 
@@ -504,6 +516,27 @@ impl RatatoskrBuilder {
             .cache_config
             .as_ref()
             .map(crate::cache::ResponseCache::new);
+
+        // Fire-and-forget background refresh: current instance uses whatever
+        // is cached, next startup benefits from the fresh fetch.
+        if !self.registry_refresh_disabled
+            && let Ok(_handle) = tokio::runtime::Handle::try_current()
+        {
+            let config = self.registry_config.clone().unwrap_or_default();
+            tokio::spawn(async move {
+                match crate::registry::remote::update_registry(&config).await {
+                    Ok(payload) => {
+                        tracing::info!(
+                            count = payload.models.len(),
+                            "background registry refresh complete"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "background registry refresh failed");
+                    }
+                }
+            });
+        }
 
         Ok(EmbeddedGateway::new(
             registry,
