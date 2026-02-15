@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BUILD_TIMESTAMP","GIT_BRANCH","GIT_SHA","PKG_VERSION"],"fn":["build_date","git_dirty","short_sha","version_string"]};

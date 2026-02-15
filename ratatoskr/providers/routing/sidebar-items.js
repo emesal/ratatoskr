@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["promote_preferred"],"struct":["ProviderCostInfo","ProviderLatency","RoutingConfig"],"trait":["HasName"]};
