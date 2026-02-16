@@ -52,7 +52,7 @@ async fn fetch_metadata_returns_parsed_model() {
 
     let registry = registry_with_mock(&server.uri());
     let metadata = registry
-        .fetch_chat_metadata("test-vendor/test-model")
+        .fetch_chat_metadata("test-vendor/test-model", None)
         .await
         .expect("fetch should succeed");
 
@@ -88,7 +88,9 @@ async fn fetch_metadata_model_not_in_response() {
         .await;
 
     let registry = registry_with_mock(&server.uri());
-    let result = registry.fetch_chat_metadata("nonexistent/model").await;
+    let result = registry
+        .fetch_chat_metadata("nonexistent/model", None)
+        .await;
 
     assert!(result.is_err(), "should fail for unknown model");
 }
@@ -104,7 +106,9 @@ async fn fetch_metadata_http_error() {
         .await;
 
     let registry = registry_with_mock(&server.uri());
-    let result = registry.fetch_chat_metadata("test-vendor/test-model").await;
+    let result = registry
+        .fetch_chat_metadata("test-vendor/test-model", None)
+        .await;
 
     assert!(result.is_err());
 }
@@ -120,7 +124,7 @@ async fn fetch_metadata_non_openrouter_returns_no_provider() {
     let mut registry = ProviderRegistry::new();
     registry.add_chat(provider);
 
-    let result = registry.fetch_chat_metadata("some-model").await;
+    let result = registry.fetch_chat_metadata("some-model", None).await;
 
     assert!(result.is_err());
 }
@@ -197,7 +201,7 @@ async fn fetch_metadata_keyless_sends_no_auth_header() {
 
     let registry = keyless_registry_with_mock(&server.uri());
     let metadata = registry
-        .fetch_chat_metadata("test-vendor/test-model")
+        .fetch_chat_metadata("test-vendor/test-model", None)
         .await
         .expect("keyless fetch should succeed");
 
@@ -218,7 +222,7 @@ async fn fetch_metadata_keyed_sends_auth_header() {
 
     let registry = registry_with_mock(&server.uri());
     let metadata = registry
-        .fetch_chat_metadata("test-vendor/test-model")
+        .fetch_chat_metadata("test-vendor/test-model", None)
         .await
         .expect("keyed fetch should succeed");
 

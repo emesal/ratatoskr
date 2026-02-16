@@ -344,17 +344,47 @@ impl ProviderRegistry {
     }
 
     // ========================================================================
+    // Provider hint resolution
+    // ========================================================================
+
+    /// Find a specific provider by name in a capability chain.
+    ///
+    /// Returns a single-element slice view (via index) or an error if the
+    /// provider isn't registered for this capability.
+    fn find_provider_index<T: HasName>(chain: &[T], name: &str) -> Result<usize> {
+        chain
+            .iter()
+            .position(|p| p.name() == name)
+            .ok_or_else(|| RatatoskrError::InvalidInput(format!("unknown provider: {name}")))
+    }
+
+    // ========================================================================
     // Fallback chain execution
     // Tries providers in order; ModelNotAvailable and exhausted transient
-    // errors trigger fallback to the next provider.
+    // errors trigger fallback to the next provider. When a provider hint is
+    // given, only that provider is tried (no fallback).
     // ========================================================================
 
     /// Embed text using the fallback chain.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, text), fields(operation = "embed"))]
-    pub async fn embed(&self, text: &str, model: &str) -> Result<Embedding> {
+    pub async fn embed(
+        &self,
+        text: &str,
+        model: &str,
+        provider: Option<&str>,
+    ) -> Result<Embedding> {
+        let chain: &[Arc<dyn EmbeddingProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.embedding, name)?;
+                &self.embedding[idx..=idx]
+            }
+            None => &self.embedding,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.embedding {
+        for provider in chain {
             match provider.embed(text, model).await {
                 Ok(result) => {
                     self.record_request("embed", provider.name(), start, true);
@@ -375,11 +405,25 @@ impl ProviderRegistry {
     }
 
     /// Embed batch of texts using the fallback chain.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, texts), fields(operation = "embed_batch", batch_size = texts.len()))]
-    pub async fn embed_batch(&self, texts: &[&str], model: &str) -> Result<Vec<Embedding>> {
+    pub async fn embed_batch(
+        &self,
+        texts: &[&str],
+        model: &str,
+        provider: Option<&str>,
+    ) -> Result<Vec<Embedding>> {
+        let chain: &[Arc<dyn EmbeddingProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.embedding, name)?;
+                &self.embedding[idx..=idx]
+            }
+            None => &self.embedding,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.embedding {
+        for provider in chain {
             match provider.embed_batch(texts, model).await {
                 Ok(result) => {
                     self.record_request("embed_batch", provider.name(), start, true);
@@ -400,16 +444,26 @@ impl ProviderRegistry {
     }
 
     /// Infer NLI using the fallback chain.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, premise, hypothesis), fields(operation = "infer_nli"))]
     pub async fn infer_nli(
         &self,
         premise: &str,
         hypothesis: &str,
         model: &str,
+        provider: Option<&str>,
     ) -> Result<NliResult> {
+        let chain: &[Arc<dyn NliProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.nli, name)?;
+                &self.nli[idx..=idx]
+            }
+            None => &self.nli,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.nli {
+        for provider in chain {
             match provider.infer_nli(premise, hypothesis, model).await {
                 Ok(result) => {
                     self.record_request("infer_nli", provider.name(), start, true);
@@ -430,15 +484,25 @@ impl ProviderRegistry {
     }
 
     /// Batch NLI inference using the fallback chain.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, pairs), fields(operation = "infer_nli_batch", batch_size = pairs.len()))]
     pub async fn infer_nli_batch(
         &self,
         pairs: &[(&str, &str)],
         model: &str,
+        provider: Option<&str>,
     ) -> Result<Vec<NliResult>> {
+        let chain: &[Arc<dyn NliProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.nli, name)?;
+                &self.nli[idx..=idx]
+            }
+            None => &self.nli,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.nli {
+        for provider in chain {
             match provider.infer_nli_batch(pairs, model).await {
                 Ok(result) => {
                     self.record_request("infer_nli_batch", provider.name(), start, true);
@@ -459,16 +523,26 @@ impl ProviderRegistry {
     }
 
     /// Zero-shot classification using the fallback chain.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, text, labels), fields(operation = "classify_zero_shot"))]
     pub async fn classify_zero_shot(
         &self,
         text: &str,
         labels: &[&str],
         model: &str,
+        provider: Option<&str>,
     ) -> Result<ClassifyResult> {
+        let chain: &[Arc<dyn ClassifyProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.classify, name)?;
+                &self.classify[idx..=idx]
+            }
+            None => &self.classify,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.classify {
+        for provider in chain {
             match provider.classify_zero_shot(text, labels, model).await {
                 Ok(result) => {
                     self.record_request("classify_zero_shot", provider.name(), start, true);
@@ -489,16 +563,26 @@ impl ProviderRegistry {
     }
 
     /// Stance detection using the fallback chain.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, text, target), fields(operation = "classify_stance"))]
     pub async fn classify_stance(
         &self,
         text: &str,
         target: &str,
         model: &str,
+        provider: Option<&str>,
     ) -> Result<StanceResult> {
+        let chain: &[Arc<dyn StanceProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.stance, name)?;
+                &self.stance[idx..=idx]
+            }
+            None => &self.stance,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.stance {
+        for provider in chain {
             match provider.classify_stance(text, target, model).await {
                 Ok(result) => {
                     self.record_request("classify_stance", provider.name(), start, true);
@@ -522,16 +606,26 @@ impl ProviderRegistry {
     ///
     /// If a provider declares `supported_chat_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, messages, tools, options), fields(operation = "chat", model = %options.model))]
     pub async fn chat(
         &self,
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
+        provider: Option<&str>,
     ) -> Result<ChatResponse> {
+        let chain: &[Arc<dyn ChatProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.chat, name)?;
+                &self.chat[idx..=idx]
+            }
+            None => &self.chat,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.chat {
+        for provider in chain {
             // Validate parameters — UnsupportedParameter triggers fallback to next provider
             match self.validate_chat_params(provider.as_ref(), options) {
                 Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
@@ -570,16 +664,26 @@ impl ProviderRegistry {
     ///
     /// If a provider declares `supported_chat_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, messages, tools, options), fields(operation = "chat_stream", model = %options.model))]
     pub async fn chat_stream(
         &self,
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         options: &ChatOptions,
+        provider: Option<&str>,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatEvent>> + Send>>> {
+        let chain: &[Arc<dyn ChatProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.chat, name)?;
+                &self.chat[idx..=idx]
+            }
+            None => &self.chat,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.chat {
+        for provider in chain {
             // Validate parameters — UnsupportedParameter triggers fallback to next provider
             match self.validate_chat_params(provider.as_ref(), options) {
                 Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
@@ -617,15 +721,25 @@ impl ProviderRegistry {
     ///
     /// If a provider declares `supported_generate_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, prompt, options), fields(operation = "generate", model = %options.model))]
     pub async fn generate(
         &self,
         prompt: &str,
         options: &GenerateOptions,
+        provider: Option<&str>,
     ) -> Result<GenerateResponse> {
+        let chain: &[Arc<dyn GenerateProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.generate, name)?;
+                &self.generate[idx..=idx]
+            }
+            None => &self.generate,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.generate {
+        for provider in chain {
             // Validate parameters — UnsupportedParameter triggers fallback to next provider
             match self.validate_generate_params(provider.as_ref(), options) {
                 Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
@@ -660,15 +774,25 @@ impl ProviderRegistry {
     ///
     /// If a provider declares `supported_generate_parameters()`, the registry validates
     /// the request against that list according to the `validation_policy`.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self, prompt, options), fields(operation = "generate_stream", model = %options.model))]
     pub async fn generate_stream(
         &self,
         prompt: &str,
         options: &GenerateOptions,
+        provider: Option<&str>,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<GenerateEvent>> + Send>>> {
+        let chain: &[Arc<dyn GenerateProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.generate, name)?;
+                &self.generate[idx..=idx]
+            }
+            None => &self.generate,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.generate {
+        for provider in chain {
             // Validate parameters — UnsupportedParameter triggers fallback to next provider
             match self.validate_generate_params(provider.as_ref(), options) {
                 Err(e @ RatatoskrError::UnsupportedParameter { .. }) => {
@@ -710,11 +834,24 @@ impl ProviderRegistry {
     ///
     /// Walks providers in priority order. `ModelNotAvailable`, `NotImplemented`,
     /// and exhausted transient errors trigger fallback; other errors are terminal.
+    ///
+    /// When `provider` is `Some`, only that provider is tried (no fallback).
     #[instrument(skip(self), fields(operation = "fetch_chat_metadata"))]
-    pub async fn fetch_chat_metadata(&self, model: &str) -> Result<ModelMetadata> {
+    pub async fn fetch_chat_metadata(
+        &self,
+        model: &str,
+        provider: Option<&str>,
+    ) -> Result<ModelMetadata> {
+        let chain: &[Arc<dyn ChatProvider>] = match provider {
+            Some(name) => {
+                let idx = Self::find_provider_index(&self.chat, name)?;
+                &self.chat[idx..=idx]
+            }
+            None => &self.chat,
+        };
         let start = Instant::now();
         let mut last_err = None;
-        for provider in &self.chat {
+        for provider in chain {
             match provider.fetch_metadata(model).await {
                 Ok(metadata) => {
                     self.record_request("fetch_chat_metadata", provider.name(), start, true);
@@ -1074,6 +1211,21 @@ pub struct ProviderNames {
     pub generate: Vec<String>,
 }
 
+impl ProviderNames {
+    /// Collect all unique provider names across all capabilities.
+    pub fn all_unique(&self) -> std::collections::HashSet<&str> {
+        self.embedding
+            .iter()
+            .chain(&self.nli)
+            .chain(&self.classify)
+            .chain(&self.stance)
+            .chain(&self.chat)
+            .chain(&self.generate)
+            .map(|s| s.as_str())
+            .collect()
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -1157,11 +1309,11 @@ mod tests {
         }));
 
         // Request model-a: should use provider-a
-        let result = registry.embed("test", "model-a").await.unwrap();
+        let result = registry.embed("test", "model-a", None).await.unwrap();
         assert_eq!(result.dimensions, 128);
 
         // Request model-b: should fallback to provider-b
-        let result = registry.embed("test", "model-b").await.unwrap();
+        let result = registry.embed("test", "model-b", None).await.unwrap();
         assert_eq!(result.dimensions, 256);
     }
 
@@ -1177,14 +1329,14 @@ mod tests {
 
         // Request unknown model — provider returns ModelNotAvailable,
         // which becomes the last error in the fallback chain
-        let result = registry.embed("test", "unknown-model").await;
+        let result = registry.embed("test", "unknown-model", None).await;
         assert!(matches!(result, Err(RatatoskrError::ModelNotAvailable)));
     }
 
     #[tokio::test]
     async fn registry_returns_no_provider_when_empty() {
         let registry = ProviderRegistry::new();
-        let result = registry.embed("test", "any-model").await;
+        let result = registry.embed("test", "any-model", None).await;
         assert!(matches!(result, Err(RatatoskrError::NoProvider)));
     }
 
@@ -1205,7 +1357,7 @@ mod tests {
         }));
 
         let result = registry
-            .infer_nli("premise", "hypothesis", "model")
+            .infer_nli("premise", "hypothesis", "model", None)
             .await
             .unwrap();
         assert_eq!(result.label, NliLabel::Entailment);
@@ -1245,5 +1397,98 @@ mod tests {
 
         let names = registry.provider_names();
         assert_eq!(names.embedding, vec!["first", "second"]);
+    }
+
+    // ========================================================================
+    // Provider hint (targeted dispatch) tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn targeted_dispatch_uses_named_provider() {
+        let mut registry = ProviderRegistry::new();
+
+        registry.add_embedding(Arc::new(MockEmbeddingProvider {
+            name: "provider-a",
+            supported_model: "model-a",
+            dimensions: 128,
+        }));
+        registry.add_embedding(Arc::new(MockEmbeddingProvider {
+            name: "provider-b",
+            supported_model: "model-b",
+            dimensions: 256,
+        }));
+
+        // Target provider-b directly — it supports model-b
+        let result = registry
+            .embed("test", "model-b", Some("provider-b"))
+            .await
+            .unwrap();
+        assert_eq!(result.dimensions, 256);
+    }
+
+    #[tokio::test]
+    async fn targeted_dispatch_skips_fallback() {
+        let mut registry = ProviderRegistry::new();
+
+        registry.add_embedding(Arc::new(MockEmbeddingProvider {
+            name: "provider-a",
+            supported_model: "model-a",
+            dimensions: 128,
+        }));
+        registry.add_embedding(Arc::new(MockEmbeddingProvider {
+            name: "provider-b",
+            supported_model: "model-b",
+            dimensions: 256,
+        }));
+
+        // Target provider-a with model-b — provider-a doesn't support it,
+        // and no fallback should happen
+        let result = registry.embed("test", "model-b", Some("provider-a")).await;
+        assert!(
+            matches!(result, Err(RatatoskrError::ModelNotAvailable)),
+            "should not fall back when provider hint is set"
+        );
+    }
+
+    #[tokio::test]
+    async fn targeted_dispatch_unknown_provider() {
+        let mut registry = ProviderRegistry::new();
+
+        registry.add_embedding(Arc::new(MockEmbeddingProvider {
+            name: "provider-a",
+            supported_model: "model-a",
+            dimensions: 128,
+        }));
+
+        let result = registry.embed("test", "model-a", Some("nonexistent")).await;
+        assert!(
+            matches!(result, Err(RatatoskrError::InvalidInput(_))),
+            "should error for unknown provider"
+        );
+    }
+
+    #[test]
+    fn provider_names_all_unique() {
+        let mut registry = ProviderRegistry::new();
+
+        registry.add_embedding(Arc::new(MockEmbeddingProvider {
+            name: "shared",
+            supported_model: "a",
+            dimensions: 128,
+        }));
+        registry.add_nli(Arc::new(MockNliProvider {
+            name: "shared",
+            fail: false,
+        }));
+        registry.add_nli(Arc::new(MockNliProvider {
+            name: "other",
+            fail: false,
+        }));
+
+        let names = registry.provider_names();
+        let unique = names.all_unique();
+        assert_eq!(unique.len(), 2);
+        assert!(unique.contains("shared"));
+        assert!(unique.contains("other"));
     }
 }

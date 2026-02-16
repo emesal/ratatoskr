@@ -82,7 +82,7 @@ async fn discovery_cache_consulted_during_validation() {
     let opts = ChatOptions::new("test-model").temperature(0.5);
     let messages = vec![Message::user("hello")];
 
-    let result = registry.chat(&messages, None, &opts).await;
+    let result = registry.chat(&messages, None, &opts, None).await;
     assert!(
         matches!(result, Err(RatatoskrError::UnsupportedParameter { .. })),
         "expected UnsupportedParameter from discovery cache, got: {result:?}"
@@ -103,7 +103,7 @@ async fn discovery_cache_not_consulted_when_disabled() {
     let opts = ChatOptions::new("test-model").temperature(0.5);
     let messages = vec![Message::user("hello")];
 
-    let result = registry.chat(&messages, None, &opts).await;
+    let result = registry.chat(&messages, None, &opts, None).await;
     // Should NOT be UnsupportedParameter — it'll be some other error (API auth fail)
     if let Err(ref e) = result {
         assert!(
@@ -130,7 +130,7 @@ async fn discovery_cache_scoped_to_model() {
     // model-a with temperature → should fail (discovery cache rejects it)
     let opts_a = ChatOptions::new("model-a").temperature(0.5);
     let messages = vec![Message::user("hello")];
-    let result_a = registry.chat(&messages, None, &opts_a).await;
+    let result_a = registry.chat(&messages, None, &opts_a, None).await;
     assert!(
         matches!(result_a, Err(RatatoskrError::UnsupportedParameter { .. })),
         "model-a should be rejected via discovery cache"
@@ -138,7 +138,7 @@ async fn discovery_cache_scoped_to_model() {
 
     // model-b with temperature → discovery cache has no entry, should pass validation
     let opts_b = ChatOptions::new("model-b").temperature(0.5);
-    let result_b = registry.chat(&messages, None, &opts_b).await;
+    let result_b = registry.chat(&messages, None, &opts_b, None).await;
     if let Err(ref e) = result_b {
         assert!(
             !matches!(e, RatatoskrError::UnsupportedParameter { .. }),
@@ -253,7 +253,7 @@ fn static_validation_still_works_with_discovery_cache() {
         .enable_all()
         .build()
         .unwrap();
-    let result = rt.block_on(registry.chat(&messages, None, &opts));
+    let result = rt.block_on(registry.chat(&messages, None, &opts, None));
     assert!(matches!(
         result,
         Err(RatatoskrError::UnsupportedParameter { .. })
