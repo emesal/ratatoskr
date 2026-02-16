@@ -125,7 +125,7 @@ async fn preferred_chat_provider_tried_first() {
 
     // Verify it actually dispatches to anthropic first
     let result = registry
-        .chat(&[], None, &ChatOptions::new("test"))
+        .chat(&[], None, &ChatOptions::new("test"), None)
         .await
         .unwrap();
     assert_eq!(result.content, "from anthropic");
@@ -148,7 +148,7 @@ async fn preferred_embed_provider_tried_first() {
     let names = registry.provider_names();
     assert_eq!(names.embedding, vec!["local", "huggingface"]);
 
-    let result = registry.embed("hello", "any-model").await.unwrap();
+    let result = registry.embed("hello", "any-model", None).await.unwrap();
     assert_eq!(result.dimensions, 768); // local's dimensions
 }
 
@@ -227,7 +227,7 @@ async fn registry_tracks_latency_on_dispatch() {
 
     // Dispatch a request
     registry
-        .chat(&[], None, &ChatOptions::new("test"))
+        .chat(&[], None, &ChatOptions::new("test"), None)
         .await
         .unwrap();
 
@@ -246,7 +246,7 @@ async fn registry_tracks_latency_for_embed() {
         dims: 128,
     }));
 
-    registry.embed("hello", "model").await.unwrap();
+    registry.embed("hello", "model", None).await.unwrap();
 
     let latency = registry.provider_latency("embed-provider");
     assert!(latency.is_some());

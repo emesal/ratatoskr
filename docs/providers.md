@@ -51,6 +51,49 @@ The gateway routes requests based on model name patterns:
 "codellama:7b"               // → Ollama
 ```
 
+### Explicit Provider Routing
+
+When multiple providers can serve the same model, you can bypass the fallback chain and route directly to a specific provider using the `provider:model` syntax:
+
+```rust
+// Route to Anthropic direct (skip OpenRouter)
+let options = ChatOptions::default()
+    .model("anthropic:claude-sonnet-4-20250514");
+
+// Route to OpenRouter explicitly
+let options = ChatOptions::default()
+    .model("openrouter:anthropic/claude-sonnet-4");
+
+// Route embeddings to a specific provider
+gateway.embed("hello world", "huggingface:sentence-transformers/all-MiniLM-L6-v2").await?;
+```
+
+The prefix must match a registered provider name (e.g. `openrouter`, `anthropic`, `openai`, `ollama`, `huggingface`). If the prefix is not a known provider, the entire string is treated as a plain model ID and goes through the normal fallback chain.
+
+This works with all `ModelGateway` methods — chat, embed, NLI, classification, metadata — and is transparent over gRPC (`ServiceClient` passes the prefixed string through to the server).
+
+**Explicit vs default routing:**
+- `RoutingConfig` sets a global preferred provider per capability (reorders the fallback chain)
+- `provider:model` overrides routing on a per-request basis (no fallback)
+
+### Preset URIs
+
+For model-agnostic code, use preset URIs that resolve to curated model IDs:
+
+```rust
+// Resolve from the model registry
+let options = ChatOptions::default()
+    .model("ratatoskr:free/agentic");      // Best free model for agentic use
+
+let options = ChatOptions::default()
+    .model("ratatoskr:premium/agentic");   // Best premium model for agentic use
+
+let options = ChatOptions::default()
+    .model("ratatoskr:free/text-generation"); // Best free model for general text
+```
+
+Preset URIs use the `ratatoskr:<tier>/<capability>` format and are resolved via the model registry before dispatch. They cannot be combined with provider prefixes.
+
 ## Provider Details
 
 ### OpenRouter

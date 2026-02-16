@@ -1,6 +1,6 @@
 [package]
 name = "ratatoskr"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2024"
 description = "Unified model gateway for LLM APIs"
 license = "ISC"

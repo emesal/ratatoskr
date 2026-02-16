@@ -115,7 +115,7 @@ async fn validation_error_policy_rejects_unsupported_param() {
     let opts = ChatOptions::new("test-model").top_k(40);
     let messages = vec![Message::user("hello")];
 
-    let result = registry.chat(&messages, None, &opts).await;
+    let result = registry.chat(&messages, None, &opts, None).await;
     assert!(result.is_err());
 
     let err = result.unwrap_err();
@@ -134,7 +134,7 @@ async fn validation_ignore_policy_allows_unsupported_param() {
     let messages = vec![Message::user("hello")];
 
     // Will fail at the API call level (no valid key), but validation should pass
-    let result = registry.chat(&messages, None, &opts).await;
+    let result = registry.chat(&messages, None, &opts, None).await;
 
     // Should not be UnsupportedParameter — might be ModelNotAvailable or Auth error
     if let Err(e) = &result {
@@ -155,7 +155,7 @@ async fn validation_skipped_when_provider_has_no_declared_params() {
     let opts = ChatOptions::new("test-model").top_k(40);
     let messages = vec![Message::user("hello")];
 
-    let result = registry.chat(&messages, None, &opts).await;
+    let result = registry.chat(&messages, None, &opts, None).await;
     assert!(result.is_err());
 
     let err = result.unwrap_err();

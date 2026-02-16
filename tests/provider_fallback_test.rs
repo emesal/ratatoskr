@@ -58,7 +58,7 @@ async fn fallback_local_to_api_wrong_model() {
     registry.add_embedding(hf_client);
 
     // Request a model the local provider doesn't support
-    let result = registry.embed("hello world", model).await;
+    let result = registry.embed("hello world", model, None).await;
 
     // Should succeed via HuggingFace fallback
     let embedding = result.expect("should fallback to HuggingFace");
@@ -112,7 +112,7 @@ async fn fallback_ram_budget_exceeded() {
     registry.add_embedding(hf_client);
 
     // Request the model local provider normally handles
-    let result = registry.embed("hello world", model).await;
+    let result = registry.embed("hello world", model, None).await;
 
     // Should succeed via HuggingFace fallback due to RAM budget
     let embedding = result.expect("should fallback to HuggingFace due to RAM budget");

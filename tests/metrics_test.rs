@@ -103,7 +103,7 @@ async fn successful_request_records_metrics() {
             tokio::runtime::Handle::current().block_on(async {
                 let mut registry = ProviderRegistry::new();
                 registry.add_embedding(Arc::new(MockEmbeddingProvider { name: "test-embed" }));
-                registry.embed("hello", "test-model").await
+                registry.embed("hello", "test-model", None).await
             })
         })
     });
@@ -130,7 +130,7 @@ async fn failed_request_records_error_metrics() {
             tokio::runtime::Handle::current().block_on(async {
                 let mut registry = ProviderRegistry::new();
                 registry.add_embedding(Arc::new(FailingEmbeddingProvider));
-                registry.embed("hello", "test-model").await
+                registry.embed("hello", "test-model", None).await
             })
         })
     });
@@ -150,7 +150,7 @@ async fn no_provider_records_error_metrics() {
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let registry = ProviderRegistry::new();
-                registry.embed("hello", "test-model").await
+                registry.embed("hello", "test-model", None).await
             })
         })
     });
@@ -166,5 +166,5 @@ async fn metrics_are_noop_without_recorder() {
     // Verify no panics when no recorder is installed.
     let mut registry = ProviderRegistry::new();
     registry.add_embedding(Arc::new(MockEmbeddingProvider { name: "test" }));
-    let _result = registry.embed("hello", "test-model").await.unwrap();
+    let _result = registry.embed("hello", "test-model", None).await.unwrap();
 }

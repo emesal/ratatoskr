@@ -16,14 +16,6 @@
           "availability": "mutable",
           "range": {}
         },
-        "parallel_tool_calls": {
-          "availability": "mutable",
-          "range": {}
-        },
-        "stop": {
-          "availability": "mutable",
-          "range": {}
-        },
         "temperature": {
           "availability": "mutable",
           "range": {
@@ -38,19 +30,27 @@
             "min": 1.0
           }
         },
-        "top_p": {
+        "stop": {
           "availability": "mutable",
-          "range": {
-            "min": 0.0,
-            "max": 1.0,
-            "default": 1.0
-          }
+          "range": {}
         },
         "max_tokens": {
           "availability": "mutable",
           "range": {
             "min": 1.0,
             "max": 16384.0
+          }
+        },
+        "parallel_tool_calls": {
+          "availability": "mutable",
+          "range": {}
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
           }
         }
       },
@@ -71,11 +71,28 @@
         "dimensions": null
       },
       "parameters": {
+        "parallel_tool_calls": {
+          "availability": "mutable",
+          "range": {}
+        },
+        "max_tokens": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0,
+            "max": 8192.0
+          }
+        },
         "top_p": {
           "availability": "mutable",
           "range": {
             "min": 0.0,
             "max": 1.0
+          }
+        },
+        "top_k": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0
           }
         },
         "temperature": {
@@ -85,23 +102,6 @@
             "max": 1.0,
             "default": 1.0
           }
-        },
-        "max_tokens": {
-          "availability": "mutable",
-          "range": {
-            "min": 1.0,
-            "max": 8192.0
-          }
-        },
-        "top_k": {
-          "availability": "mutable",
-          "range": {
-            "min": 1.0
-          }
-        },
-        "parallel_tool_calls": {
-          "availability": "mutable",
-          "range": {}
         }
       },
       "pricing": {
@@ -109,6 +109,55 @@
         "completion_cost_per_mtok": 4.0
       },
       "max_output_tokens": 8192
+    },
+    {
+      "info": {
+        "id": "arcee-ai/trinity-large-preview:free",
+        "provider": "openrouter",
+        "capabilities": [
+          "Chat"
+        ],
+        "context_window": 131000,
+        "dimensions": null
+      },
+      "parameters": {
+        "tools": {
+          "availability": "opaque"
+        },
+        "temperature": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 2.0
+          }
+        },
+        "max_tokens": {
+          "availability": "opaque"
+        },
+        "top_k": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0
+          }
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "response_format": {
+          "availability": "opaque"
+        },
+        "structured_outputs": {
+          "availability": "opaque"
+        }
+      },
+      "pricing": {
+        "prompt_cost_per_mtok": 0.0,
+        "completion_cost_per_mtok": 0.0
+      }
     },
     {
       "info": {
@@ -121,14 +170,14 @@
         "dimensions": null
       },
       "parameters": {
-        "frequency_penalty": {
+        "presence_penalty": {
           "availability": "mutable",
           "range": {
             "min": -2.0,
             "max": 2.0
           }
         },
-        "stop": {
+        "max_tokens": {
           "availability": "opaque"
         },
         "top_k": {
@@ -137,21 +186,12 @@
             "min": 0.0
           }
         },
-        "max_tokens": {
-          "availability": "opaque"
-        },
-        "presence_penalty": {
+        "top_p": {
           "availability": "mutable",
           "range": {
-            "min": -2.0,
-            "max": 2.0
+            "min": 0.0,
+            "max": 1.0
           }
-        },
-        "min_p": {
-          "availability": "opaque"
-        },
-        "include_reasoning": {
-          "availability": "opaque"
         },
         "temperature": {
           "availability": "mutable",
@@ -160,17 +200,26 @@
             "max": 2.0
           }
         },
+        "stop": {
+          "availability": "opaque"
+        },
+        "min_p": {
+          "availability": "opaque"
+        },
         "repetition_penalty": {
           "availability": "opaque"
         },
-        "top_p": {
+        "frequency_penalty": {
           "availability": "mutable",
           "range": {
-            "min": 0.0,
-            "max": 1.0
+            "min": -2.0,
+            "max": 2.0
           }
         },
         "reasoning": {
+          "availability": "opaque"
+        },
+        "include_reasoning": {
           "availability": "opaque"
         }
       },
@@ -191,17 +240,6 @@
         "dimensions": null
       },
       "parameters": {
-        "top_p": {
-          "availability": "mutable",
-          "range": {
-            "min": 0.0,
-            "max": 1.0
-          }
-        },
-        "seed": {
-          "availability": "mutable",
-          "range": {}
-        },
         "temperature": {
           "availability": "mutable",
           "range": {
@@ -209,6 +247,17 @@
             "max": 2.0,
             "default": 1.0
           }
+        },
+        "max_tokens": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0,
+            "max": 16384.0
+          }
+        },
+        "parallel_tool_calls": {
+          "availability": "mutable",
+          "range": {}
         },
         "frequency_penalty": {
           "availability": "mutable",
@@ -226,16 +275,16 @@
             "default": 0.0
           }
         },
-        "parallel_tool_calls": {
-          "availability": "mutable",
-          "range": {}
-        },
-        "max_tokens": {
+        "top_p": {
           "availability": "mutable",
           "range": {
-            "min": 1.0,
-            "max": 16384.0
+            "min": 0.0,
+            "max": 1.0
           }
+        },
+        "seed": {
+          "availability": "mutable",
+          "range": {}
         }
       },
       "pricing": {
@@ -255,11 +304,11 @@
         "dimensions": null
       },
       "parameters": {
-        "max_tokens": {
+        "top_p": {
           "availability": "mutable",
           "range": {
-            "min": 1.0,
-            "max": 8192.0
+            "min": 0.0,
+            "max": 1.0
           }
         },
         "temperature": {
@@ -270,17 +319,17 @@
             "default": 1.0
           }
         },
-        "top_p": {
-          "availability": "mutable",
-          "range": {
-            "min": 0.0,
-            "max": 1.0
-          }
-        },
         "top_k": {
           "availability": "mutable",
           "range": {
             "min": 1.0
+          }
+        },
+        "max_tokens": {
+          "availability": "mutable",
+          "range": {
+            "min": 1.0,
+            "max": 8192.0
           }
         }
       },
@@ -301,18 +350,11 @@
         "dimensions": null
       },
       "parameters": {
-        "presence_penalty": {
+        "top_k": {
           "availability": "mutable",
           "range": {
-            "min": -2.0,
-            "max": 2.0
+            "min": 0.0
           }
-        },
-        "tools": {
-          "availability": "opaque"
-        },
-        "structured_outputs": {
-          "availability": "opaque"
         },
         "frequency_penalty": {
           "availability": "mutable",
@@ -321,19 +363,27 @@
             "max": 2.0
           }
         },
-        "seed": {
-          "availability": "opaque"
-        },
         "stop": {
-          "availability": "opaque"
-        },
-        "min_p": {
           "availability": "opaque"
         },
         "repetition_penalty": {
           "availability": "opaque"
         },
-        "response_format": {
+        "presence_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0
+          }
+        },
+        "top_p": {
+          "availability": "mutable",
+          "range": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "tools": {
           "availability": "opaque"
         },
         "temperature": {
@@ -346,21 +396,20 @@
         "max_tokens": {
           "availability": "opaque"
         },
+        "structured_outputs": {
+          "availability": "opaque"
+        },
+        "seed": {
+          "availability": "opaque"
+        },
         "tool_choice": {
           "availability": "opaque"
         },
-        "top_k": {
-          "availability": "mutable",
-          "range": {
-            "min": 0.0
-          }
+        "min_p": {
+          "availability": "opaque"
         },
-        "top_p": {
-          "availability": "mutable",
-          "range": {
-            "min": 0.0,
-            "max": 1.0
-          }
+        "response_format": {
+          "availability": "opaque"
         }
       },
       "pricing": {
@@ -380,10 +429,10 @@
         "dimensions": null
       },
       "parameters": {
-        "reasoning": {
+        "seed": {
           "availability": "opaque"
         },
-        "include_reasoning": {
+        "reasoning": {
           "availability": "opaque"
         },
         "tool_choice": {
@@ -392,7 +441,7 @@
         "tools": {
           "availability": "opaque"
         },
-        "max_tokens": {
+        "stop": {
           "availability": "opaque"
         },
         "temperature": {
@@ -402,10 +451,10 @@
             "max": 2.0
           }
         },
-        "seed": {
+        "max_tokens": {
           "availability": "opaque"
         },
-        "stop": {
+        "include_reasoning": {
           "availability": "opaque"
         }
       },
@@ -445,6 +494,15 @@
             "max": 2.0
           }
         },
+        "tools": {
+          "availability": "opaque"
+        },
+        "stop": {
+          "availability": "opaque"
+        },
+        "max_tokens": {
+          "availability": "opaque"
+        },
         "frequency_penalty": {
           "availability": "mutable",
           "range": {
@@ -452,16 +510,10 @@
             "max": 2.0
           }
         },
-        "stop": {
-          "availability": "opaque"
-        },
-        "tools": {
-          "availability": "opaque"
-        },
-        "max_tokens": {
-          "availability": "opaque"
-        },
         "include_reasoning": {
+          "availability": "opaque"
+        },
+        "reasoning": {
           "availability": "opaque"
         },
         "top_p": {
@@ -470,9 +522,6 @@
             "min": 0.0,
             "max": 1.0
           }
-        },
-        "reasoning": {
-          "availability": "opaque"
         }
       },
       "pricing": {
@@ -492,20 +541,16 @@
         "dimensions": null
       },
       "parameters": {
-        "frequency_penalty": {
-          "availability": "mutable",
-          "range": {
-            "min": -2.0,
-            "max": 2.0
-          }
-        },
-        "include_reasoning": {
-          "availability": "opaque"
-        },
         "seed": {
           "availability": "opaque"
         },
-        "stop": {
+        "reasoning": {
+          "availability": "opaque"
+        },
+        "repetition_penalty": {
+          "availability": "opaque"
+        },
+        "structured_outputs": {
           "availability": "opaque"
         },
         "presence_penalty": {
@@ -515,13 +560,7 @@
             "max": 2.0
           }
         },
-        "response_format": {
-          "availability": "opaque"
-        },
-        "repetition_penalty": {
-          "availability": "opaque"
-        },
-        "structured_outputs": {
+        "tool_choice": {
           "availability": "opaque"
         },
         "top_p": {
@@ -531,13 +570,13 @@
             "max": 1.0
           }
         },
-        "reasoning": {
+        "tools": {
+          "availability": "opaque"
+        },
+        "response_format": {
           "availability": "opaque"
         },
         "max_tokens": {
-          "availability": "opaque"
-        },
-        "tools": {
           "availability": "opaque"
         },
         "top_k": {
@@ -546,6 +585,16 @@
             "min": 0.0
           }
         },
+        "frequency_penalty": {
+          "availability": "mutable",
+          "range": {
+            "min": -2.0,
+            "max": 2.0
+          }
+        },
+        "stop": {
+          "availability": "opaque"
+        },
         "temperature": {
           "availability": "mutable",
           "range": {
@@ -553,7 +602,7 @@
             "max": 2.0
           }
         },
-        "tool_choice": {
+        "include_reasoning": {
           "availability": "opaque"
         }
       },
@@ -572,7 +621,7 @@
     "free": {
       "agentic": "stepfun/step-3.5-flash:free",
       "embedding": "sentence-transformers/all-MiniLM-L6-v2",
-      "text-generation": "deepseek/deepseek-r1-0528:free"
+      "text-generation": "arcee-ai/trinity-large-preview:free"
     },
     "premium": {
       "agentic": "anthropic/claude-sonnet-4",

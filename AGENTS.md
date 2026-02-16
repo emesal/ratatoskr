@@ -118,7 +118,7 @@ contrib/
 - `GenerateOptions` — model, temperature, max_tokens, top_k, frequency/presence penalty, seed, reasoning
 - `RatatoskrError` — comprehensive error enum; `ModelNotAvailable` triggers fallback, `UnsupportedParameter` for validation errors
 - `StanceResult` — stance detection result (favor/against/neutral scores with label)
-- `ProviderRegistry` — fallback chains per capability with opt-in parameter validation; `fetch_chat_metadata()` for on-demand fetch
+- `ProviderRegistry` — fallback chains per capability with opt-in parameter validation, provider-targeted dispatch (via `provider: Option<&str>` on all dispatch methods), and `fetch_chat_metadata()` for on-demand fetch
 - `ModelRegistry` — centralized model metadata with three-layer merge (embedded seed → cached remote → live data)
 - `RemoteRegistryConfig` — URL + cache path for the remote registry; default: `emesal/ratatoskr-registry` on GitHub
 - `RemoteRegistry` — versioned payload wrapper (`{ "version": 1, "models": [...] }`) with legacy bare-array fallback
@@ -131,7 +131,7 @@ contrib/
 - `RatatoskrService<G>` — wraps any `ModelGateway` behind gRPC handlers (server feature)
 - `RetryConfig` — retry behaviour (max attempts, exponential backoff, jitter, retry-after support)
 - `RetryingProvider<T>` — decorator wrapping any provider trait with retry logic on transient errors
-- `RoutingConfig` — preferred provider per capability (reorders fallback chain)
+- `RoutingConfig` — preferred provider per capability (reorders fallback chain); global default, unlike per-request `provider:model` prefix routing
 - `ProviderLatency` — EWMA-based per-provider latency tracker (thread-safe atomics)
 - `ProviderCostInfo` — cost ranking for providers serving a model (sorted cheapest-first)
 - `CacheConfig` — opt-in response cache configuration (max entries, TTL)
@@ -139,6 +139,7 @@ contrib/
 - `DiscoveryConfig` — configuration for runtime parameter discovery cache (max entries, TTL)
 - `ParameterDiscoveryCache` — moka-backed cache recording parameter rejections at runtime; consulted during validation to prevent repeated failures
 - `DiscoveryRecord` — a single parameter rejection (parameter, provider, model, timestamp, reason); forward-compatible with #14 aggregation
+- `ResolvedModel` — `pub(crate)` result of parsing a model string: `{ provider: Option<String>, model: String }`. Lives in `gateway/embedded.rs`
 
 ### Builder Pattern
 
