@@ -64,7 +64,7 @@ enum Command {
         /// User message
         message: String,
         /// Model to use
-        #[arg(short, long, default_value = "anthropic/claude-sonnet-4")]
+        #[arg(short, long, default_value = "ratatoskr:free/agentic")]
         model: String,
     },
 
