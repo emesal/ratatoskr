@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ReasoningConfig, ResponseFormat, ToolChoice};
+use crate::types::{ChatOptions, GenerateOptions, ReasoningConfig, ResponseFormat, ToolChoice};
 
 /// A single preset: model ID with optional default generation parameters.
 ///
@@ -95,6 +95,63 @@ impl PresetParameters {
             && self.cache_prompt.is_none()
             && self.raw_provider_options.is_none()
     }
+
+    /// Apply these parameters as defaults to `ChatOptions`.
+    ///
+    /// Fills `None` fields from preset values; never overwrites `Some`.
+    pub fn apply_defaults_to_chat(&self, opts: &mut ChatOptions) {
+        macro_rules! fill {
+            ($field:ident) => {
+                if opts.$field.is_none() {
+                    opts.$field = self.$field.clone();
+                }
+            };
+        }
+        fill!(temperature);
+        fill!(top_p);
+        fill!(top_k);
+        fill!(max_tokens);
+        fill!(frequency_penalty);
+        fill!(presence_penalty);
+        fill!(seed);
+        fill!(stop);
+        fill!(reasoning);
+        fill!(tool_choice);
+        fill!(parallel_tool_calls);
+        fill!(response_format);
+        fill!(cache_prompt);
+        fill!(raw_provider_options);
+    }
+
+    /// Apply these parameters as defaults to `GenerateOptions`.
+    ///
+    /// Fills `None` fields from preset values; never overwrites `Some`.
+    /// Fields absent from `GenerateOptions` (e.g. `tool_choice`) are
+    /// silently ignored.
+    pub fn apply_defaults_to_generate(&self, opts: &mut GenerateOptions) {
+        macro_rules! fill {
+            ($field:ident) => {
+                if opts.$field.is_none() {
+                    opts.$field = self.$field.clone();
+                }
+            };
+        }
+        fill!(temperature);
+        fill!(top_p);
+        fill!(top_k);
+        fill!(max_tokens);
+        fill!(frequency_penalty);
+        fill!(presence_penalty);
+        fill!(seed);
+        fill!(reasoning);
+        // `stop` in PresetParameters maps to `stop_sequences` in GenerateOptions.
+        // Only fill if the caller left the vec empty.
+        if opts.stop_sequences.is_empty() {
+            if let Some(stop) = &self.stop {
+                opts.stop_sequences = stop.clone();
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -160,5 +217,73 @@ mod tests {
             ..Default::default()
         }
         .is_empty());
+    }
+
+    // ===== Task 2: apply_defaults =====
+
+    use crate::types::{ChatOptions, GenerateOptions};
+
+    #[test]
+    fn apply_defaults_fills_none_chat() {
+        let params = PresetParameters {
+            temperature: Some(0.3),
+            top_p: Some(0.95),
+            max_tokens: Some(4096),
+            ..Default::default()
+        };
+        let mut opts = ChatOptions::new("x");
+        params.apply_defaults_to_chat(&mut opts);
+        assert_eq!(opts.temperature, Some(0.3));
+        assert_eq!(opts.top_p, Some(0.95));
+        assert_eq!(opts.max_tokens, Some(4096));
+    }
+
+    #[test]
+    fn apply_defaults_preserves_caller_chat() {
+        let params = PresetParameters {
+            temperature: Some(0.3),
+            top_p: Some(0.95),
+            ..Default::default()
+        };
+        let mut opts = ChatOptions::new("x");
+        opts.temperature = Some(0.7); // caller set this
+        params.apply_defaults_to_chat(&mut opts);
+        assert_eq!(opts.temperature, Some(0.7)); // caller wins
+        assert_eq!(opts.top_p, Some(0.95)); // preset fills
+    }
+
+    #[test]
+    fn apply_defaults_noop_when_empty() {
+        let params = PresetParameters::default();
+        let mut opts = ChatOptions::new("x");
+        opts.temperature = Some(0.5);
+        let before = opts.clone();
+        params.apply_defaults_to_chat(&mut opts);
+        assert_eq!(opts, before);
+    }
+
+    #[test]
+    fn apply_defaults_fills_none_generate() {
+        let params = PresetParameters {
+            temperature: Some(0.8),
+            top_k: Some(50),
+            ..Default::default()
+        };
+        let mut opts = GenerateOptions::new("x");
+        params.apply_defaults_to_generate(&mut opts);
+        assert_eq!(opts.temperature, Some(0.8));
+        assert_eq!(opts.top_k, Some(50));
+    }
+
+    #[test]
+    fn apply_defaults_preserves_caller_generate() {
+        let params = PresetParameters {
+            temperature: Some(0.8),
+            ..Default::default()
+        };
+        let mut opts = GenerateOptions::new("x");
+        opts.temperature = Some(0.1);
+        params.apply_defaults_to_generate(&mut opts);
+        assert_eq!(opts.temperature, Some(0.1));
     }
 }
