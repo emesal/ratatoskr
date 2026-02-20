@@ -1413,7 +1413,10 @@
   ],
   "presets": {
     "budget": {
-      "agentic": "xiaomi/mimo-v2-flash",
+      "agentic": {
+        "model": "xiaomi/mimo-v2-flash",
+        "parameters": { "temperature": 0.3, "top_p": 0.95 }
+      },
       "embedding": "sentence-transformers/all-MiniLM-L6-v2",
       "summariser": "meta-llama/llama-3.3-70b-instruct",
       "text-generation": "mistralai/mistral-small-creative"
