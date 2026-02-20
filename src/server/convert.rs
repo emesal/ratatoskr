@@ -371,7 +371,6 @@ pub(crate) fn model_capability_to_proto(cap: ModelCapability) -> Option<proto::M
         ModelCapability::Stance => Some(proto::ModelCapability::Stance),
         ModelCapability::TokenCounting => Some(proto::ModelCapability::TokenCounting),
         ModelCapability::LocalInference => Some(proto::ModelCapability::LocalInference),
-        _ => None,
     }
 }
 

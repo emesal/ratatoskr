@@ -175,18 +175,14 @@ impl ModelGateway for ServiceClient {
         }) {
             Ok(response) => {
                 let caps = response.into_inner();
-                Capabilities {
-                    chat: caps.chat,
-                    chat_streaming: caps.chat_streaming,
-                    generate: caps.generate,
-                    tool_use: caps.tool_use,
-                    embed: caps.embed,
-                    nli: caps.nli,
-                    classify: caps.classify,
-                    stance: caps.stance,
-                    token_counting: caps.token_counting,
-                    local_inference: caps.local_inference,
-                }
+                caps.capabilities
+                    .into_iter()
+                    .filter_map(|c| {
+                        proto::ModelCapability::try_from(c)
+                            .ok()
+                            .and_then(crate::server::convert::proto_to_model_capability)
+                    })
+                    .collect()
             }
             // Fall back to empty capabilities if the RPC fails (e.g. older server).
             Err(_) => Capabilities::default(),
