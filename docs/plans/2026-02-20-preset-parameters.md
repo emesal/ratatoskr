@@ -12,13 +12,17 @@
 
 ---
 
-### Task 1: PresetEntry and PresetParameters types
+### Task 1: PresetEntry and PresetParameters types ✓
+
+> **Status:** Complete. Committed `d0a6a44`.
 
 **Files:**
 - Create: `src/registry/preset.rs`
 - Modify: `src/registry/mod.rs` (add `pub mod preset;` + re-export)
 - Modify: `src/lib.rs` (re-export new types)
 - Test: inline unit tests in `src/registry/preset.rs`
+
+**Deviations:** Tests used `ChatOptions::new("x")` / `GenerateOptions::new("x")` instead of `..Default::default()` (those types don't derive `Default`). `stop_sequences` in `GenerateOptions` is `Vec<String>` (not `Option`), so the apply method checks `is_empty()` instead of `is_none()`.
 
 **Step 1: Write the failing test**
 
@@ -226,7 +230,9 @@ git commit -m "feat: add PresetEntry and PresetParameters types"
 
 ---
 
-### Task 2: apply_defaults methods on PresetParameters
+### Task 2: apply_defaults methods on PresetParameters ✓
+
+> **Status:** Complete. Committed `7eeed1d`.
 
 **Files:**
 - Modify: `src/registry/preset.rs` (add methods + tests)
@@ -401,7 +407,9 @@ git commit -m "feat: PresetParameters::apply_defaults_to_chat/generate"
 
 ---
 
-### Task 3: Migrate ModelRegistry to PresetEntry
+### Task 3: Migrate ModelRegistry to PresetEntry ✓
+
+> **Status:** Complete. Committed `b9c3382` (combined with Task 4).
 
 **Files:**
 - Modify: `src/registry/mod.rs` (change `presets` type + methods)
@@ -484,7 +492,9 @@ git commit -m "feat: migrate ModelRegistry presets to PresetEntry"
 
 ---
 
-### Task 4: Migrate remote registry types to PresetEntry
+### Task 4: Migrate remote registry types to PresetEntry ✓
+
+> **Status:** Complete. Committed `b9c3382` (combined with Task 3).
 
 **Files:**
 - Modify: `src/registry/remote.rs` (change `RemoteRegistry`, `RegistryPayload` types)
@@ -536,6 +546,8 @@ git commit -m "feat: migrate remote registry types to PresetEntry"
 ---
 
 ### Task 5: Update ResolvedModel and gateway resolution
+
+> **Pre-condition note:** During Tasks 3-4, the two `.map(String::from)` calls in `embedded.rs` were patched to `.map(|e| e.model().to_owned())` to unblock compilation. Task 5 replaces this with the full implementation.
 
 **Files:**
 - Modify: `src/gateway/embedded.rs` (ResolvedModel + resolve_model + apply_resolved_*)

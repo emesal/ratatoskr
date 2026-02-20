@@ -122,8 +122,8 @@ pub use providers::{
 pub use cache::{CacheConfig, DiscoveryConfig, ModelCache, ResponseCache};
 
 // Re-export registry
-pub use registry::{ModelRegistry, PresetEntry, PresetParameters, PresetResolution};
 pub use registry::remote::RemoteRegistryConfig;
+pub use registry::{ModelRegistry, PresetEntry, PresetParameters, PresetResolution};
 
 // Re-export version info
 pub use version::{BUILD_TIMESTAMP, GIT_BRANCH, GIT_SHA, PKG_VERSION, git_dirty, version_string};

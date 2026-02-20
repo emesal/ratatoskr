@@ -455,8 +455,7 @@ impl ModelGateway for ServiceClient {
         };
         let mut client = self.inner.clone();
         let response =
-            block_in_place(|| rt.block_on(async { client.resolve_preset(request).await }))
-                .ok()?;
+            block_in_place(|| rt.block_on(async { client.resolve_preset(request).await })).ok()?;
         response.into_inner().into()
     }
 }
