@@ -13,7 +13,7 @@
 pub mod preset;
 pub mod remote;
 
-pub use preset::{PresetEntry, PresetParameters};
+pub use preset::{PresetEntry, PresetParameters, PresetResolution};
 
 use std::collections::{BTreeMap, HashMap};
 

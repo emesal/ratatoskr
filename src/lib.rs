@@ -122,7 +122,7 @@ pub use providers::{
 pub use cache::{CacheConfig, DiscoveryConfig, ModelCache, ResponseCache};
 
 // Re-export registry
-pub use registry::{ModelRegistry, PresetEntry, PresetParameters};
+pub use registry::{ModelRegistry, PresetEntry, PresetParameters, PresetResolution};
 pub use registry::remote::RemoteRegistryConfig;
 
 // Re-export version info

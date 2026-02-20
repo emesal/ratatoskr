@@ -154,6 +154,17 @@ impl PresetParameters {
     }
 }
 
+/// Result of resolving a preset: the concrete model ID and any default parameters.
+///
+/// Returned by [`crate::ModelGateway::resolve_preset`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct PresetResolution {
+    /// The resolved model identifier.
+    pub model: String,
+    /// Optional default parameters for this preset.
+    pub parameters: Option<PresetParameters>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

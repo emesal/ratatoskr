@@ -521,13 +521,14 @@ impl ModelGateway for EmbeddedGateway {
         Ok(metadata)
     }
 
-    fn resolve_preset(&self, tier: &str, capability: &str) -> Option<String> {
-        self.model_registry
-            .preset(tier, capability)
-            .map(|e| e.model().to_owned())
+    fn resolve_preset(&self, tier: &str, capability: &str) -> Option<crate::PresetResolution> {
+        self.model_registry.preset(tier, capability).map(|entry| {
+            crate::PresetResolution {
+                model: entry.model().to_owned(),
+                parameters: entry.parameters().cloned(),
+            }
+        })
     }
-    // Note: `resolve_preset` returns a bare String for the trait method; Task 6
-    // replaces it with `Option<PresetResolution>` carrying parameters too.
 }
 
 #[cfg(test)]
