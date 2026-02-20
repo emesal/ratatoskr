@@ -342,7 +342,7 @@ fn preset_set(
     } else {
         PresetEntry::WithParams {
             model: model_id.to_owned(),
-            parameters: params,
+            parameters: Box::new(params),
         }
     };
 

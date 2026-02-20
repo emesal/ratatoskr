@@ -16,7 +16,7 @@ pub enum PresetEntry {
     WithParams {
         model: String,
         #[serde(default, skip_serializing_if = "PresetParameters::is_empty")]
-        parameters: PresetParameters,
+        parameters: Box<PresetParameters>,
     },
     /// Legacy bare string (just a model ID).
     Bare(String),
@@ -146,10 +146,10 @@ impl PresetParameters {
         fill!(reasoning);
         // `stop` in PresetParameters maps to `stop_sequences` in GenerateOptions.
         // Only fill if the caller left the vec empty.
-        if opts.stop_sequences.is_empty() {
-            if let Some(stop) = &self.stop {
-                opts.stop_sequences = stop.clone();
-            }
+        if opts.stop_sequences.is_empty()
+            && let Some(stop) = &self.stop
+        {
+            opts.stop_sequences = stop.clone();
         }
     }
 }
@@ -194,7 +194,7 @@ mod tests {
         let entry: PresetEntry = serde_json::from_str(json).unwrap();
         assert_eq!(entry.model(), "some/model");
         // WithParams variant but empty parameters
-        assert!(entry.parameters().map_or(true, |p| p.is_empty()));
+        assert!(entry.parameters().is_none_or(|p| p.is_empty()));
     }
 
     #[test]
@@ -209,10 +209,10 @@ mod tests {
     fn with_params_round_trips() {
         let entry = PresetEntry::WithParams {
             model: "x/model".to_owned(),
-            parameters: PresetParameters {
+            parameters: Box::new(PresetParameters {
                 temperature: Some(0.5),
                 ..Default::default()
-            },
+            }),
         };
         let json = serde_json::to_string(&entry).unwrap();
         let back: PresetEntry = serde_json::from_str(&json).unwrap();
@@ -223,11 +223,13 @@ mod tests {
     #[test]
     fn preset_parameters_is_empty() {
         assert!(PresetParameters::default().is_empty());
-        assert!(!PresetParameters {
-            temperature: Some(0.5),
-            ..Default::default()
-        }
-        .is_empty());
+        assert!(
+            !PresetParameters {
+                temperature: Some(0.5),
+                ..Default::default()
+            }
+            .is_empty()
+        );
     }
 
     // ===== Task 2: apply_defaults =====

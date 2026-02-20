@@ -162,11 +162,11 @@ fn parameterised_preset_round_trips() {
         "agentic".to_owned(),
         PresetEntry::WithParams {
             model: "xiaomi/mimo-v2-flash".to_owned(),
-            parameters: PresetParameters {
+            parameters: Box::new(PresetParameters {
                 temperature: Some(0.3),
                 top_p: Some(0.95),
                 ..Default::default()
-            },
+            }),
         },
     );
     presets.insert("budget".to_owned(), budget_map);

@@ -522,12 +522,12 @@ impl ModelGateway for EmbeddedGateway {
     }
 
     fn resolve_preset(&self, tier: &str, capability: &str) -> Option<crate::PresetResolution> {
-        self.model_registry.preset(tier, capability).map(|entry| {
-            crate::PresetResolution {
+        self.model_registry
+            .preset(tier, capability)
+            .map(|entry| crate::PresetResolution {
                 model: entry.model().to_owned(),
                 parameters: entry.parameters().cloned(),
-            }
-        })
+            })
     }
 }
 
@@ -767,11 +767,11 @@ mod tests {
             "agentic",
             PresetEntry::WithParams {
                 model: "some/model".to_owned(),
-                parameters: PresetParameters {
+                parameters: Box::new(PresetParameters {
                     temperature: Some(0.3),
                     top_p: Some(0.9),
                     ..Default::default()
-                },
+                }),
             },
         );
 

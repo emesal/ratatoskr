@@ -309,7 +309,9 @@ fn preset_lookup_hit() {
     );
 
     assert_eq!(
-        registry.preset("free", "text-generation").map(|e| e.model()),
+        registry
+            .preset("free", "text-generation")
+            .map(|e| e.model()),
         Some("free/model")
     );
 }
@@ -397,7 +399,9 @@ fn merge_presets_incoming_overrides_existing() {
 
     // Overridden
     assert_eq!(
-        registry.preset("free", "text-generation").map(|e| e.model()),
+        registry
+            .preset("free", "text-generation")
+            .map(|e| e.model()),
         Some("new/model")
     );
     // Preserved (not in incoming)
@@ -420,11 +424,11 @@ fn preset_with_parameters() {
         "agentic",
         PresetEntry::WithParams {
             model: "xiaomi/mimo-v2-flash".to_owned(),
-            parameters: PresetParameters {
+            parameters: Box::new(PresetParameters {
                 temperature: Some(0.3),
                 top_p: Some(0.95),
                 ..Default::default()
-            },
+            }),
         },
     );
     let entry = registry.preset("budget", "agentic").unwrap();
@@ -445,7 +449,9 @@ fn embedded_seed_loads_with_presets() {
 
     // Check a known preset value.
     assert_eq!(
-        registry.preset("premium", "text-generation").map(|e| e.model()),
+        registry
+            .preset("premium", "text-generation")
+            .map(|e| e.model()),
         Some("anthropic/claude-sonnet-4.6")
     );
     assert_eq!(
@@ -479,7 +485,9 @@ fn cached_remote_merges_presets_over_seed() {
 
     // Premium text-generation should be overridden by cache.
     assert_eq!(
-        registry.preset("premium", "text-generation").map(|e| e.model()),
+        registry
+            .preset("premium", "text-generation")
+            .map(|e| e.model()),
         Some("anthropic/claude-opus-4")
     );
 
