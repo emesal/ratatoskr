@@ -10,7 +10,10 @@
 //!
 //! See [`remote`] for the fetch/cache mechanism.
 
+pub mod preset;
 pub mod remote;
+
+pub use preset::{PresetEntry, PresetParameters};
 
 use std::collections::{BTreeMap, HashMap};
 
