@@ -226,9 +226,22 @@ impl ModelGateway for EmbeddedGateway {
     }
 
     fn capabilities(&self) -> Capabilities {
+        use crate::ModelCapability::*;
+
+        #[allow(unused_mut)]
+        let mut caps = vec![
+            (self.registry.has_chat(), Chat),
+            (self.registry.has_chat(), ChatStreaming),
+            (self.registry.has_generate(), Generate),
+            (self.registry.has_chat(), ToolUse),
+            (self.registry.has_embedding(), Embed),
+            (self.registry.has_nli(), Nli),
+            (self.registry.has_classify(), Classify),
+            (self.registry.has_stance(), Stance),
+        ];
+
         #[cfg(feature = "local-inference")]
-        let (token_counting, local_inference) = {
-            // Check if any local providers are registered
+        {
             let names = self.registry.provider_names();
             let has_local = names
                 .embedding
@@ -238,27 +251,14 @@ impl ModelGateway for EmbeddedGateway {
                     .nli
                     .iter()
                     .any(|n| n.starts_with("local-") || n.contains("onnx"));
-            (true, has_local)
-        };
-
-        Capabilities {
-            chat: self.registry.has_chat(),
-            chat_streaming: self.registry.has_chat(),
-            generate: self.registry.has_generate(),
-            tool_use: self.registry.has_chat(),
-            embed: self.registry.has_embedding(),
-            nli: self.registry.has_nli(),
-            classify: self.registry.has_classify(),
-            stance: self.registry.has_stance(),
-            #[cfg(feature = "local-inference")]
-            token_counting,
-            #[cfg(not(feature = "local-inference"))]
-            token_counting: false,
-            #[cfg(feature = "local-inference")]
-            local_inference,
-            #[cfg(not(feature = "local-inference"))]
-            local_inference: false,
+            caps.push((true, TokenCounting));
+            caps.push((has_local, LocalInference));
         }
+
+        caps.into_iter()
+            .filter(|(enabled, _)| *enabled)
+            .map(|(_, cap)| cap)
+            .collect()
     }
 
     #[instrument(name = "gateway.embed", skip(self, text))]
