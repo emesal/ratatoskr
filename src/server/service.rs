@@ -387,17 +387,11 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
         _request: Request<proto::CapabilitiesRequest>,
     ) -> GrpcResult<proto::CapabilitiesResponse> {
         let caps = self.gateway.capabilities();
-        Ok(Response::new(proto::CapabilitiesResponse {
-            chat: caps.chat,
-            chat_streaming: caps.chat_streaming,
-            generate: caps.generate,
-            tool_use: caps.tool_use,
-            embed: caps.embed,
-            nli: caps.nli,
-            classify: caps.classify,
-            stance: caps.stance,
-            token_counting: caps.token_counting,
-            local_inference: caps.local_inference,
-        }))
+        let capabilities = caps
+            .iter()
+            .filter_map(|cap| crate::server::convert::model_capability_to_proto(*cap))
+            .map(|c| c as i32)
+            .collect();
+        Ok(Response::new(proto::CapabilitiesResponse { capabilities }))
     }
 }
