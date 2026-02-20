@@ -15,7 +15,7 @@ pub mod remote;
 
 pub use preset::{PresetEntry, PresetParameters, PresetResolution};
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use tracing::{info, warn};
 
@@ -124,6 +124,14 @@ impl ModelRegistry {
     /// Get all presets for a cost tier.
     pub fn presets_for_tier(&self, tier: &str) -> Option<&BTreeMap<String, PresetEntry>> {
         self.presets.get(tier)
+    }
+
+    /// Return all preset tiers and their capability names (no model details).
+    pub fn all_preset_keys(&self) -> BTreeMap<String, BTreeSet<String>> {
+        self.presets
+            .iter()
+            .map(|(tier, caps)| (tier.clone(), caps.keys().cloned().collect()))
+            .collect()
     }
 
     /// Insert or update a single preset.
