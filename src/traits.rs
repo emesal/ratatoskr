@@ -165,4 +165,15 @@ pub trait ModelGateway: Send + Sync {
     fn resolve_preset(&self, _tier: &str, _capability: &str) -> Option<crate::PresetResolution> {
         None
     }
+
+    /// List all configured presets as a tier → capability set map.
+    ///
+    /// Returns the full two-level structure of preset keys so consumers can
+    /// discover which tiers and capabilities are available before resolving.
+    /// Use [`Self::resolve_preset`] to obtain the concrete model and parameters.
+    fn list_presets(
+        &self,
+    ) -> std::collections::BTreeMap<String, std::collections::BTreeSet<String>> {
+        Default::default()
+    }
 }

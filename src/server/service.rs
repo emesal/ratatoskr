@@ -408,4 +408,20 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
             })),
         }
     }
+
+    async fn list_presets(
+        &self,
+        _request: Request<proto::ListPresetsRequest>,
+    ) -> GrpcResult<proto::ListPresetsResponse> {
+        let tiers = self
+            .gateway
+            .list_presets()
+            .into_iter()
+            .map(|(tier, caps)| proto::PresetTierEntry {
+                tier,
+                capabilities: caps.into_iter().collect(),
+            })
+            .collect();
+        Ok(Response::new(proto::ListPresetsResponse { tiers }))
+    }
 }

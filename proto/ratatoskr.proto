@@ -38,6 +38,7 @@ service Ratatoskr {
 
     // Preset resolution
     rpc ResolvePreset(ResolvePresetRequest) returns (ResolvePresetResponse);
+    rpc ListPresets(ListPresetsRequest) returns (ListPresetsResponse);
 
     // Service info
     rpc Health(HealthRequest) returns (HealthResponse);
@@ -542,4 +543,16 @@ message ResolvePresetResponse {
     optional string model_id = 2;
     // Default generation parameters (set when found = true and preset has params).
     optional ProtoPresetParameters parameters = 3;
+}
+
+// Tier entry in a ListPresets response: one tier with its capability names.
+message PresetTierEntry {
+    string tier = 1;
+    repeated string capabilities = 2;
+}
+
+message ListPresetsRequest {}
+
+message ListPresetsResponse {
+    repeated PresetTierEntry tiers = 1;
 }

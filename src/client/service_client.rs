@@ -458,6 +458,28 @@ impl ModelGateway for ServiceClient {
             block_in_place(|| rt.block_on(async { client.resolve_preset(request).await })).ok()?;
         response.into_inner().into()
     }
+
+    fn list_presets(
+        &self,
+    ) -> std::collections::BTreeMap<String, std::collections::BTreeSet<String>> {
+        // Synchronous trait method — use block_in_place to safely block on async gRPC.
+        let Ok(rt) = tokio::runtime::Handle::try_current() else {
+            return Default::default();
+        };
+        let mut client = self.inner.clone();
+        let response = block_in_place(|| {
+            rt.block_on(async { client.list_presets(proto::ListPresetsRequest {}).await })
+        });
+        let Ok(response) = response else {
+            return Default::default();
+        };
+        response
+            .into_inner()
+            .tiers
+            .into_iter()
+            .map(|entry| (entry.tier, entry.capabilities.into_iter().collect()))
+            .collect()
+    }
 }
 
 // =============================================================================

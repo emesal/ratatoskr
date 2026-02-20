@@ -529,6 +529,12 @@ impl ModelGateway for EmbeddedGateway {
                 parameters: entry.parameters().cloned(),
             })
     }
+
+    fn list_presets(
+        &self,
+    ) -> std::collections::BTreeMap<String, std::collections::BTreeSet<String>> {
+        self.model_registry.all_preset_keys()
+    }
 }
 
 #[cfg(test)]
