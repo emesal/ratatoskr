@@ -1,4 +1,4 @@
-use ratatoskr::{ModelGateway, ParameterName, Ratatoskr};
+use ratatoskr::{ModelCapability, ModelGateway, ParameterName, Ratatoskr};
 
 #[test]
 fn test_builder_no_provider_error() {
@@ -26,9 +26,9 @@ fn test_builder_with_huggingface() {
         .expect("should build with huggingface only");
 
     let caps = gateway.capabilities();
-    assert!(caps.embed);
-    assert!(caps.nli);
-    assert!(caps.classify);
+    assert!(caps.has(ModelCapability::Embed));
+    assert!(caps.has(ModelCapability::Nli));
+    assert!(caps.has(ModelCapability::Classify));
 }
 
 #[test]
@@ -41,8 +41,8 @@ fn test_builder_openrouter_and_huggingface() {
         .expect("should build with both providers");
 
     let caps = gateway.capabilities();
-    assert!(caps.chat);
-    assert!(caps.embed);
+    assert!(caps.has(ModelCapability::Chat));
+    assert!(caps.has(ModelCapability::Embed));
 }
 
 // ===== Phase 6: model_metadata tests =====
@@ -161,7 +161,7 @@ fn test_builder_keyless_openrouter_has_chat() {
         .unwrap();
     let caps = gateway.capabilities();
     assert!(
-        caps.chat,
+        caps.has(ModelCapability::Chat),
         "keyless openrouter should provide chat capability"
     );
 }

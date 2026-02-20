@@ -358,4 +358,57 @@ mod tests {
         let config = RemoteRegistryConfig::with_url("https://example.com/reg.json");
         assert_eq!(config.url, "https://example.com/reg.json");
     }
+
+    #[test]
+    fn presets_round_trip_preserves_all_slots() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("registry.json");
+
+        let json = r#"{
+            "version": 1,
+            "models": [],
+            "presets": {
+                "budget": {
+                    "agentic": "x/model-a",
+                    "embedding": "x/model-b",
+                    "summariser": "x/model-c",
+                    "text-generation": "x/model-d"
+                },
+                "premium": {
+                    "agentic": "x/model-e",
+                    "summariser": "x/model-f"
+                }
+            }
+        }"#;
+
+        let payload = parse_payload(json).unwrap();
+        assert_eq!(
+            payload.presets["budget"].get("summariser"),
+            Some(&"x/model-c".to_string()),
+            "summariser slot must survive parse"
+        );
+
+        save_cache(&path, &payload).unwrap();
+        let loaded = load_cached(&path).unwrap();
+
+        assert_eq!(
+            loaded.presets["budget"].get("summariser"),
+            Some(&"x/model-c".to_string()),
+            "summariser slot must survive save+load"
+        );
+        assert_eq!(
+            loaded.presets["premium"].get("summariser"),
+            Some(&"x/model-f".to_string()),
+        );
+        assert_eq!(
+            loaded.presets["budget"].len(),
+            4,
+            "all 4 budget slots preserved"
+        );
+        assert_eq!(
+            loaded.presets["premium"].len(),
+            2,
+            "all 2 premium slots preserved"
+        );
+    }
 }

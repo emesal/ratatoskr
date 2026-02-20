@@ -386,6 +386,10 @@ enum ModelCapability {
     MODEL_CAPABILITY_NLI = 4;
     MODEL_CAPABILITY_CLASSIFY = 5;
     MODEL_CAPABILITY_STANCE = 6;
+    MODEL_CAPABILITY_CHAT_STREAMING = 7;
+    MODEL_CAPABILITY_TOOL_USE = 8;
+    MODEL_CAPABILITY_TOKEN_COUNTING = 9;
+    MODEL_CAPABILITY_LOCAL_INFERENCE = 10;
 }
 
 message ModelStatusRequest {
@@ -503,14 +507,5 @@ message HealthResponse {
 message CapabilitiesRequest {}
 
 message CapabilitiesResponse {
-    bool chat = 1;
-    bool chat_streaming = 2;
-    bool generate = 3;
-    bool tool_use = 4;
-    bool embed = 5;
-    bool nli = 6;
-    bool classify = 7;
-    bool stance = 8;
-    bool token_counting = 9;
-    bool local_inference = 10;
+    repeated ModelCapability capabilities = 1;
 }

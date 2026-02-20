@@ -235,7 +235,7 @@ async fn test_live_generate_stream_openrouter() {
     let mut stream = gateway
         .generate_stream(
             "Say only 'hello' and nothing else.",
-            &GenerateOptions::new("anthropic/claude-3-haiku-20240307").max_tokens(10),
+            &GenerateOptions::new("ratatoskr:free/agentic").max_tokens(10),
         )
         .await
         .expect("Generate stream failed");

@@ -1,4 +1,4 @@
-use ratatoskr::{Capabilities, ModelGateway, RatatoskrError};
+use ratatoskr::{Capabilities, ModelCapability, ModelGateway, RatatoskrError};
 
 // Test that the trait can be implemented
 struct MockGateway;
@@ -36,7 +36,7 @@ impl ModelGateway for MockGateway {
 fn test_mock_gateway_capabilities() {
     let gateway = MockGateway;
     let caps = gateway.capabilities();
-    assert!(!caps.chat);
+    assert!(!caps.has(ModelCapability::Chat));
 }
 
 #[tokio::test]

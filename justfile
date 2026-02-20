@@ -43,7 +43,8 @@ default:
   @echo ""
   @echo "🛠️  Utility:"
   @echo "  just clean                → Remove build artifacts"
-  @echo "  just rebuild              → Clean + rebuild release"
+  @echo "  just rebuild              → Clean + rebuild release (all features)"
+  @echo "  just install              → Build + install all binaries to ~/.cargo/bin"
   @echo ""
   @echo "Run 'just --list' to see all available commands"
 
@@ -249,26 +250,30 @@ pre-push: check-freeze check-seed lint test
 push: pre-push
   git push
 
-# Install all binary crates to ~/.cargo/bin
+# Install all binaries to ~/.cargo/bin (with correct features per binary)
 install:
   #!/usr/bin/env bash
   set -e
   BINS=$(cargo metadata --format-version=1 --no-deps 2>/dev/null \
     | jq -r '
-        .workspace_root as $root |
-        [.packages[] | select(any(.targets[]; .kind[] == "bin")) | .manifest_path] |
-        unique | .[] |
-        if . == ($root + "/Cargo.toml") then "."
-        else (ltrimstr($root + "/") | rtrimstr("/Cargo.toml"))
-        end')
+        [.packages[].targets[]
+          | select(.kind[] == "bin")
+          | {name, features: (."required-features" // [] | join(","))}
+          | "\(.name)\t\(.features)"
+        ] | .[]')
   if [ -z "$BINS" ]; then
-    echo "❌ No binary crates found"
+    echo "❌ No binary targets found"
     exit 1
   fi
-  for crate in $BINS; do
-    echo "Installing ${crate}..."
-    cargo install --path "$crate"
-  done
+  while IFS=$'\t' read -r bin features; do
+    if [ -n "$features" ]; then
+      echo "Installing ${bin} (--features ${features})..."
+      cargo install --path . --bin "$bin" --features "$features"
+    else
+      echo "Installing ${bin}..."
+      cargo install --path . --bin "$bin"
+    fi
+  done <<< "$BINS"
 
 # === Documentation ===
 
@@ -423,7 +428,7 @@ clean:
 update-submodules:
   git submodule update --init --recursive
 
-# Full clean rebuild
+# Full clean rebuild (all features)
 rebuild: clean
   git submodule update --init --recursive
-  cargo build --release
+  cargo build --release --features server,client,registry-tool

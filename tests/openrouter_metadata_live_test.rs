@@ -2,6 +2,10 @@
 //!
 //! Requires `OPENROUTER_API_KEY` environment variable.
 //! Run with: `cargo test --test openrouter_metadata_live_test -- --ignored`
+//!
+//! **Note:** These tests fetch metadata for specific paid models (e.g. `anthropic/claude-sonnet-4`)
+//! and will incur API costs if run. They are intentionally left on paid models to assert
+//! rich metadata fields (context window, pricing, parameters) that free models may not expose.
 
 use ratatoskr::{ModelGateway, ParameterName, Ratatoskr};
 

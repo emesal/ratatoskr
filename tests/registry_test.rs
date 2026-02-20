@@ -382,7 +382,7 @@ fn embedded_seed_loads_with_presets() {
     // Check a known preset value.
     assert_eq!(
         registry.preset("premium", "text-generation"),
-        Some("anthropic/claude-sonnet-4")
+        Some("anthropic/claude-sonnet-4.6")
     );
     assert_eq!(
         registry.preset("premium", "embedding"),
