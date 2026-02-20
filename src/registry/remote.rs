@@ -385,8 +385,8 @@ mod tests {
 
         let payload = parse_payload(json).unwrap();
         assert_eq!(
-            payload.presets["budget"].get("summariser"),
-            Some(&"x/model-c".to_string()),
+            payload.presets["budget"].get("summariser").map(|e| e.model()),
+            Some("x/model-c"),
             "summariser slot must survive parse"
         );
 
@@ -394,13 +394,13 @@ mod tests {
         let loaded = load_cached(&path).unwrap();
 
         assert_eq!(
-            loaded.presets["budget"].get("summariser"),
-            Some(&"x/model-c".to_string()),
+            loaded.presets["budget"].get("summariser").map(|e| e.model()),
+            Some("x/model-c"),
             "summariser slot must survive save+load"
         );
         assert_eq!(
-            loaded.presets["premium"].get("summariser"),
-            Some(&"x/model-f".to_string()),
+            loaded.presets["premium"].get("summariser").map(|e| e.model()),
+            Some("x/model-f"),
         );
         assert_eq!(
             loaded.presets["budget"].len(),
