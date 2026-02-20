@@ -389,8 +389,7 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
         let caps = self.gateway.capabilities();
         let capabilities = caps
             .iter()
-            .filter_map(|cap| crate::server::convert::model_capability_to_proto(*cap))
-            .map(|c| c as i32)
+            .map(|cap| crate::server::convert::model_capability_to_proto(*cap) as i32)
             .collect();
         Ok(Response::new(proto::CapabilitiesResponse { capabilities }))
     }

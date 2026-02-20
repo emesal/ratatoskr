@@ -358,19 +358,22 @@ impl From<Token> for proto::Token {
     }
 }
 
-/// Maps a [`ModelCapability`] to its proto equivalent. Returns `None` for unknown variants.
-pub(crate) fn model_capability_to_proto(cap: ModelCapability) -> Option<proto::ModelCapability> {
+/// Maps a [`ModelCapability`] to its proto equivalent.
+///
+/// The match is exhaustive: adding a new [`ModelCapability`] variant will cause a compile error
+/// here, ensuring the proto mapping stays in sync.
+pub(crate) fn model_capability_to_proto(cap: ModelCapability) -> proto::ModelCapability {
     match cap {
-        ModelCapability::Chat => Some(proto::ModelCapability::Chat),
-        ModelCapability::ChatStreaming => Some(proto::ModelCapability::ChatStreaming),
-        ModelCapability::Generate => Some(proto::ModelCapability::Generate),
-        ModelCapability::ToolUse => Some(proto::ModelCapability::ToolUse),
-        ModelCapability::Embed => Some(proto::ModelCapability::Embed),
-        ModelCapability::Nli => Some(proto::ModelCapability::Nli),
-        ModelCapability::Classify => Some(proto::ModelCapability::Classify),
-        ModelCapability::Stance => Some(proto::ModelCapability::Stance),
-        ModelCapability::TokenCounting => Some(proto::ModelCapability::TokenCounting),
-        ModelCapability::LocalInference => Some(proto::ModelCapability::LocalInference),
+        ModelCapability::Chat => proto::ModelCapability::Chat,
+        ModelCapability::ChatStreaming => proto::ModelCapability::ChatStreaming,
+        ModelCapability::Generate => proto::ModelCapability::Generate,
+        ModelCapability::ToolUse => proto::ModelCapability::ToolUse,
+        ModelCapability::Embed => proto::ModelCapability::Embed,
+        ModelCapability::Nli => proto::ModelCapability::Nli,
+        ModelCapability::Classify => proto::ModelCapability::Classify,
+        ModelCapability::Stance => proto::ModelCapability::Stance,
+        ModelCapability::TokenCounting => proto::ModelCapability::TokenCounting,
+        ModelCapability::LocalInference => proto::ModelCapability::LocalInference,
     }
 }
 
@@ -399,7 +402,7 @@ impl From<ModelInfo> for proto::ModelInfo {
             capabilities: m
                 .capabilities
                 .into_iter()
-                .filter_map(|c| model_capability_to_proto(c).map(|p| p as i32))
+                .map(|c| model_capability_to_proto(c) as i32)
                 .collect(),
             context_window: m.context_window.map(|w| w as u32),
             dimensions: m.dimensions.map(|d| d as u32),
