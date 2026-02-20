@@ -62,7 +62,7 @@ enum ModelCommand {
 
 #[derive(Subcommand)]
 enum PresetCommand {
-    /// set a preset entry: tier → slot → model
+    /// set a preset entry: tier → slot → model (with optional generation parameter defaults)
     Set {
         /// cost tier (e.g. "free", "budget", "premium", or any custom tier)
         tier: String,
@@ -70,6 +70,20 @@ enum PresetCommand {
         slot: String,
         /// model identifier (must already be in the registry)
         model_id: String,
+        #[arg(long, help = "default temperature (0.0–2.0)")]
+        temperature: Option<f32>,
+        #[arg(long, help = "default top_p nucleus sampling (0.0–1.0)")]
+        top_p: Option<f32>,
+        #[arg(long, help = "default top_k")]
+        top_k: Option<usize>,
+        #[arg(long, help = "default max output tokens")]
+        max_tokens: Option<usize>,
+        #[arg(long, help = "default frequency penalty")]
+        frequency_penalty: Option<f32>,
+        #[arg(long, help = "default presence penalty")]
+        presence_penalty: Option<f32>,
+        #[arg(long, help = "default random seed")]
+        seed: Option<u64>,
     },
     /// display preset table
     List,
@@ -123,8 +137,8 @@ fn known_slots(registry: &RemoteRegistry) -> std::collections::BTreeSet<String> 
 fn preset_references(registry: &RemoteRegistry, model_id: &str) -> Vec<String> {
     let mut refs = Vec::new();
     for (tier, slots) in &registry.presets {
-        for (slot, id) in slots {
-            if id == model_id {
+        for (slot, entry) in slots {
+            if entry.model() == model_id {
                 refs.push(format!("{tier}.{slot}"));
             }
         }
@@ -273,7 +287,16 @@ fn preset_set(
     tier: &str,
     slot: &str,
     model_id: &str,
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    top_k: Option<usize>,
+    max_tokens: Option<usize>,
+    frequency_penalty: Option<f32>,
+    presence_penalty: Option<f32>,
+    seed: Option<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    use ratatoskr::{PresetEntry, PresetParameters};
+
     let mut registry = load_registry(path)?;
 
     // model must exist in registry
@@ -303,11 +326,31 @@ fn preset_set(
         return Ok(());
     }
 
+    let params = PresetParameters {
+        temperature,
+        top_p,
+        top_k,
+        max_tokens,
+        frequency_penalty,
+        presence_penalty,
+        seed,
+        ..Default::default()
+    };
+
+    let entry = if params.is_empty() {
+        PresetEntry::Bare(model_id.to_owned())
+    } else {
+        PresetEntry::WithParams {
+            model: model_id.to_owned(),
+            parameters: params,
+        }
+    };
+
     registry
         .presets
         .entry(tier.to_owned())
         .or_default()
-        .insert(slot.to_string(), model_id.to_string());
+        .insert(slot.to_string(), entry);
 
     save_registry(path, &registry)?;
     println!("set {tier}.{slot} = {model_id}");
@@ -333,12 +376,21 @@ fn preset_list(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("{}", "─".repeat(12 + all_slots.len() * 41));
 
-    // rows
+    // rows — `*` suffix marks presets with parameter defaults
     for (tier, slots) in &registry.presets {
         print!("{tier:<12}");
         for slot in &all_slots {
-            let model = slots.get(slot).map(|s| s.as_str()).unwrap_or("—");
-            print!(" {:<40}", model);
+            let cell = match slots.get(slot) {
+                None => "—".to_owned(),
+                Some(entry) => {
+                    if entry.parameters().is_some() {
+                        format!("{}*", entry.model())
+                    } else {
+                        entry.model().to_owned()
+                    }
+                }
+            };
+            print!(" {:<40}", cell);
         }
         println!();
     }
@@ -458,7 +510,26 @@ async fn main() {
             tier,
             ref slot,
             ref model_id,
-        }) => preset_set(path, &tier, slot, model_id),
+            temperature,
+            top_p,
+            top_k,
+            max_tokens,
+            frequency_penalty,
+            presence_penalty,
+            seed,
+        }) => preset_set(
+            path,
+            &tier,
+            slot,
+            model_id,
+            temperature,
+            top_p,
+            top_k,
+            max_tokens,
+            frequency_penalty,
+            presence_penalty,
+            seed,
+        ),
         Command::Preset(PresetCommand::List) => preset_list(path),
         Command::Preset(PresetCommand::Remove { tier }) => preset_remove(path, &tier),
     };
