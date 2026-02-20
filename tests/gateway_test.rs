@@ -137,11 +137,11 @@ fn test_preset_uri_resolve_preset_still_works() {
         .build()
         .unwrap();
 
-    // the resolve_preset trait method should return a valid model id
-    let model = gateway.resolve_preset("free", "agentic");
-    assert!(model.is_some(), "free/agentic preset should resolve");
+    // the resolve_preset trait method should return a valid model id + optional params
+    let resolution = gateway.resolve_preset("free", "agentic");
+    assert!(resolution.is_some(), "free/agentic preset should resolve");
     assert!(
-        !model.as_ref().unwrap().is_empty(),
+        !resolution.as_ref().unwrap().model.is_empty(),
         "resolved model id should be non-empty"
     );
 }

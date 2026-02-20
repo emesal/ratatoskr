@@ -158,10 +158,11 @@ pub trait ModelGateway: Send + Sync {
 
     // ===== Autoconfig presets =====
 
-    /// Resolve a preset model ID for the given cost tier and capability.
+    /// Resolve a preset for the given cost tier and capability.
     ///
-    /// Returns `None` if no preset is configured for this combination.
-    fn resolve_preset(&self, _tier: &str, _capability: &str) -> Option<String> {
+    /// Returns the concrete model ID and any default generation parameters,
+    /// or `None` if no preset is configured for this combination.
+    fn resolve_preset(&self, _tier: &str, _capability: &str) -> Option<crate::PresetResolution> {
         None
     }
 }

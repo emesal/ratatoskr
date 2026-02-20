@@ -7,7 +7,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use ratatoskr::registry::remote::{self, RegistryPayload, RemoteRegistry, RemoteRegistryConfig};
-use ratatoskr::{ModelInfo, ModelMetadata};
+use ratatoskr::{ModelInfo, ModelMetadata, PresetEntry};
 
 fn sample_metadata(id: &str) -> ModelMetadata {
     ModelMetadata {
@@ -110,12 +110,21 @@ fn presets_survive_save_load_roundtrip() {
 
     let mut presets = BTreeMap::new();
     let mut free_map = BTreeMap::new();
-    free_map.insert("text-generation".to_owned(), "some/free-model".to_owned());
-    free_map.insert("embedding".to_owned(), "embed/model".to_owned());
+    free_map.insert(
+        "text-generation".to_owned(),
+        PresetEntry::Bare("some/free-model".to_owned()),
+    );
+    free_map.insert(
+        "embedding".to_owned(),
+        PresetEntry::Bare("embed/model".to_owned()),
+    );
     presets.insert("free".to_owned(), free_map);
 
     let mut premium_map = BTreeMap::new();
-    premium_map.insert("agentic".to_owned(), "big/model".to_owned());
+    premium_map.insert(
+        "agentic".to_owned(),
+        PresetEntry::Bare("big/model".to_owned()),
+    );
     presets.insert("premium".to_owned(), premium_map);
 
     let payload = RegistryPayload {
@@ -127,17 +136,53 @@ fn presets_survive_save_load_roundtrip() {
     let loaded = remote::load_cached(&path).unwrap();
     assert_eq!(loaded.presets.len(), 2);
     assert_eq!(
-        loaded.presets[&"free".to_owned()]["text-generation"],
+        loaded.presets[&"free".to_owned()]["text-generation"].model(),
         "some/free-model"
     );
     assert_eq!(
-        loaded.presets[&"free".to_owned()]["embedding"],
+        loaded.presets[&"free".to_owned()]["embedding"].model(),
         "embed/model"
     );
     assert_eq!(
-        loaded.presets[&"premium".to_owned()]["agentic"],
+        loaded.presets[&"premium".to_owned()]["agentic"].model(),
         "big/model"
     );
+}
+
+#[test]
+fn parameterised_preset_round_trips() {
+    use ratatoskr::PresetParameters;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("registry.json");
+
+    let mut presets = BTreeMap::new();
+    let mut budget_map = BTreeMap::new();
+    budget_map.insert(
+        "agentic".to_owned(),
+        PresetEntry::WithParams {
+            model: "xiaomi/mimo-v2-flash".to_owned(),
+            parameters: Box::new(PresetParameters {
+                temperature: Some(0.3),
+                top_p: Some(0.95),
+                ..Default::default()
+            }),
+        },
+    );
+    presets.insert("budget".to_owned(), budget_map);
+
+    let payload = RegistryPayload {
+        models: vec![],
+        presets,
+    };
+    remote::save_cache(&path, &payload).unwrap();
+
+    let loaded = remote::load_cached(&path).unwrap();
+    let entry = &loaded.presets["budget"]["agentic"];
+    assert_eq!(entry.model(), "xiaomi/mimo-v2-flash");
+    let params = entry.parameters().unwrap();
+    assert_eq!(params.temperature, Some(0.3));
+    assert_eq!(params.top_p, Some(0.95));
 }
 
 #[test]

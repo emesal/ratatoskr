@@ -393,4 +393,19 @@ impl<G: ModelGateway + 'static> Ratatoskr for RatatoskrService<G> {
             .collect();
         Ok(Response::new(proto::CapabilitiesResponse { capabilities }))
     }
+
+    async fn resolve_preset(
+        &self,
+        request: Request<proto::ResolvePresetRequest>,
+    ) -> GrpcResult<proto::ResolvePresetResponse> {
+        let req = request.into_inner();
+        match self.gateway.resolve_preset(&req.tier, &req.capability) {
+            Some(resolution) => Ok(Response::new(resolution.into())),
+            None => Ok(Response::new(proto::ResolvePresetResponse {
+                found: false,
+                model_id: None,
+                parameters: None,
+            })),
+        }
+    }
 }

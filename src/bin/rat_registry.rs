@@ -13,7 +13,7 @@ use clap::{Parser, Subcommand};
 use dialoguer::Confirm;
 
 use ratatoskr::registry::remote::RemoteRegistry;
-use ratatoskr::{EmbeddedGateway, ModelGateway, PricingInfo, Ratatoskr};
+use ratatoskr::{EmbeddedGateway, ModelGateway, ModelRegistry, PricingInfo, Ratatoskr};
 
 // ── CLI ─────────────────────────────────────────────────────────────
 
@@ -56,11 +56,13 @@ enum ModelCommand {
         /// model identifier
         model_id: String,
     },
+    /// re-fetch metadata for all models from providers and merge in-place
+    Refresh,
 }
 
 #[derive(Subcommand)]
 enum PresetCommand {
-    /// set a preset entry: tier → slot → model
+    /// set a preset entry: tier → slot → model (with optional generation parameter defaults)
     Set {
         /// cost tier (e.g. "free", "budget", "premium", or any custom tier)
         tier: String,
@@ -68,6 +70,20 @@ enum PresetCommand {
         slot: String,
         /// model identifier (must already be in the registry)
         model_id: String,
+        #[arg(long, help = "default temperature (0.0–2.0)")]
+        temperature: Option<f32>,
+        #[arg(long, help = "default top_p nucleus sampling (0.0–1.0)")]
+        top_p: Option<f32>,
+        #[arg(long, help = "default top_k")]
+        top_k: Option<usize>,
+        #[arg(long, help = "default max output tokens")]
+        max_tokens: Option<usize>,
+        #[arg(long, help = "default frequency penalty")]
+        frequency_penalty: Option<f32>,
+        #[arg(long, help = "default presence penalty")]
+        presence_penalty: Option<f32>,
+        #[arg(long, help = "default random seed")]
+        seed: Option<u64>,
     },
     /// display preset table
     List,
@@ -121,8 +137,8 @@ fn known_slots(registry: &RemoteRegistry) -> std::collections::BTreeSet<String> 
 fn preset_references(registry: &RemoteRegistry, model_id: &str) -> Vec<String> {
     let mut refs = Vec::new();
     for (tier, slots) in &registry.presets {
-        for (slot, id) in slots {
-            if id == model_id {
+        for (slot, entry) in slots {
+            if entry.model() == model_id {
                 refs.push(format!("{tier}.{slot}"));
             }
         }
@@ -271,7 +287,16 @@ fn preset_set(
     tier: &str,
     slot: &str,
     model_id: &str,
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    top_k: Option<usize>,
+    max_tokens: Option<usize>,
+    frequency_penalty: Option<f32>,
+    presence_penalty: Option<f32>,
+    seed: Option<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    use ratatoskr::{PresetEntry, PresetParameters};
+
     let mut registry = load_registry(path)?;
 
     // model must exist in registry
@@ -301,11 +326,31 @@ fn preset_set(
         return Ok(());
     }
 
+    let params = PresetParameters {
+        temperature,
+        top_p,
+        top_k,
+        max_tokens,
+        frequency_penalty,
+        presence_penalty,
+        seed,
+        ..Default::default()
+    };
+
+    let entry = if params.is_empty() {
+        PresetEntry::Bare(model_id.to_owned())
+    } else {
+        PresetEntry::WithParams {
+            model: model_id.to_owned(),
+            parameters: Box::new(params),
+        }
+    };
+
     registry
         .presets
         .entry(tier.to_owned())
         .or_default()
-        .insert(slot.to_string(), model_id.to_string());
+        .insert(slot.to_string(), entry);
 
     save_registry(path, &registry)?;
     println!("set {tier}.{slot} = {model_id}");
@@ -331,12 +376,21 @@ fn preset_list(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("{}", "─".repeat(12 + all_slots.len() * 41));
 
-    // rows
+    // rows — `*` suffix marks presets with parameter defaults
     for (tier, slots) in &registry.presets {
         print!("{tier:<12}");
         for slot in &all_slots {
-            let model = slots.get(slot).map(|s| s.as_str()).unwrap_or("—");
-            print!(" {:<40}", model);
+            let cell = match slots.get(slot) {
+                None => "—".to_owned(),
+                Some(entry) => {
+                    if entry.parameters().is_some() {
+                        format!("{}*", entry.model())
+                    } else {
+                        entry.model().to_owned()
+                    }
+                }
+            };
+            print!(" {:<40}", cell);
         }
         println!();
     }
@@ -364,6 +418,75 @@ fn preset_remove(path: &Path, tier: &str) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
+async fn model_refresh(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let mut registry = load_registry(path)?;
+
+    if registry.models.is_empty() {
+        println!("no models in registry — nothing to refresh.");
+        return Ok(());
+    }
+
+    let total = registry.models.len();
+    println!("refreshing {total} models...");
+
+    let gateway = build_gateway()?;
+
+    // collect model IDs to iterate (avoid borrow conflict with registry)
+    let model_ids: Vec<String> = registry.models.iter().map(|m| m.info.id.clone()).collect();
+
+    let mut successes = 0usize;
+    let mut failures: Vec<(String, String)> = Vec::new();
+
+    // load existing models into ModelRegistry for merge semantics
+    let mut model_reg = ModelRegistry::default();
+    for m in registry.models.drain(..) {
+        model_reg.merge(m);
+    }
+
+    for model_id in &model_ids {
+        print!("  fetching {model_id}... ");
+        match gateway.fetch_model_metadata(model_id).await {
+            Ok(fetched) => {
+                model_reg.merge(fetched);
+                successes += 1;
+                println!("ok");
+            }
+            Err(e) => {
+                println!("WARN: {e}");
+                failures.push((model_id.clone(), e.to_string()));
+            }
+        }
+    }
+
+    if successes == 0 {
+        eprintln!("no models refreshed — registry unchanged.");
+        if !failures.is_empty() {
+            eprintln!("\nfailed ({}):", failures.len());
+            for (id, err) in &failures {
+                eprintln!("  {id}: {err}");
+            }
+        }
+        return Err("all fetches failed".into());
+    }
+
+    // extract merged models back into sorted vec, preserving presets
+    let mut merged_models: Vec<_> = model_reg.list().into_iter().cloned().collect();
+    merged_models.sort_by(|a, b| a.info.id.cmp(&b.info.id));
+    registry.models = merged_models;
+
+    save_registry(path, &registry)?;
+
+    println!("\nrefreshed {successes}/{total} models.");
+    if !failures.is_empty() {
+        eprintln!("failed ({}):", failures.len());
+        for (id, err) in &failures {
+            eprintln!("  {id}: {err}");
+        }
+    }
+
+    Ok(())
+}
+
 // ── main ────────────────────────────────────────────────────────────
 
 #[tokio::main]
@@ -382,11 +505,31 @@ async fn main() {
         Command::Model(ModelCommand::Add { ref model_id }) => model_add(path, model_id).await,
         Command::Model(ModelCommand::List) => model_list(path),
         Command::Model(ModelCommand::Remove { ref model_id }) => model_remove(path, model_id),
+        Command::Model(ModelCommand::Refresh) => model_refresh(path).await,
         Command::Preset(PresetCommand::Set {
             tier,
             ref slot,
             ref model_id,
-        }) => preset_set(path, &tier, slot, model_id),
+            temperature,
+            top_p,
+            top_k,
+            max_tokens,
+            frequency_penalty,
+            presence_penalty,
+            seed,
+        }) => preset_set(
+            path,
+            &tier,
+            slot,
+            model_id,
+            temperature,
+            top_p,
+            top_k,
+            max_tokens,
+            frequency_penalty,
+            presence_penalty,
+            seed,
+        ),
         Command::Preset(PresetCommand::List) => preset_list(path),
         Command::Preset(PresetCommand::Remove { tier }) => preset_remove(path, &tier),
     };
