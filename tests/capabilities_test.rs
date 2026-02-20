@@ -1,21 +1,21 @@
-use ratatoskr::{Capabilities, Embedding, NliLabel, NliResult};
+use ratatoskr::{Capabilities, Embedding, ModelCapability, NliLabel, NliResult};
 
 #[test]
 fn test_capabilities_default() {
     let caps = Capabilities::default();
-    assert!(!caps.chat);
-    assert!(!caps.embed);
+    assert!(!caps.has(ModelCapability::Chat));
+    assert!(!caps.has(ModelCapability::Embed));
 }
 
 #[test]
 fn test_capabilities_chat_only() {
     let caps = Capabilities::chat_only();
-    assert!(caps.chat);
-    assert!(caps.chat_streaming);
-    assert!(caps.generate);
-    assert!(caps.tool_use);
-    assert!(!caps.embed);
-    assert!(!caps.local_inference);
+    assert!(caps.has(ModelCapability::Chat));
+    assert!(caps.has(ModelCapability::ChatStreaming));
+    assert!(caps.has(ModelCapability::Generate));
+    assert!(caps.has(ModelCapability::ToolUse));
+    assert!(!caps.has(ModelCapability::Embed));
+    assert!(!caps.has(ModelCapability::LocalInference));
 }
 
 #[test]
@@ -42,16 +42,16 @@ fn test_nli_result_stub() {
 #[test]
 fn test_capabilities_huggingface_only() {
     let caps = Capabilities::huggingface_only();
-    assert!(!caps.chat, "huggingface_only should not have chat");
+    assert!(!caps.has(ModelCapability::Chat), "huggingface_only should not have chat");
     assert!(
-        !caps.chat_streaming,
+        !caps.has(ModelCapability::ChatStreaming),
         "huggingface_only should not have chat_streaming"
     );
-    assert!(caps.embed, "huggingface_only should have embeddings");
-    assert!(caps.nli, "huggingface_only should have nli");
-    assert!(caps.classify, "huggingface_only should have classification");
+    assert!(caps.has(ModelCapability::Embed), "huggingface_only should have embeddings");
+    assert!(caps.has(ModelCapability::Nli), "huggingface_only should have nli");
+    assert!(caps.has(ModelCapability::Classify), "huggingface_only should have classification");
     assert!(
-        !caps.token_counting,
+        !caps.has(ModelCapability::TokenCounting),
         "huggingface_only should not have token_counting"
     );
 }
@@ -62,14 +62,13 @@ fn test_capabilities_merge() {
     let hf = Capabilities::huggingface_only();
     let merged = chat.merge(&hf);
 
-    // Should have both chat and HF capabilities
-    assert!(merged.chat, "merged should have chat");
-    assert!(merged.chat_streaming, "merged should have chat_streaming");
-    assert!(merged.embed, "merged should have embeddings");
-    assert!(merged.nli, "merged should have nli");
-    assert!(merged.classify, "merged should have classification");
+    assert!(merged.has(ModelCapability::Chat), "merged should have chat");
+    assert!(merged.has(ModelCapability::ChatStreaming), "merged should have chat_streaming");
+    assert!(merged.has(ModelCapability::Embed), "merged should have embeddings");
+    assert!(merged.has(ModelCapability::Nli), "merged should have nli");
+    assert!(merged.has(ModelCapability::Classify), "merged should have classification");
     assert!(
-        !merged.token_counting,
+        !merged.has(ModelCapability::TokenCounting),
         "merged should not have token_counting (neither source has it)"
     );
 }
@@ -82,34 +81,26 @@ fn test_capabilities_merge_is_symmetric() {
     let ab = a.merge(&b);
     let ba = b.merge(&a);
 
-    // Merge should be symmetric (a.merge(b) == b.merge(a))
-    assert_eq!(ab.chat, ba.chat);
-    assert_eq!(ab.chat_streaming, ba.chat_streaming);
-    assert_eq!(ab.generate, ba.generate);
-    assert_eq!(ab.tool_use, ba.tool_use);
-    assert_eq!(ab.embed, ba.embed);
-    assert_eq!(ab.nli, ba.nli);
-    assert_eq!(ab.classify, ba.classify);
-    assert_eq!(ab.token_counting, ba.token_counting);
-    assert_eq!(ab.local_inference, ba.local_inference);
+    // Merge should be symmetric
+    assert_eq!(ab, ba);
 }
 
 #[test]
 fn test_capabilities_local_only() {
     let caps = Capabilities::local_only();
-    assert!(!caps.chat, "local_only should not have chat");
+    assert!(!caps.has(ModelCapability::Chat), "local_only should not have chat");
     assert!(
-        !caps.chat_streaming,
+        !caps.has(ModelCapability::ChatStreaming),
         "local_only should not have chat_streaming"
     );
-    assert!(!caps.generate, "local_only should not have generate");
-    assert!(!caps.tool_use, "local_only should not have tool_use");
-    assert!(caps.embed, "local_only should have embeddings");
-    assert!(caps.nli, "local_only should have nli");
-    assert!(!caps.classify, "local_only should not have classification");
-    assert!(caps.token_counting, "local_only should have token_counting");
+    assert!(!caps.has(ModelCapability::Generate), "local_only should not have generate");
+    assert!(!caps.has(ModelCapability::ToolUse), "local_only should not have tool_use");
+    assert!(caps.has(ModelCapability::Embed), "local_only should have embeddings");
+    assert!(caps.has(ModelCapability::Nli), "local_only should have nli");
+    assert!(!caps.has(ModelCapability::Classify), "local_only should not have classification");
+    assert!(caps.has(ModelCapability::TokenCounting), "local_only should have token_counting");
     assert!(
-        caps.local_inference,
+        caps.has(ModelCapability::LocalInference),
         "local_only should have local_inference"
     );
 }
@@ -117,13 +108,40 @@ fn test_capabilities_local_only() {
 #[test]
 fn test_capabilities_full() {
     let caps = Capabilities::full();
-    assert!(caps.chat);
-    assert!(caps.chat_streaming);
-    assert!(caps.generate);
-    assert!(caps.tool_use);
-    assert!(caps.embed);
-    assert!(caps.nli);
-    assert!(caps.classify);
-    assert!(caps.token_counting);
-    assert!(caps.local_inference);
+    assert!(caps.has(ModelCapability::Chat));
+    assert!(caps.has(ModelCapability::ChatStreaming));
+    assert!(caps.has(ModelCapability::Generate));
+    assert!(caps.has(ModelCapability::ToolUse));
+    assert!(caps.has(ModelCapability::Embed));
+    assert!(caps.has(ModelCapability::Nli));
+    assert!(caps.has(ModelCapability::Classify));
+    assert!(caps.has(ModelCapability::TokenCounting));
+    assert!(caps.has(ModelCapability::LocalInference));
+}
+
+#[test]
+fn test_capabilities_insert() {
+    let mut caps = Capabilities::default();
+    assert!(!caps.has(ModelCapability::Chat));
+    caps.insert(ModelCapability::Chat);
+    assert!(caps.has(ModelCapability::Chat));
+}
+
+#[test]
+fn test_capabilities_from_iter() {
+    let caps: Capabilities = [ModelCapability::Chat, ModelCapability::Embed]
+        .into_iter()
+        .collect();
+    assert!(caps.has(ModelCapability::Chat));
+    assert!(caps.has(ModelCapability::Embed));
+    assert!(!caps.has(ModelCapability::Nli));
+}
+
+#[test]
+fn test_capabilities_roundtrip_hashset() {
+    use std::collections::HashSet;
+    let original = Capabilities::chat_only();
+    let set: HashSet<ModelCapability> = original.clone().into();
+    let roundtripped = Capabilities::from(set);
+    assert_eq!(original, roundtripped);
 }
