@@ -28,8 +28,8 @@ use crate::{ModelCapability, ModelMetadata};
 #[derive(Debug, Clone, Default)]
 pub struct ModelRegistry {
     entries: HashMap<String, ModelMetadata>,
-    /// Autoconfig presets: `(cost_tier, capability_string) → model_id`.
-    presets: BTreeMap<String, BTreeMap<String, String>>,
+    /// Autoconfig presets: `(cost_tier, capability_string) → preset entry`.
+    presets: BTreeMap<String, BTreeMap<String, PresetEntry>>,
 }
 
 impl ModelRegistry {
@@ -114,33 +114,32 @@ impl ModelRegistry {
 
     // ===== Presets =====
 
-    /// Look up a preset model ID for the given tier and capability.
-    pub fn preset(&self, tier: &str, capability: &str) -> Option<&str> {
+    /// Look up a preset entry for the given tier and capability.
+    pub fn preset(&self, tier: &str, capability: &str) -> Option<&PresetEntry> {
         self.presets
             .get(tier)
             .and_then(|cap_map| cap_map.get(capability))
-            .map(String::as_str)
     }
 
     /// Get all presets for a cost tier.
-    pub fn presets_for_tier(&self, tier: &str) -> Option<&BTreeMap<String, String>> {
+    pub fn presets_for_tier(&self, tier: &str) -> Option<&BTreeMap<String, PresetEntry>> {
         self.presets.get(tier)
     }
 
     /// Insert or update a single preset.
-    pub fn set_preset(&mut self, tier: &str, capability: &str, model_id: &str) {
+    pub fn set_preset(&mut self, tier: &str, capability: &str, entry: PresetEntry) {
         self.presets
             .entry(tier.to_owned())
             .or_default()
-            .insert(capability.to_owned(), model_id.to_owned());
+            .insert(capability.to_owned(), entry);
     }
 
     /// Merge incoming presets (incoming overrides existing per-key).
-    pub fn merge_presets(&mut self, incoming: BTreeMap<String, BTreeMap<String, String>>) {
+    pub fn merge_presets(&mut self, incoming: BTreeMap<String, BTreeMap<String, PresetEntry>>) {
         for (tier, cap_map) in incoming {
             let existing = self.presets.entry(tier).or_default();
-            for (capability, model_id) in cap_map {
-                existing.insert(capability, model_id);
+            for (capability, entry) in cap_map {
+                existing.insert(capability, entry);
             }
         }
     }
@@ -150,7 +149,8 @@ impl ModelRegistry {
     /// This is advisory — the model may still be resolvable at runtime via provider APIs.
     fn validate_presets(&self) {
         for (tier, cap_map) in &self.presets {
-            for (capability, model_id) in cap_map {
+            for (capability, entry) in cap_map {
+                let model_id = entry.model();
                 if !self.entries.contains_key(model_id) {
                     warn!(
                         tier = %tier,

@@ -19,6 +19,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
+use super::PresetEntry;
+
 use crate::types::ModelMetadata;
 use crate::{RatatoskrError, Result};
 
@@ -78,9 +80,9 @@ pub struct RemoteRegistry {
     pub version: u32,
     /// Model metadata entries.
     pub models: Vec<ModelMetadata>,
-    /// Autoconfig presets: `cost_tier → { capability → model_id }`.
+    /// Autoconfig presets: `cost_tier → { capability → preset entry }`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub presets: BTreeMap<String, BTreeMap<String, String>>,
+    pub presets: BTreeMap<String, BTreeMap<String, PresetEntry>>,
 }
 
 /// Accept both versioned and bare-array formats.
@@ -101,7 +103,7 @@ pub struct RegistryPayload {
     /// Model metadata entries.
     pub models: Vec<ModelMetadata>,
     /// Autoconfig presets (empty if not present or legacy format).
-    pub presets: BTreeMap<String, BTreeMap<String, String>>,
+    pub presets: BTreeMap<String, BTreeMap<String, PresetEntry>>,
 }
 
 /// Parse a registry payload, accepting both versioned and legacy formats.

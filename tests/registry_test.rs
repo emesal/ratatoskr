@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use ratatoskr::{
     ModelCapability, ModelInfo, ModelMetadata, ModelRegistry, ParameterAvailability, ParameterName,
-    ParameterRange,
+    ParameterRange, PresetEntry, PresetParameters,
 };
 
 #[test]
@@ -302,10 +302,14 @@ fn embedded_seed_merge_over_seed() {
 #[test]
 fn preset_lookup_hit() {
     let mut registry = ModelRegistry::new();
-    registry.set_preset("free", "text-generation", "free/model");
+    registry.set_preset(
+        "free",
+        "text-generation",
+        PresetEntry::Bare("free/model".to_owned()),
+    );
 
     assert_eq!(
-        registry.preset("free", "text-generation"),
+        registry.preset("free", "text-generation").map(|e| e.model()),
         Some("free/model")
     );
 }
@@ -313,21 +317,33 @@ fn preset_lookup_hit() {
 #[test]
 fn preset_lookup_miss() {
     let registry = ModelRegistry::new();
-    assert_eq!(registry.preset("free", "nonexistent"), None);
-    assert_eq!(registry.preset("premium", "text-generation"), None);
+    assert!(registry.preset("free", "nonexistent").is_none());
+    assert!(registry.preset("premium", "text-generation").is_none());
 }
 
 #[test]
 fn presets_for_tier_returns_correct_map() {
     let mut registry = ModelRegistry::new();
-    registry.set_preset("budget", "text-generation", "budget/chat");
-    registry.set_preset("budget", "embedding", "budget/embed");
-    registry.set_preset("premium", "agentic", "premium/agent");
+    registry.set_preset(
+        "budget",
+        "text-generation",
+        PresetEntry::Bare("budget/chat".to_owned()),
+    );
+    registry.set_preset(
+        "budget",
+        "embedding",
+        PresetEntry::Bare("budget/embed".to_owned()),
+    );
+    registry.set_preset(
+        "premium",
+        "agentic",
+        PresetEntry::Bare("premium/agent".to_owned()),
+    );
 
     let budget = registry.presets_for_tier("budget").unwrap();
     assert_eq!(budget.len(), 2);
-    assert_eq!(budget["text-generation"], "budget/chat");
-    assert_eq!(budget["embedding"], "budget/embed");
+    assert_eq!(budget["text-generation"].model(), "budget/chat");
+    assert_eq!(budget["embedding"].model(), "budget/embed");
 
     assert!(registry.presets_for_tier("free").is_none());
 }
@@ -337,37 +353,85 @@ fn set_preset_insert_and_update() {
     let mut registry = ModelRegistry::new();
 
     // Insert
-    registry.set_preset("free", "agentic", "old/model");
-    assert_eq!(registry.preset("free", "agentic"), Some("old/model"));
+    registry.set_preset("free", "agentic", PresetEntry::Bare("old/model".to_owned()));
+    assert_eq!(
+        registry.preset("free", "agentic").map(|e| e.model()),
+        Some("old/model")
+    );
 
     // Update
-    registry.set_preset("free", "agentic", "new/model");
-    assert_eq!(registry.preset("free", "agentic"), Some("new/model"));
+    registry.set_preset("free", "agentic", PresetEntry::Bare("new/model".to_owned()));
+    assert_eq!(
+        registry.preset("free", "agentic").map(|e| e.model()),
+        Some("new/model")
+    );
 }
 
 #[test]
 fn merge_presets_incoming_overrides_existing() {
     let mut registry = ModelRegistry::new();
-    registry.set_preset("free", "text-generation", "old/model");
-    registry.set_preset("free", "embedding", "old/embed");
+    registry.set_preset(
+        "free",
+        "text-generation",
+        PresetEntry::Bare("old/model".to_owned()),
+    );
+    registry.set_preset(
+        "free",
+        "embedding",
+        PresetEntry::Bare("old/embed".to_owned()),
+    );
 
     let mut incoming = BTreeMap::new();
     let mut free_map = BTreeMap::new();
-    free_map.insert("text-generation".to_owned(), "new/model".to_owned());
-    free_map.insert("agentic".to_owned(), "new/agent".to_owned());
+    free_map.insert(
+        "text-generation".to_owned(),
+        PresetEntry::Bare("new/model".to_owned()),
+    );
+    free_map.insert(
+        "agentic".to_owned(),
+        PresetEntry::Bare("new/agent".to_owned()),
+    );
     incoming.insert("free".to_owned(), free_map);
 
     registry.merge_presets(incoming);
 
     // Overridden
     assert_eq!(
-        registry.preset("free", "text-generation"),
+        registry.preset("free", "text-generation").map(|e| e.model()),
         Some("new/model")
     );
     // Preserved (not in incoming)
-    assert_eq!(registry.preset("free", "embedding"), Some("old/embed"));
+    assert_eq!(
+        registry.preset("free", "embedding").map(|e| e.model()),
+        Some("old/embed")
+    );
     // Added
-    assert_eq!(registry.preset("free", "agentic"), Some("new/agent"));
+    assert_eq!(
+        registry.preset("free", "agentic").map(|e| e.model()),
+        Some("new/agent")
+    );
+}
+
+#[test]
+fn preset_with_parameters() {
+    let mut registry = ModelRegistry::new();
+    registry.set_preset(
+        "budget",
+        "agentic",
+        PresetEntry::WithParams {
+            model: "xiaomi/mimo-v2-flash".to_owned(),
+            parameters: PresetParameters {
+                temperature: Some(0.3),
+                top_p: Some(0.95),
+                ..Default::default()
+            },
+        },
+    );
+    let entry = registry.preset("budget", "agentic").unwrap();
+    assert_eq!(entry.model(), "xiaomi/mimo-v2-flash");
+    let params = entry.parameters().unwrap();
+    assert_eq!(params.temperature, Some(0.3));
+    assert_eq!(params.top_p, Some(0.95));
 }
 
 #[test]
@@ -381,11 +445,11 @@ fn embedded_seed_loads_with_presets() {
 
     // Check a known preset value.
     assert_eq!(
-        registry.preset("premium", "text-generation"),
+        registry.preset("premium", "text-generation").map(|e| e.model()),
         Some("anthropic/claude-sonnet-4.6")
     );
     assert_eq!(
-        registry.preset("premium", "embedding"),
+        registry.preset("premium", "embedding").map(|e| e.model()),
         Some("sentence-transformers/all-MiniLM-L6-v2")
     );
 }
@@ -400,7 +464,7 @@ fn cached_remote_merges_presets_over_seed() {
     let mut premium_map = BTreeMap::new();
     premium_map.insert(
         "text-generation".to_owned(),
-        "anthropic/claude-opus-4".to_owned(),
+        PresetEntry::Bare("anthropic/claude-opus-4".to_owned()),
     );
     presets.insert("premium".to_owned(), premium_map);
 
@@ -415,13 +479,13 @@ fn cached_remote_merges_presets_over_seed() {
 
     // Premium text-generation should be overridden by cache.
     assert_eq!(
-        registry.preset("premium", "text-generation"),
+        registry.preset("premium", "text-generation").map(|e| e.model()),
         Some("anthropic/claude-opus-4")
     );
 
     // Other seed presets should be preserved.
     assert_eq!(
-        registry.preset("premium", "embedding"),
+        registry.preset("premium", "embedding").map(|e| e.model()),
         Some("sentence-transformers/all-MiniLM-L6-v2")
     );
     assert!(registry.preset("free", "text-generation").is_some());

@@ -120,7 +120,7 @@ impl EmbeddedGateway {
             let resolved = self
                 .model_registry
                 .preset(tier, capability)
-                .map(String::from)
+                .map(|e| e.model().to_owned())
                 .ok_or_else(|| crate::RatatoskrError::PresetNotFound {
                     tier: tier.to_string(),
                     capability: capability.to_string(),
@@ -508,7 +508,7 @@ impl ModelGateway for EmbeddedGateway {
     fn resolve_preset(&self, tier: &str, capability: &str) -> Option<String> {
         self.model_registry
             .preset(tier, capability)
-            .map(String::from)
+            .map(|e| e.model().to_owned())
     }
 }
 
