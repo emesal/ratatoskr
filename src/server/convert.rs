@@ -10,8 +10,9 @@ use crate::{
     ChatEvent, ChatOptions, ChatResponse, ClassifyResult, Embedding, FinishReason, GenerateEvent,
     GenerateOptions, GenerateResponse, Message, MessageContent, ModelCapability, ModelInfo,
     ModelMetadata, ModelStatus, NliLabel, NliResult, ParameterAvailability, ParameterName,
-    ParameterRange, PricingInfo, ReasoningConfig, ReasoningEffort, ResponseFormat, Role,
-    StanceLabel, StanceResult, Token, ToolCall, ToolChoice, ToolDefinition, Usage,
+    ParameterRange, PresetParameters, PresetResolution, PricingInfo, ReasoningConfig,
+    ReasoningEffort, ResponseFormat, Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice,
+    ToolDefinition, Usage,
 };
 
 use super::proto;
@@ -873,5 +874,67 @@ fn proto_to_finish_reason(raw: i32) -> FinishReason {
         Ok(proto::FinishReason::ToolCalls) => FinishReason::ToolCalls,
         Ok(proto::FinishReason::ContentFilter) => FinishReason::ContentFilter,
         _ => FinishReason::Stop,
+    }
+}
+
+// =============================================================================
+// Preset resolution conversions
+// =============================================================================
+
+impl From<PresetParameters> for proto::ProtoPresetParameters {
+    fn from(p: PresetParameters) -> Self {
+        Self {
+            temperature: p.temperature,
+            top_p: p.top_p,
+            top_k: p.top_k.map(|v| v as u32),
+            max_tokens: p.max_tokens.map(|v| v as u64),
+            frequency_penalty: p.frequency_penalty,
+            presence_penalty: p.presence_penalty,
+            seed: p.seed,
+            stop: p.stop.unwrap_or_default(),
+        }
+    }
+}
+
+impl From<proto::ProtoPresetParameters> for PresetParameters {
+    fn from(p: proto::ProtoPresetParameters) -> Self {
+        Self {
+            temperature: p.temperature,
+            top_p: p.top_p,
+            top_k: p.top_k.map(|v| v as usize),
+            max_tokens: p.max_tokens.map(|v| v as usize),
+            frequency_penalty: p.frequency_penalty,
+            presence_penalty: p.presence_penalty,
+            seed: p.seed,
+            stop: if p.stop.is_empty() {
+                None
+            } else {
+                Some(p.stop)
+            },
+            // Fields not in the proto (reasoning, tool_choice, etc.) default to None.
+            ..Default::default()
+        }
+    }
+}
+
+impl From<PresetResolution> for proto::ResolvePresetResponse {
+    fn from(r: PresetResolution) -> Self {
+        Self {
+            found: true,
+            model_id: Some(r.model),
+            parameters: r.parameters.map(Into::into),
+        }
+    }
+}
+
+impl From<proto::ResolvePresetResponse> for Option<PresetResolution> {
+    fn from(r: proto::ResolvePresetResponse) -> Self {
+        if !r.found {
+            return None;
+        }
+        Some(PresetResolution {
+            model: r.model_id.unwrap_or_default(),
+            parameters: r.parameters.map(Into::into),
+        })
     }
 }

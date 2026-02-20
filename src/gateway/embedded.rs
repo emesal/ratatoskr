@@ -15,7 +15,7 @@ use crate::Token;
 use crate::cache::response::merge_batch_results;
 use crate::cache::{ModelCache, ResponseCache};
 use crate::providers::ProviderRegistry;
-use crate::registry::ModelRegistry;
+use crate::registry::{ModelRegistry, PresetParameters};
 use crate::{
     Capabilities, ChatEvent, ChatOptions, ChatResponse, GenerateEvent, GenerateOptions,
     GenerateResponse, Message, ModelCapability, ModelGateway, ModelInfo, ModelMetadata,
@@ -32,12 +32,14 @@ use crate::tokenizer::TokenizerRegistry;
 /// When a model string contains a `provider:model` prefix matching a known
 /// provider name, the prefix is stripped and routing bypasses the fallback
 /// chain, dispatching directly to that provider.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ResolvedModel {
     /// If set, skip the fallback chain and route to this provider only.
     pub provider: Option<String>,
     /// The actual model identifier (prefix stripped if provider was matched).
     pub model: String,
+    /// Default generation parameters from the preset, if any.
+    pub preset_parameters: Option<PresetParameters>,
 }
 
 /// Gateway that wraps a ProviderRegistry for embedded mode.
@@ -117,10 +119,9 @@ impl EmbeddedGateway {
                 )));
             }
 
-            let resolved = self
+            let entry = self
                 .model_registry
                 .preset(tier, capability)
-                .map(String::from)
                 .ok_or_else(|| crate::RatatoskrError::PresetNotFound {
                     tier: tier.to_string(),
                     capability: capability.to_string(),
@@ -128,7 +129,8 @@ impl EmbeddedGateway {
 
             return Ok(ResolvedModel {
                 provider: None,
-                model: resolved,
+                model: entry.model().to_owned(),
+                preset_parameters: entry.parameters().cloned(),
             });
         }
 
@@ -139,6 +141,7 @@ impl EmbeddedGateway {
                 return Ok(ResolvedModel {
                     provider: Some(prefix.to_string()),
                     model: rest.to_string(),
+                    preset_parameters: None,
                 });
             }
         }
@@ -147,41 +150,54 @@ impl EmbeddedGateway {
         Ok(ResolvedModel {
             provider: None,
             model: model.to_string(),
+            preset_parameters: None,
         })
     }
 
-    /// Build a patched `ChatOptions` only when the resolved model differs.
+    /// Build a patched `ChatOptions` when the resolved model or preset
+    /// parameters differ from the caller's options.
     /// Returns `None` when the original options can be used as-is.
     fn apply_resolved_chat(
         &self,
         options: &ChatOptions,
         resolved: &ResolvedModel,
     ) -> Option<ChatOptions> {
-        if resolved.model == options.model {
-            None
-        } else {
-            Some(ChatOptions {
-                model: resolved.model.clone(),
-                ..options.clone()
-            })
+        let needs_model_swap = resolved.model != options.model;
+        let has_params = resolved.preset_parameters.is_some();
+
+        if !needs_model_swap && !has_params {
+            return None;
         }
+
+        let mut opts = options.clone();
+        opts.model = resolved.model.clone();
+        if let Some(params) = &resolved.preset_parameters {
+            params.apply_defaults_to_chat(&mut opts);
+        }
+        Some(opts)
     }
 
-    /// Build a patched `GenerateOptions` only when the resolved model differs.
+    /// Build a patched `GenerateOptions` when the resolved model or preset
+    /// parameters differ from the caller's options.
     /// Returns `None` when the original options can be used as-is.
     fn apply_resolved_generate(
         &self,
         options: &GenerateOptions,
         resolved: &ResolvedModel,
     ) -> Option<GenerateOptions> {
-        if resolved.model == options.model {
-            None
-        } else {
-            Some(GenerateOptions {
-                model: resolved.model.clone(),
-                ..options.clone()
-            })
+        let needs_model_swap = resolved.model != options.model;
+        let has_params = resolved.preset_parameters.is_some();
+
+        if !needs_model_swap && !has_params {
+            return None;
         }
+
+        let mut opts = options.clone();
+        opts.model = resolved.model.clone();
+        if let Some(params) = &resolved.preset_parameters {
+            params.apply_defaults_to_generate(&mut opts);
+        }
+        Some(opts)
     }
 }
 
@@ -505,10 +521,13 @@ impl ModelGateway for EmbeddedGateway {
         Ok(metadata)
     }
 
-    fn resolve_preset(&self, tier: &str, capability: &str) -> Option<String> {
+    fn resolve_preset(&self, tier: &str, capability: &str) -> Option<crate::PresetResolution> {
         self.model_registry
             .preset(tier, capability)
-            .map(String::from)
+            .map(|entry| crate::PresetResolution {
+                model: entry.model().to_owned(),
+                parameters: entry.parameters().cloned(),
+            })
     }
 }
 
@@ -672,6 +691,7 @@ mod tests {
             ResolvedModel {
                 provider: Some("anthropic".to_string()),
                 model: "claude-sonnet-4-20250514".to_string(),
+                preset_parameters: None,
             }
         );
     }
@@ -687,6 +707,7 @@ mod tests {
             ResolvedModel {
                 provider: Some("openrouter".to_string()),
                 model: "anthropic/claude-sonnet-4".to_string(),
+                preset_parameters: None,
             }
         );
     }
@@ -701,6 +722,7 @@ mod tests {
             ResolvedModel {
                 provider: None,
                 model: "unknown:something".to_string(),
+                preset_parameters: None,
             }
         );
     }
@@ -714,6 +736,7 @@ mod tests {
             ResolvedModel {
                 provider: None,
                 model: "claude-sonnet-4-20250514".to_string(),
+                preset_parameters: None,
             }
         );
     }
@@ -724,5 +747,54 @@ mod tests {
         let resolved = gw.resolve_model("ratatoskr:free/agentic").unwrap();
         assert!(resolved.provider.is_none());
         assert!(!resolved.model.starts_with("ratatoskr:"));
+    }
+
+    #[test]
+    fn test_resolve_plain_model_no_parameters() {
+        let gw = test_gateway();
+        let resolved = gw.resolve_model("anthropic/claude-sonnet-4").unwrap();
+        assert!(resolved.preset_parameters.is_none());
+    }
+
+    #[test]
+    fn test_resolve_preset_carries_parameters() {
+        use crate::registry::{ModelRegistry, PresetEntry, PresetParameters};
+
+        // Build a gateway with a parameterised preset in its registry.
+        let mut model_registry = ModelRegistry::new();
+        model_registry.set_preset(
+            "test",
+            "agentic",
+            PresetEntry::WithParams {
+                model: "some/model".to_owned(),
+                parameters: Box::new(PresetParameters {
+                    temperature: Some(0.3),
+                    top_p: Some(0.9),
+                    ..Default::default()
+                }),
+            },
+        );
+
+        let registry = crate::providers::ProviderRegistry::new();
+        let model_cache = Arc::new(ModelCache::new());
+        let gw = EmbeddedGateway::new(
+            registry,
+            model_registry,
+            model_cache,
+            None,
+            #[cfg(feature = "local-inference")]
+            Arc::new(crate::model::ModelManager::new(
+                std::path::PathBuf::from("/tmp"),
+                None,
+            )),
+            #[cfg(feature = "local-inference")]
+            Arc::new(crate::tokenizer::TokenizerRegistry::new()),
+        );
+
+        let resolved = gw.resolve_model("ratatoskr:test/agentic").unwrap();
+        assert_eq!(resolved.model, "some/model");
+        let params = resolved.preset_parameters.unwrap();
+        assert_eq!(params.temperature, Some(0.3));
+        assert_eq!(params.top_p, Some(0.9));
     }
 }

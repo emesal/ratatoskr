@@ -19,6 +19,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
+use super::PresetEntry;
+
 use crate::types::ModelMetadata;
 use crate::{RatatoskrError, Result};
 
@@ -78,9 +80,9 @@ pub struct RemoteRegistry {
     pub version: u32,
     /// Model metadata entries.
     pub models: Vec<ModelMetadata>,
-    /// Autoconfig presets: `cost_tier → { capability → model_id }`.
+    /// Autoconfig presets: `cost_tier → { capability → preset entry }`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub presets: BTreeMap<String, BTreeMap<String, String>>,
+    pub presets: BTreeMap<String, BTreeMap<String, PresetEntry>>,
 }
 
 /// Accept both versioned and bare-array formats.
@@ -101,7 +103,7 @@ pub struct RegistryPayload {
     /// Model metadata entries.
     pub models: Vec<ModelMetadata>,
     /// Autoconfig presets (empty if not present or legacy format).
-    pub presets: BTreeMap<String, BTreeMap<String, String>>,
+    pub presets: BTreeMap<String, BTreeMap<String, PresetEntry>>,
 }
 
 /// Parse a registry payload, accepting both versioned and legacy formats.
@@ -383,8 +385,10 @@ mod tests {
 
         let payload = parse_payload(json).unwrap();
         assert_eq!(
-            payload.presets["budget"].get("summariser"),
-            Some(&"x/model-c".to_string()),
+            payload.presets["budget"]
+                .get("summariser")
+                .map(|e| e.model()),
+            Some("x/model-c"),
             "summariser slot must survive parse"
         );
 
@@ -392,13 +396,17 @@ mod tests {
         let loaded = load_cached(&path).unwrap();
 
         assert_eq!(
-            loaded.presets["budget"].get("summariser"),
-            Some(&"x/model-c".to_string()),
+            loaded.presets["budget"]
+                .get("summariser")
+                .map(|e| e.model()),
+            Some("x/model-c"),
             "summariser slot must survive save+load"
         );
         assert_eq!(
-            loaded.presets["premium"].get("summariser"),
-            Some(&"x/model-f".to_string()),
+            loaded.presets["premium"]
+                .get("summariser")
+                .map(|e| e.model()),
+            Some("x/model-f"),
         );
         assert_eq!(
             loaded.presets["budget"].len(),

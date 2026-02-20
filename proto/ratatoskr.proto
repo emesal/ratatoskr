@@ -36,6 +36,9 @@ service Ratatoskr {
     rpc GetModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
     rpc FetchModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse);
 
+    // Preset resolution
+    rpc ResolvePreset(ResolvePresetRequest) returns (ResolvePresetResponse);
+
     // Service info
     rpc Health(HealthRequest) returns (HealthResponse);
     rpc GetCapabilities(CapabilitiesRequest) returns (CapabilitiesResponse);
@@ -508,4 +511,35 @@ message CapabilitiesRequest {}
 
 message CapabilitiesResponse {
     repeated ModelCapability capabilities = 1;
+}
+
+// =============================================================================
+// Preset Resolution Types
+// =============================================================================
+
+message ResolvePresetRequest {
+    string tier = 1;
+    string capability = 2;
+}
+
+// Default generation parameters attached to a preset.
+// All fields are optional — unset means no default for that parameter.
+message ProtoPresetParameters {
+    optional float temperature = 1;
+    optional float top_p = 2;
+    optional uint32 top_k = 3;
+    optional uint64 max_tokens = 4;
+    optional float frequency_penalty = 5;
+    optional float presence_penalty = 6;
+    optional uint64 seed = 7;
+    repeated string stop = 8;
+}
+
+message ResolvePresetResponse {
+    // Whether a preset was found for the given tier + capability.
+    bool found = 1;
+    // The resolved model identifier (set when found = true).
+    optional string model_id = 2;
+    // Default generation parameters (set when found = true and preset has params).
+    optional ProtoPresetParameters parameters = 3;
 }
