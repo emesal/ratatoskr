@@ -445,6 +445,20 @@ impl ModelGateway for ServiceClient {
             Err(RatatoskrError::ModelNotAvailable)
         }
     }
+
+    fn resolve_preset(&self, tier: &str, capability: &str) -> Option<crate::PresetResolution> {
+        // Synchronous trait method — use block_in_place to safely block on async gRPC.
+        let rt = tokio::runtime::Handle::try_current().ok()?;
+        let request = proto::ResolvePresetRequest {
+            tier: tier.to_string(),
+            capability: capability.to_string(),
+        };
+        let mut client = self.inner.clone();
+        let response =
+            block_in_place(|| rt.block_on(async { client.resolve_preset(request).await }))
+                .ok()?;
+        response.into_inner().into()
+    }
 }
 
 // =============================================================================
