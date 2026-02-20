@@ -358,6 +358,40 @@ impl From<Token> for proto::Token {
     }
 }
 
+/// Maps a [`ModelCapability`] to its proto equivalent. Returns `None` for unknown variants.
+pub(crate) fn model_capability_to_proto(cap: ModelCapability) -> Option<proto::ModelCapability> {
+    match cap {
+        ModelCapability::Chat => Some(proto::ModelCapability::Chat),
+        ModelCapability::ChatStreaming => Some(proto::ModelCapability::ChatStreaming),
+        ModelCapability::Generate => Some(proto::ModelCapability::Generate),
+        ModelCapability::ToolUse => Some(proto::ModelCapability::ToolUse),
+        ModelCapability::Embed => Some(proto::ModelCapability::Embed),
+        ModelCapability::Nli => Some(proto::ModelCapability::Nli),
+        ModelCapability::Classify => Some(proto::ModelCapability::Classify),
+        ModelCapability::Stance => Some(proto::ModelCapability::Stance),
+        ModelCapability::TokenCounting => Some(proto::ModelCapability::TokenCounting),
+        ModelCapability::LocalInference => Some(proto::ModelCapability::LocalInference),
+        _ => None,
+    }
+}
+
+/// Maps a proto [`proto::ModelCapability`] to its native equivalent. Returns `None` for unspecified.
+pub(crate) fn proto_to_model_capability(cap: proto::ModelCapability) -> Option<ModelCapability> {
+    match cap {
+        proto::ModelCapability::Chat => Some(ModelCapability::Chat),
+        proto::ModelCapability::ChatStreaming => Some(ModelCapability::ChatStreaming),
+        proto::ModelCapability::Generate => Some(ModelCapability::Generate),
+        proto::ModelCapability::ToolUse => Some(ModelCapability::ToolUse),
+        proto::ModelCapability::Embed => Some(ModelCapability::Embed),
+        proto::ModelCapability::Nli => Some(ModelCapability::Nli),
+        proto::ModelCapability::Classify => Some(ModelCapability::Classify),
+        proto::ModelCapability::Stance => Some(ModelCapability::Stance),
+        proto::ModelCapability::TokenCounting => Some(ModelCapability::TokenCounting),
+        proto::ModelCapability::LocalInference => Some(ModelCapability::LocalInference),
+        proto::ModelCapability::Unspecified => None,
+    }
+}
+
 impl From<ModelInfo> for proto::ModelInfo {
     fn from(m: ModelInfo) -> Self {
         proto::ModelInfo {
@@ -366,16 +400,7 @@ impl From<ModelInfo> for proto::ModelInfo {
             capabilities: m
                 .capabilities
                 .into_iter()
-                .filter_map(|c| match c {
-                    ModelCapability::Chat => Some(proto::ModelCapability::Chat as i32),
-                    ModelCapability::Generate => Some(proto::ModelCapability::Generate as i32),
-                    ModelCapability::Embed => Some(proto::ModelCapability::Embed as i32),
-                    ModelCapability::Nli => Some(proto::ModelCapability::Nli as i32),
-                    ModelCapability::Classify => Some(proto::ModelCapability::Classify as i32),
-                    ModelCapability::Stance => Some(proto::ModelCapability::Stance as i32),
-                    // Gateway-level capabilities have no proto equivalent
-                    _ => None,
-                })
+                .filter_map(|c| model_capability_to_proto(c).map(|p| p as i32))
                 .collect(),
             context_window: m.context_window.map(|w| w as u32),
             dimensions: m.dimensions.map(|d| d as u32),
@@ -626,14 +651,10 @@ impl From<proto::ModelInfo> for ModelInfo {
             capabilities: p
                 .capabilities
                 .into_iter()
-                .filter_map(|c| match proto::ModelCapability::try_from(c).ok()? {
-                    proto::ModelCapability::Chat => Some(ModelCapability::Chat),
-                    proto::ModelCapability::Generate => Some(ModelCapability::Generate),
-                    proto::ModelCapability::Embed => Some(ModelCapability::Embed),
-                    proto::ModelCapability::Nli => Some(ModelCapability::Nli),
-                    proto::ModelCapability::Classify => Some(ModelCapability::Classify),
-                    proto::ModelCapability::Stance => Some(ModelCapability::Stance),
-                    proto::ModelCapability::Unspecified => None,
+                .filter_map(|c| {
+                    proto::ModelCapability::try_from(c)
+                        .ok()
+                        .and_then(proto_to_model_capability)
                 })
                 .collect(),
             context_window: p.context_window.map(|w| w as usize),
