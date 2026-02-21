@@ -9,6 +9,10 @@ pub struct ToolDefinition {
     pub name: String,
     pub description: String,
     pub parameters: serde_json::Value,
+    /// Optional cache control directive (e.g. `{"type": "ephemeral"}` for Anthropic prompt caching).
+    /// When set, the tool definition is eligible for prompt-cache hits, reducing cost on repeated calls.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<serde_json::Value>,
 }
 
 impl ToolDefinition {
@@ -21,7 +25,15 @@ impl ToolDefinition {
             name: name.into(),
             description: description.into(),
             parameters,
+            cache_control: None,
         }
+    }
+
+    /// Set a cache control directive for this tool (e.g. `json!({"type": "ephemeral"})`).
+    #[must_use]
+    pub fn with_cache_control(mut self, cache_control: serde_json::Value) -> Self {
+        self.cache_control = Some(cache_control);
+        self
     }
 }
 
@@ -44,6 +56,7 @@ impl TryFrom<&serde_json::Value> for ToolDefinition {
                 .get("parameters")
                 .cloned()
                 .unwrap_or(serde_json::json!({})),
+            cache_control: value.get("cache_control").cloned(),
         })
     }
 }

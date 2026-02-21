@@ -16,6 +16,7 @@ use std::time::Duration;
 use ratatoskr::client::ServiceClient;
 use ratatoskr::server::RatatoskrService;
 use ratatoskr::server::proto::ratatoskr_server::RatatoskrServer;
+use ratatoskr::types::ModelCapability;
 use ratatoskr::{ChatOptions, Message, ModelGateway, Ratatoskr};
 use tokio::net::TcpListener;
 use tonic::transport::Server;
@@ -65,12 +66,19 @@ async fn test_client_connect() {
 #[tokio::test]
 async fn test_client_capabilities() {
     let addr = start_test_server().await;
-    let client = ServiceClient::connect(&addr).await.unwrap();
+    let client = Arc::new(ServiceClient::connect(&addr).await.unwrap());
 
-    let caps = client.capabilities();
-    assert!(caps.chat, "ServiceClient should report chat capability");
+    // capabilities() uses block_in_place internally — must run on multi-threaded runtime
+    let caps = tokio::task::spawn_blocking(move || client.capabilities())
+        .await
+        .unwrap();
+
     assert!(
-        caps.chat_streaming,
+        caps.has(ModelCapability::Chat),
+        "ServiceClient should report chat capability"
+    );
+    assert!(
+        caps.has(ModelCapability::ChatStreaming),
         "ServiceClient should report streaming capability"
     );
 }

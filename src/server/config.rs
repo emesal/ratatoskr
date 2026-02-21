@@ -408,6 +408,7 @@ mod tests {
             routing: RoutingConfig::default(),
             discovery: DiscoveryTomlConfig::default(),
             registry: None,
+            limits: LimitsConfig::default(),
         };
         assert_eq!(config.server.address, "127.0.0.1:9741");
         assert_eq!(config.server.limits.max_concurrent_requests, 100);
