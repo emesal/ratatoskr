@@ -73,7 +73,10 @@ async fn test_client_capabilities() {
         .await
         .unwrap();
 
-    assert!(caps.has(ModelCapability::Chat), "ServiceClient should report chat capability");
+    assert!(
+        caps.has(ModelCapability::Chat),
+        "ServiceClient should report chat capability"
+    );
     assert!(
         caps.has(ModelCapability::ChatStreaming),
         "ServiceClient should report streaming capability"
