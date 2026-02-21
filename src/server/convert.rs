@@ -69,6 +69,18 @@ impl From<proto::ToolDefinition> for ToolDefinition {
                 );
                 serde_json::Value::Object(Default::default())
             }),
+            cache_control: if p.cache_control_json.is_empty() {
+                None
+            } else {
+                serde_json::from_str(&p.cache_control_json).unwrap_or_else(|e| {
+                    tracing::warn!(
+                        tool = %p.name,
+                        error = %e,
+                        "malformed cache_control_json in ToolDefinition, ignoring"
+                    );
+                    None
+                })
+            },
         }
     }
 }
@@ -772,6 +784,11 @@ impl From<ToolDefinition> for proto::ToolDefinition {
             name: t.name,
             description: t.description,
             parameters_json: serde_json::to_string(&t.parameters).unwrap_or_default(),
+            cache_control_json: t
+                .cache_control
+                .as_ref()
+                .and_then(|cc| serde_json::to_string(cc).ok())
+                .unwrap_or_default(),
         }
     }
 }

@@ -234,6 +234,11 @@ impl LlmChatProvider {
                     func_builder = func_builder.required(req_vec);
                 }
 
+                // Wire cache_control for prompt caching (Anthropic, Bedrock)
+                if let Some(cc) = &tool.cache_control {
+                    func_builder = func_builder.cache_control(cc.clone());
+                }
+
                 builder = builder.function(func_builder);
             }
         }
