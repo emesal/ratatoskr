@@ -2,6 +2,8 @@
 //!
 //! Control and test interface for ratd.
 
+use std::io::{self, IsTerminal, Read};
+
 use clap::{Parser, Subcommand};
 use ratatoskr::client::ServiceClient;
 use ratatoskr::{ModelGateway, ModelMetadata, ParameterAvailability};
@@ -41,8 +43,8 @@ enum Command {
 
     /// Generate embeddings for text
     Embed {
-        /// Text to embed
-        text: String,
+        /// Text to embed (or omit to read from stdin)
+        text: Option<String>,
         /// Model to use
         #[arg(short, long, default_value = "sentence-transformers/all-MiniLM-L6-v2")]
         model: String,
@@ -50,8 +52,8 @@ enum Command {
 
     /// Perform NLI inference
     Nli {
-        /// Premise text
-        premise: String,
+        /// Premise text (or omit to read from stdin)
+        premise: Option<String>,
         /// Hypothesis text
         hypothesis: String,
         /// Model to use
@@ -61,8 +63,8 @@ enum Command {
 
     /// Chat with a model
     Chat {
-        /// User message
-        message: String,
+        /// User message (or omit to read from stdin)
+        message: Option<String>,
         /// Model to use
         #[arg(short, long, default_value = "ratatoskr:free/agentic")]
         model: String,
@@ -70,8 +72,8 @@ enum Command {
 
     /// Count tokens in text
     Tokens {
-        /// Text to tokenize
-        text: String,
+        /// Text to tokenize (or omit to read from stdin)
+        text: Option<String>,
         /// Model for tokenizer
         #[arg(short, long, default_value = "claude-sonnet")]
         model: String,
@@ -161,6 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Command::Embed { text, model } => {
+            let text = resolve_text(text, "embed")?;
             let embedding = client.embed(&text, &model).await?;
             println!("model: {}", embedding.model);
             println!("dimensions: {}", embedding.dimensions);
@@ -177,6 +180,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             hypothesis,
             model,
         } => {
+            let premise = resolve_text(premise, "nli")?;
             let result = client.infer_nli(&premise, &hypothesis, &model).await?;
             println!("label: {:?}", result.label);
             println!("entailment: {:.4}", result.entailment);
@@ -186,6 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Command::Chat { message, model } => {
             use ratatoskr::ChatOptions;
+            let message = resolve_text(message, "chat")?;
             let response = client
                 .chat(
                     &[ratatoskr::Message::user(&message)],
@@ -197,6 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Command::Tokens { text, model } => {
+            let text = resolve_text(text, "tokens")?;
             let count = client.count_tokens(&text, &model)?;
             println!("{count} tokens");
         }
@@ -211,6 +217,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+/// Resolve text input from an optional CLI argument and/or stdin.
+///
+/// Combination rules (matching chibi convention):
+/// - arg only → arg
+/// - stdin only → stdin
+/// - both → `"{arg}\n\n{stdin}"`
+/// - neither → error
+fn resolve_text(arg: Option<String>, command: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let stdin_is_pipe = !io::stdin().is_terminal();
+    let stdin_text = if stdin_is_pipe {
+        let mut buf = String::new();
+        io::stdin().read_to_string(&mut buf)?;
+        let trimmed = buf.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    } else {
+        None
+    };
+
+    match (arg, stdin_text) {
+        (Some(a), Some(s)) => Ok(format!("{a}\n\n{s}")),
+        (Some(a), None) => Ok(a),
+        (None, Some(s)) => Ok(s),
+        (None, None) => {
+            Err(format!("{command}: no input provided (pass text as argument or via stdin)").into())
+        }
+    }
 }
 
 /// Display model metadata in a readable format.
