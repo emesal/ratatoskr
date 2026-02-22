@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provider registry with fallback chain semantics."><title>ratatoskr::providers::registry - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ratatoskr" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.1 (01f6ddf75 2026-02-11)" data-channel="1.93.1" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module registry</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../ratatoskr/index.html">ratatoskr</a><span class="version">0.3.4</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module registry</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#fallback-triggers" title="Fallback Triggers">Fallback Triggers</a></li><li><a href="#retry-wrapping" title="Retry Wrapping">Retry Wrapping</a></li><li><a href="#fallback-chain-flow" title="Fallback Chain Flow">Fallback Chain Flow</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In ratatoskr::<wbr>providers</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">ratatoskr</a>::<wbr><a href="../index.html">providers</a></div><h1>Module <span>registry</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/ratatoskr/providers/registry.rs.html#1-1494">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provider registry with fallback chain semantics.</p>
+<p>The <code>ProviderRegistry</code> stores providers in priority order (index 0 = highest).
+When a capability is requested, it tries providers in order until one succeeds
+or returns a non-fallback error.</p>
+<h2 id="fallback-triggers"><a class="doc-anchor" href="#fallback-triggers">§</a>Fallback Triggers</h2>
+<p>The registry falls through to the next provider on:</p>
+<ul>
+<li><code>ModelNotAvailable</code> — provider can’t handle this model</li>
+<li>Transient errors after retry exhaustion — all retry attempts failed</li>
+</ul>
+<p>Permanent errors (auth, validation, etc.) are terminal and stop the chain.</p>
+<h2 id="retry-wrapping"><a class="doc-anchor" href="#retry-wrapping">§</a>Retry Wrapping</h2>
+<p>When a <code>RetryConfig</code> is set, providers are automatically wrapped in
+<code>Retrying*Provider</code> decorators at registration time. This means each
+provider retries internally before the registry sees a transient error
+as exhausted.</p>
+<h2 id="fallback-chain-flow"><a class="doc-anchor" href="#fallback-chain-flow">§</a>Fallback Chain Flow</h2><div class="example-wrap"><pre class="language-text"><code>User: gateway.embed(&quot;hello&quot;, &quot;all-MiniLM-L6-v2&quot;)
+                    │
+                    ▼
+        ┌─────────────────────┐
+        │  ProviderRegistry   │
+        │  embedding providers│
+        └─────────┬───────────┘
+                  │ try in order
+                  ▼
+        ┌─────────────────────┐
+        │  FastEmbedProvider  │ ──► checks: right model? RAM available?
+        │  (priority 0)       │ ──► if no: return ModelNotAvailable
+        └─────────┬───────────┘
+                  │ ModelNotAvailable
+                  ▼
+        ┌─────────────────────┐
+        │  HuggingFaceClient  │ ──► calls API with model string
+        │  (priority 1)       │ ──► returns embedding
+        └─────────────────────┘</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ProviderNames.html" title="struct ratatoskr::providers::registry::ProviderNames">Provider<wbr>Names</a></dt><dd>Provider names per capability, in priority order.</dd><dt><a class="struct" href="struct.ProviderRegistry.html" title="struct ratatoskr::providers::registry::ProviderRegistry">Provider<wbr>Registry</a></dt><dd>Registry of providers with fallback chain semantics.</dd></dl></section></div></main></body></html>

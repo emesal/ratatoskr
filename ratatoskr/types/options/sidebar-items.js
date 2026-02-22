@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ReasoningEffort","ResponseFormat"],"struct":["ChatOptions","ReasoningConfig"]};

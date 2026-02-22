@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_REGISTRY_URL","MAX_SUPPORTED_VERSION"],"enum":["RawPayload"],"fn":["default_cache_path","fetch_remote","load_cached","parse_payload","save_cache","update_registry"],"struct":["RegistryPayload","RemoteRegistry","RemoteRegistryConfig"]};

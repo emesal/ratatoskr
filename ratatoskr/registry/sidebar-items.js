@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EMBEDDED_SEED"],"mod":["preset","remote"],"struct":["ModelRegistry"]};
