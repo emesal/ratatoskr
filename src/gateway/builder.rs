@@ -37,6 +37,7 @@ pub struct RatatoskrBuilder {
     openai_key: Option<String>,
     google_key: Option<String>,
     ollama_url: Option<String>,
+    stub_url: Option<String>,
     default_timeout_secs: Option<u64>,
     retry_config: RetryConfig,
     validation_policy: ParameterValidationPolicy,
@@ -72,6 +73,7 @@ impl RatatoskrBuilder {
             openai_key: None,
             google_key: None,
             ollama_url: None,
+            stub_url: None,
             default_timeout_secs: None,
             retry_config: RetryConfig::default(),
             validation_policy: ParameterValidationPolicy::default(),
@@ -130,6 +132,23 @@ impl RatatoskrBuilder {
     /// Configure Ollama provider with custom URL.
     pub fn ollama(mut self, url: impl Into<String>) -> Self {
         self.ollama_url = Some(url.into());
+        self
+    }
+
+    /// Register a stub OpenAI-compatible chat provider at the given base URL.
+    ///
+    /// Intended for testing. The stub must serve `POST /v1/chat/completions`
+    /// and return a well-formed OpenAI chat response. No feature flag required —
+    /// downstream crates can use this in their `#[cfg(test)]` blocks without
+    /// enabling additional features.
+    ///
+    /// ```rust,ignore
+    /// let gateway = Ratatoskr::builder()
+    ///     .stub("http://127.0.0.1:9999")
+    ///     .build()?;
+    /// ```
+    pub fn stub(mut self, base_url: impl Into<String>) -> Self {
+        self.stub_url = Some(base_url.into());
         self
     }
 
@@ -315,6 +334,7 @@ impl RatatoskrBuilder {
             || self.openai_key.is_some()
             || self.google_key.is_some()
             || self.ollama_url.is_some()
+            || self.stub_url.is_some()
     }
 
     /// Check if at least one capability provider is configured.
@@ -483,6 +503,22 @@ impl RatatoskrBuilder {
                 )
                 .timeout_secs(timeout_secs)
                 .ollama_url(url.clone()),
+            );
+            registry.add_chat(provider.clone());
+            registry.add_generate(provider);
+        }
+
+        // Stub (OpenAI-compatible, custom base URL — for testing)
+        if let Some(ref url) = self.stub_url {
+            let provider = Arc::new(
+                LlmChatProvider::with_http_client(
+                    LLMBackend::OpenAI,
+                    Some("stub-key"),
+                    "stub",
+                    http_client.clone(),
+                )
+                .timeout_secs(timeout_secs)
+                .base_url(url.clone()),
             );
             registry.add_chat(provider.clone());
             registry.add_generate(provider);

@@ -44,6 +44,8 @@ pub struct LlmChatProvider {
     name: String,
     /// Ollama base URL (only used for Ollama backend)
     ollama_url: Option<String>,
+    /// Override base URL for all HTTP requests (testing/stub servers).
+    base_url_override: Option<String>,
     /// Default timeout in seconds
     timeout_secs: u64,
     /// Shared HTTP client for metadata fetches.
@@ -83,6 +85,7 @@ impl LlmChatProvider {
             api_key: api_key.map(|k| k.into()),
             name: name.into(),
             ollama_url: None,
+            base_url_override: None,
             timeout_secs: 120,
             http_client,
             models_base_url: None,
@@ -92,6 +95,16 @@ impl LlmChatProvider {
     /// Set the Ollama base URL (only relevant for Ollama backend).
     pub fn ollama_url(mut self, url: impl Into<String>) -> Self {
         self.ollama_url = Some(url.into());
+        self
+    }
+
+    /// Override the base URL for all chat/generate requests.
+    ///
+    /// Takes precedence over `ollama_url`. Used by [`RatatoskrBuilder::stub`] to
+    /// redirect requests to a local stub server speaking the OpenAI chat completions
+    /// protocol.
+    pub fn base_url(mut self, url: impl Into<String>) -> Self {
+        self.base_url_override = Some(url.into());
         self
     }
 
@@ -191,8 +204,10 @@ impl LlmChatProvider {
             builder = builder.enable_parallel_tool_use(ptc);
         }
 
-        // Handle Ollama URL
-        if self.backend == LLMBackend::Ollama
+        // Apply base URL override (stub/test servers take precedence, then Ollama)
+        if let Some(ref url) = self.base_url_override {
+            builder = builder.base_url(url.clone());
+        } else if self.backend == LLMBackend::Ollama
             && let Some(ref url) = self.ollama_url
         {
             builder = builder.base_url(url.clone());
