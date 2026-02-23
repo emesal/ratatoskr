@@ -509,10 +509,12 @@ impl RatatoskrBuilder {
         }
 
         // Stub (OpenAI-compatible, custom base URL — for testing)
+        // Use OpenRouter backend: it speaks the standard chat/completions protocol
+        // rather than the OpenAI Responses API, making it suitable for simple stubs.
         if let Some(ref url) = self.stub_url {
             let provider = Arc::new(
                 LlmChatProvider::with_http_client(
-                    LLMBackend::OpenAI,
+                    LLMBackend::OpenRouter,
                     Some("stub-key"),
                     "stub",
                     http_client.clone(),
