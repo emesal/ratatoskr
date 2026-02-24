@@ -262,9 +262,10 @@ impl LlmChatProvider {
 
                         let mut param = ParamBuilder::new(name).type_of(type_str).description(desc);
                         if type_str == "array"
-                            && let Some(items_schema) = schema.get("items") {
-                                param = param.items(json_schema_to_param_property(items_schema));
-                            }
+                            && let Some(items_schema) = schema.get("items")
+                        {
+                            param = param.items(json_schema_to_param_property(items_schema));
+                        }
                         func_builder = func_builder.param(param);
                     }
                 }
