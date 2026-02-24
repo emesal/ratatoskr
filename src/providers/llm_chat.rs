@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use futures_util::{Stream, StreamExt};
 use llm::LLMProvider;
 use llm::builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder};
+use llm::chat::ParameterProperty;
 use llm::completion::CompletionRequest;
 use tracing::instrument;
 
@@ -52,6 +53,32 @@ pub struct LlmChatProvider {
     http_client: reqwest::Client,
     /// Override base URL for model metadata endpoint (testing).
     models_base_url: Option<String>,
+}
+
+/// Build a `ParameterProperty` from a JSON schema value.
+///
+/// Handles `items` recursively so array-type parameters include the correct
+/// item schema — required by strict validators like Google AI Studio (Gemini).
+fn json_schema_to_param_property(schema: &serde_json::Value) -> ParameterProperty {
+    let property_type = schema
+        .get("type")
+        .and_then(|t| t.as_str())
+        .unwrap_or("string")
+        .to_string();
+    let description = schema
+        .get("description")
+        .and_then(|d| d.as_str())
+        .unwrap_or("")
+        .to_string();
+    let items = schema
+        .get("items")
+        .map(|items_schema| Box::new(json_schema_to_param_property(items_schema)));
+    ParameterProperty {
+        property_type,
+        description,
+        items,
+        enum_list: None,
+    }
 }
 
 impl LlmChatProvider {
@@ -233,8 +260,13 @@ impl LlmChatProvider {
                             .and_then(|d| d.as_str())
                             .unwrap_or("");
 
-                        func_builder = func_builder
-                            .param(ParamBuilder::new(name).type_of(type_str).description(desc));
+                        let mut param = ParamBuilder::new(name).type_of(type_str).description(desc);
+                        if type_str == "array"
+                            && let Some(items_schema) = schema.get("items")
+                        {
+                            param = param.items(json_schema_to_param_property(items_schema));
+                        }
+                        func_builder = func_builder.param(param);
                     }
                 }
 
