@@ -22,6 +22,10 @@ Phase 5: Service Mode                       ✓
 Phase 6: Model Intelligence & Parameters    ✓  (see 2026-02-05-phase6-model-intelligence.md)
     ↓
 Phase 7: Operational Hardening              ✓  (see 2026-02-11-phase7-operational-hardening.md)
+    ↓
+Phase 8: Tein Bridge
+    ↓
+Phase 9: Projection Metadata
 ```
 
 ---
@@ -769,6 +773,102 @@ pub struct Router {
 
 ---
 
+## Phase 8: Tein Bridge
+
+**Goal**: Make ratatoskr consumable as a tein foreign type, enabling the `(tein llm)` scheme module to expose `ModelGateway` to the stochastic runtime.
+
+**Context**: tein is an embeddable r7rs scheme interpreter for rust. its M12 milestone introduces a stochastic core library (`define~`, `intent`, `monad`, etc.) as a scheme module on top of existing tein primitives. `(tein llm)` is the bridge — a rust-backed scheme module wrapping ratatoskr's `ModelGateway` as an opaque foreign type with method dispatch. ratatoskr's job is to have clean enough boundaries that this wrapping is straightforward.
+
+**See also**: `chibi/backrooms/current/strategy/ratatoskr.md`, `tein.md` — the stochastic ecosystem strategy documents.
+
+### 8a: Value Boundary Audit
+
+Audit every type that crosses the `(tein llm)` boundary and ensure it has a clean value representation:
+
+- `ChatOptions`, `GenerateOptions` — need serde-friendly construction from scheme keyword args
+- `Message`, `ChatEvent`, `ToolCall`, `ToolResult` — need scheme-side constructors and accessors
+- `Embedding` (`Vec<f32>`), `NliResult`, `StanceResult` — need scheme-accessible field extraction
+- `RatatoskrError` — need scheme-side condition types with structured fields
+
+The goal is not a new API layer — it's confirming that the existing types are clean enough to wrap without shims. Document any gaps as issues.
+
+### 8b: Minimal Interface Surface
+
+Define what `(tein llm)` actually needs to call:
+
+```rust
+// The methods the scheme bridge exercises:
+// chat_stream(messages, tools, options)    → Stream<ChatEvent>
+// embed(text, model)                       → Vec<f32>
+// embed_batch(texts, model)                → Vec<Vec<f32>>
+// infer_nli(premise, hypothesis, model)    → NliResult
+// classify_stance(text, target, model)     → StanceResult
+// model_metadata(model)                    → ModelMetadata
+```
+
+No new trait methods needed — these are all on `ModelGateway` already. The question is whether the types are ergonomic across the FFI boundary. Outcome: either "no gaps found" or a set of targeted additions.
+
+### 8c: Feature Flag Hygiene
+
+Ensure there is a path for tein to depend on ratatoskr that pulls in only what `(tein llm)` needs — not `local-inference`, not `server`, not `client`. Document the recommended feature set for the tein integration.
+
+### Phase 8 Questions
+
+1. **Gateway construction**: does `(tein llm)` construct the gateway itself (via builder), or receive one injected by the rust host? likely both — `llm-connect` for standalone use, `llm-from-handle` for host-injected.
+2. **Streaming across FFI**: `chat_stream` returns a `Stream<ChatEvent>`. scheme needs either an async iterator protocol or a callback-based interface. tein's custom ports may be the right abstraction.
+
+---
+
+## Phase 9: Projection Metadata
+
+**Goal**: Let ratatoskr declare the cost level and constraint coverage of each of its operations, so the stochastic runtime can assemble monad swarms with correct cost ordering.
+
+**Context**: the stochastic cost hierarchy (algorithmic → small-model → llm) maps directly onto ratatoskr's operation types. the scheme-side projection registry needs to know which ratatoskr methods land at which cost level, and what constraints each method can satisfy. ratatoskr should own this metadata since it knows its own cost structure.
+
+### 9a: Operation Cost Declarations
+
+Add cost-level metadata to `ModelMetadata` and/or as a static property of each gateway method:
+
+```rust
+pub enum OperationCost {
+    /// Local deterministic computation (token counting, cache hits).
+    Deterministic,
+    /// Small model inference — embedding, NLI, classification.
+    SmallModel,
+    /// Full LLM inference — chat, generate.
+    Llm,
+}
+
+pub trait ModelGateway {
+    // existing methods ...
+    fn operation_cost(operation: &str) -> OperationCost;  // new
+}
+```
+
+The default mapping: `embed`/`embed_batch`/`infer_nli`/`classify_stance` → `SmallModel`; `chat`/`chat_stream`/`generate`/`generate_stream` → `Llm`; `count_tokens`/`tokenize` → `Deterministic`. Providers can override (e.g. a locally-cached embed result is `Deterministic`).
+
+### 9b: Constraint Coverage Stubs
+
+Each operation declares which intent constraints it can satisfy — the minimum needed for the scheme-side projection registry to select it appropriately:
+
+```rust
+pub struct OperationConstraints {
+    /// Intent types this operation can collapse (e.g. "Embedding", "NliResult").
+    pub output_types: &'static [&'static str],
+    /// Constraint keywords this operation understands (e.g. "#:similarity", "#:entailment").
+    pub constraint_keywords: &'static [&'static str],
+}
+```
+
+This is intentionally minimal — the full constraint system lives in the scheme-side stochastic library. ratatoskr just needs to be queryable enough to be registered as a projection source.
+
+### Phase 9 Questions
+
+1. **Static vs dynamic**: operation cost and constraint coverage are mostly static properties of the operation type, not the model. should they be associated constants on `ModelGateway`, or metadata returned at runtime (allows per-provider/per-model overrides)?
+2. **Scope**: does this belong on `ModelGateway` itself, or as a separate `ProjectionSource` trait that `EmbeddedGateway` and `ServiceClient` optionally implement?
+
+---
+
 ## Cross-Cutting Concerns
 
 ### Testing Strategy
@@ -889,3 +989,7 @@ Follow semver. The `ModelGateway` trait is the stability boundary:
 | M7 | 6 | chibi integration (model-info, registry, full passthrough) |
 | M8 | 6 | örlög control surface enabled (parameter introspection) |
 | M9 | 7 | Production-ready with caching, routing, telemetry |
+| M10 | 8 | Value boundary audit complete, `(tein llm)` integration unblocked |
+| M11 | 8 | Streaming across FFI validated (tein M12 unblocked) |
+| M12 | 9 | Operation cost declarations on `ModelGateway` |
+| M13 | 9 | Constraint coverage stubs, ratatoskr registerable as projection source |
