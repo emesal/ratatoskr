@@ -33,10 +33,21 @@ timeline
                 : Shared gateway
                 : Client mode
 
-    section Polish
-        Phase 6 : Advanced Features
+    section Intelligence
+        Phase 6 : Model Intelligence
+                : Metadata, parameter surface
+                : Registry
+        Phase 7 : Operational Hardening
                 : Caching, retry
                 : Metrics, routing
+
+    section Stochastic
+        Phase 8 : Tein Bridge
+                : Foreign type boundary
+                : (tein llm) integration
+        Phase 9 : Projection Metadata
+                : Operation cost declarations
+                : Constraint coverage stubs
 ```
 
 ## Ecosystem Architecture
@@ -51,13 +62,18 @@ C4Context
 
     System_Boundary(apps, "Applications") {
         System(chibi, "chibi", "CLI chat")
-        System(orlog, "örlög", "Context management")
+        System(orlog, "örlög", "Stochastic compiler / context mgmt")
         System(other, "Other projects", "Any Rust app")
+    }
+
+    System_Boundary(stochastic, "Stochastic Runtime") {
+        System(tein, "tein", "Scheme interpreter + stochastic core library")
+        System(tein_llm, "(tein llm)", "ModelGateway as scheme foreign type")
     }
 
     System_Boundary(ratatoskr_boundary, "ratatoskr") {
         System(embedded, "Embedded Mode", "In-process gateway")
-        System(service, "Service Mode", "Shared daemon")
+        System(service, "Service Mode", "Shared daemon — ratd")
     }
 
     System_Boundary(providers, "Providers") {
@@ -75,6 +91,11 @@ C4Context
     Rel(orlog, service, "Requires")
     Rel(orlog, surrealdb, "Stores memories")
     Rel(other, embedded, "Embeds")
+
+    Rel(tein, tein_llm, "Imports")
+    Rel(tein_llm, embedded, "Wraps")
+    Rel(orlog, tein, "Hosts stochastic programs")
+    Rel(chibi, tein, "Hosts .ssp tool definitions")
 
     Rel(embedded, openrouter, "HTTPS")
     Rel(embedded, huggingface, "HTTPS")
@@ -510,12 +531,20 @@ flowchart LR
     M4 --> M5[M5: Service<br/>mode]
     M5 --> M6[M6: örlög<br/>integration]
     M6 --> M7[M7: Production<br/>ready]
+    M7 --> M10[M10: Tein bridge<br/>audit]
+    M10 --> M11[M11: FFI<br/>streaming]
+    M11 --> M12r[M12: Operation<br/>cost metadata]
+    M12r --> M13[M13: Projection<br/>source]
 
     M1 --> ChibiReady[chibi release<br/>unblocked]
     M5 --> OrlogReady[örlög development<br/>unblocked]
+    M11 --> TeinReady[tein M12<br/>unblocked]
+    M13 --> StochasticReady[stochastic runtime<br/>can use ratatoskr]
 
     style M1 fill:#e74c3c
     style M6 fill:#9b59b6
+    style M10 fill:#2980b9
+    style M13 fill:#2980b9
 ```
 
 ## Integration with örlög
