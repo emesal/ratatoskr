@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NliLabel"],"struct":["ClassifyResult","Embedding","NliResult"]};

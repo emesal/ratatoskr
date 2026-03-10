@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["builder","embedded"],"struct":["EmbeddedGateway","Ratatoskr","RatatoskrBuilder"]};

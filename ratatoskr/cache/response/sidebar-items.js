@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CachedResponse"],"fn":["cache_key","merge_batch_results"],"struct":["CacheConfig","ResponseCache"]};
