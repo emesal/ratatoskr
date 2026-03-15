@@ -24,7 +24,7 @@ RatatoskrBuilder.request_inspector(cb)
   → EmbeddedGateway { request_inspector: Some(cb) }
     → LlmChatProvider { request_inspector: Some(cb.clone()) }
       → LLMBuilder.request_inspector(cb.clone())
-        → OpenAICompatibleProvider { request_inspector: Some(cb) }
+        → each backend's provider struct { request_inspector: Some(cb) }
 ```
 
 All `Arc::clone` — cheap pointer bumps. Zero cost when `None`.
@@ -37,13 +37,25 @@ All `Arc::clone` — cheap pointer bumps. Zero cost when `None`.
 pub type RequestInspector = Arc<dyn Fn(&str) + Send + Sync>;
 ```
 
-**`OpenAICompatibleProvider<T>`** gains one field:
+**All backend provider structs** gain one field:
 
 ```rust
 request_inspector: Option<RequestInspector>,
 ```
 
-**Three serialization points** in `openai_compatible.rs` (`chat_with_tools`, `chat_stream_struct`, `chat_stream_with_tools`) change from:
+This applies to every backend that serializes request bodies:
+
+| Backend | File | Serialization points |
+|---------|------|---------------------|
+| OpenAI-compatible (OpenRouter, Groq, Mistral, etc.) | `openai_compatible.rs` | 3 (`chat_with_tools`, `chat_stream_struct`, `chat_stream_with_tools`) |
+| Anthropic | `anthropic.rs` | 2 |
+| Google/Gemini | `google.rs` | 2 |
+| Ollama | `ollama.rs` | 1 |
+| OpenAI Responses API | `openai.rs` | 1 |
+
+All backends follow the identical `log::log_enabled!(Trace)` pattern. The change is mechanical — same transformation at every point (~9 total).
+
+**Each serialization point** changes from:
 
 ```rust
 if log::log_enabled!(log::Level::Trace) {
@@ -68,7 +80,7 @@ if self.request_inspector.is_some() || log::log_enabled!(log::Level::Trace) {
 
 Serialization only happens if either the callback or trace logging is active. Both coexist. Zero overhead in the default path.
 
-**`LLMBuilder`** gains a `.request_inspector(Arc<...>)` method; `build()` threads it into the provider.
+**`LLMBuilder`** gains a `.request_inspector(Arc<...>)` method. Each backend-specific `build_*` constructor picks it up from the builder state and passes it to its provider struct.
 
 ### Ratatoskr Changes
 
@@ -113,7 +125,7 @@ When `--debug` isn't active, omit `.request_inspector()`. Zero overhead.
 
 - `RequestInspector` type alias and builder method in ratatoskr
 - `request_inspector` field on `EmbeddedGateway` and `LlmChatProvider`
-- llm crate: field on `OpenAICompatibleProvider`, builder method on `LLMBuilder`, callback invocation at three serialization points
+- llm crate: field on all backend provider structs, builder method on `LLMBuilder`, callback invocation at all serialization points (~9 across 5 backends)
 - Unit tests (callback fires with expected JSON, doesn't fire when unset)
 - Integration test (captured JSON matches what wiremock receives)
 
@@ -121,7 +133,7 @@ When `--debug` isn't active, omit `.request_inspector()`. Zero overhead.
 
 - Response body inspection (future work)
 - Per-request callback override
-- Generate/embed/NLI inspection (generate routes through chat internally; embed/NLI don't go through the llm crate's HTTP serialization)
+- Generate/embed/NLI inspection (streaming generate delegates to chat_stream so inspection fires there; non-streaming generate uses a separate `complete()` path; embed/NLI don't go through the llm crate's HTTP serialization)
 - gRPC/proto changes
 
 ## Testing Strategy
