@@ -134,6 +134,6 @@ pub use types::{
     GenerateEvent, GenerateOptions, GenerateResponse, Message, MessageContent, ModelCapability,
     ModelInfo, ModelMetadata, ModelStatus, NliLabel, NliResult, ParameterAvailability,
     ParameterName, ParameterRange, ParameterValidationPolicy, PricingInfo, ReasoningConfig,
-    ReasoningEffort, ResponseFormat, Role, StanceLabel, StanceResult, Token, ToolCall, ToolChoice,
-    ToolDefinition, Usage,
+    ReasoningEffort, RequestInspector, ResponseFormat, Role, StanceLabel, StanceResult, Token,
+    ToolCall, ToolChoice, ToolDefinition, Usage,
 };
