@@ -158,7 +158,7 @@ cd ~/forks/llm && git add -A && git commit -m "feat: thread request_inspector in
 
 Each truly standalone backend (ones that do NOT wrap `OpenAICompatibleProvider`) needs the same treatment. This is mechanical — same pattern for each.
 
-**Note:** `OpenAI` (Responses API) is handled in Task 4 since it wraps `OpenAICompatibleProvider<OpenAIConfig>`. `ElevenLabs` is a TTS-only backend with no chat serialization — skip it. `AwsBedrock` shares the `azure_openai.rs` backend struct (constructed via `azure::build_bedrock`), so adding the field to `AzureOpenAI` covers both paths.
+**Note:** `OpenAI` (Responses API) is handled in Task 4 since it wraps `OpenAICompatibleProvider<OpenAIConfig>`. `ElevenLabs` is a TTS-only backend with no chat serialization — skip it. `AwsBedrock` uses the AWS SDK directly (no HTTP JSON serialization, no trace logging points) — no inspector field or callback needed.
 
 **Files (all under `~/forks/llm/llm-main/src/`):**
 - `backends/anthropic.rs` — struct at line ~70, `new()` at line ~522, `with_client()` nearby
@@ -198,7 +198,7 @@ let provider = crate::backends::anthropic::Anthropic::new(
 );
 ```
 
-For `azure.rs`, ensure BOTH `build_azure_openai` and `build_bedrock` pass the inspector.
+For `azure.rs`, `build_azure_openai` needs the inspector. `build_bedrock` constructs `BedrockBackend` (AWS SDK, no HTTP serialization) — skip it.
 
 - [ ] **Step 4: Verify it compiles**
 
@@ -292,6 +292,8 @@ fn log_request_payload<T: Serialize>(&self, label: &str, body: &T) {
 ```
 
 The inspector is accessed via `self.provider.config.request_inspector` because `OpenAI` wraps `OpenAICompatibleProvider<OpenAIConfig>` as `self.provider`, which stores config in `Arc<OpenAICompatibleProviderConfig>`.
+
+**Note for `backends/phind.rs`:** Phind builds its request payload as a `serde_json::Value` (via `json!{}`) rather than a typed struct, and the trace log uses `Display` formatting (`log::trace!("...", payload)`) rather than `serde_json::to_string(&body)`. For the callback, use `payload.to_string()` (which produces JSON from `serde_json::Value`).
 
 - [ ] **Step 1: Apply the transformation to all serialization points in `openai_compatible.rs`** (3 points)
 
