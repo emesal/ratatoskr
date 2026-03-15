@@ -172,16 +172,18 @@ Each truly standalone backend (ones that do NOT wrap `OpenAICompatibleProvider`)
 And corresponding builder functions in `~/forks/llm/llm-main/src/builder/build/backends/`:
 - `anthropic.rs`, `google.rs`, `ollama.rs`, `deepseek.rs`, `phind.rs`, `xai.rs`, `azure.rs` (covers both AzureOpenAI and AwsBedrock)
 
-- [ ] **Step 1: For each backend struct, add the field**
+- [ ] **Step 1: For each backend's inner config struct, add the field**
+
+All standalone backends follow the pattern `struct Backend { config: Arc<BackendConfig>, client: Client }`. The field goes on the `*Config` struct (e.g. `AnthropicConfig`, `GoogleConfig`, `OllamaConfig`, `DeepSeekConfig`, `PhindConfig`, `XAIConfig`, `AzureOpenAIConfig`), not the outer backend struct.
 
 ```rust
     /// Optional callback receiving serialized request JSON before send.
-    request_inspector: Option<crate::RequestInspector>,
+    pub request_inspector: Option<crate::RequestInspector>,
 ```
 
-- [ ] **Step 2: For each `new()` and `with_client()`, add the parameter and wire it**
+- [ ] **Step 2: For each `new()` and `with_client()`, add the parameter and wire it into the config struct**
 
-Add `request_inspector: Option<crate::RequestInspector>` as the last parameter. Store it in `Self { ..., request_inspector }`.
+Add `request_inspector: Option<crate::RequestInspector>` as the last parameter. Store it in the `*Config { ..., request_inspector }` struct literal inside the constructor.
 
 - [ ] **Step 3: For each `build_*` function, pass `state.request_inspector.take()`**
 
@@ -230,9 +232,9 @@ if log::log_enabled!(log::Level::Trace) {
 to:
 
 ```rust
-if self.request_inspector.is_some() || log::log_enabled!(log::Level::Trace) {
+if self.config.request_inspector.is_some() || log::log_enabled!(log::Level::Trace) {
     if let Ok(json) = serde_json::to_string(&body) {
-        if let Some(ref cb) = self.request_inspector {
+        if let Some(ref cb) = self.config.request_inspector {
             (cb)(&json);
         }
         log::trace!("...", json);
@@ -240,7 +242,7 @@ if self.request_inspector.is_some() || log::log_enabled!(log::Level::Trace) {
 }
 ```
 
-For `OpenAICompatibleProvider<T>`, use `self.config.request_inspector` instead of `self.request_inspector` (since the field lives on the shared `Arc<OpenAICompatibleProviderConfig>`).
+All backends (both `OpenAICompatibleProvider<T>` and standalone backends) use `self.config.request_inspector` — the field lives on the inner config struct wrapped in `Arc`.
 
 **Files and locations (all under `~/forks/llm/llm-main/src/`):**
 
@@ -249,16 +251,16 @@ For `OpenAICompatibleProvider<T>`, use `self.config.request_inspector` instead o
 | `providers/openai_compatible.rs` | `chat_with_tools` | 635 | `self.config.request_inspector` |
 | `providers/openai_compatible.rs` | `chat_stream_struct` | 756 | `self.config.request_inspector` |
 | `providers/openai_compatible.rs` | `chat_stream_with_tools` | 861 | `self.config.request_inspector` |
-| `backends/anthropic.rs` | `chat_with_tools` | 732 | `self.request_inspector` |
-| `backends/anthropic.rs` | `chat_stream_with_tools` | 932 | `self.request_inspector` |
-| `backends/google.rs` | `chat` | 736 | `self.request_inspector` |
-| `backends/google.rs` | `chat_with_tools` | 910 | `self.request_inspector` |
-| `backends/ollama.rs` | `chat_with_tools` | 504 | `self.request_inspector` |
+| `backends/anthropic.rs` | `chat_with_tools` | 732 | `self.config.request_inspector` |
+| `backends/anthropic.rs` | `chat_stream_with_tools` | 932 | `self.config.request_inspector` |
+| `backends/google.rs` | `chat` | 736 | `self.config.request_inspector` |
+| `backends/google.rs` | `chat_with_tools` | 910 | `self.config.request_inspector` |
+| `backends/ollama.rs` | `chat_with_tools` | 504 | `self.config.request_inspector` |
 | `backends/openai.rs` | `log_request_payload` (helper) | 594 | `self.provider.config.request_inspector` (see note below) |
-| `backends/deepseek.rs` | `chat` | 227 | `self.request_inspector` |
-| `backends/phind.rs` | `chat` | 293 | `self.request_inspector` |
-| `backends/xai.rs` | `chat` | 468 | `self.request_inspector` |
-| `backends/azure_openai.rs` | `chat_with_tools` | 617 | `self.request_inspector` |
+| `backends/deepseek.rs` | `chat` | 227 | `self.config.request_inspector` |
+| `backends/phind.rs` | `chat` | 293 | `self.config.request_inspector` |
+| `backends/xai.rs` | `chat` | 468 | `self.config.request_inspector` |
+| `backends/azure_openai.rs` | `chat_with_tools` | 617 | `self.config.request_inspector` |
 
 **Note for `backends/openai.rs`:** The `log_request_payload` method on `OpenAI` uses an inverted early-return guard pattern, not the wrapping `if` pattern used everywhere else. The transformation is different:
 
@@ -840,7 +842,8 @@ Expected: all pass
 - The llm fork is at `~/forks/llm`. Ratatoskr depends on it via a path dependency. Changes to both repos are needed.
 - `cargo target` is at `~/.cache/cargo-target` (set in the project's cargo config).
 - When modifying backend `new()` signatures, the `request_inspector` parameter should always be the **last** parameter to minimize churn in existing call sites.
-- The `OpenAICompatibleProvider<T>` accesses the inspector via `self.config.request_inspector` (through the `Arc<OpenAICompatibleProviderConfig>`), while standalone backends use `self.request_inspector` directly.
+- ALL backends access the inspector via `self.config.request_inspector` — both `OpenAICompatibleProvider<T>` and standalone backends store config in an `Arc<*Config>` struct. The `OpenAI` (Responses API) backend is special: it wraps `OpenAICompatibleProvider<OpenAIConfig>` as `self.provider`, so its access path is `self.provider.config.request_inspector`.
+- The spec's call flow diagram shows `EmbeddedGateway` storing the inspector, but the plan deliberately skips this — the inspector is threaded at the builder level directly into each `LlmChatProvider` instance, making gateway-level storage unnecessary.
 - In the `build_backend()` match dispatch, only one arm fires per call, so `state.request_inspector.take()` is safe in every arm.
 - Clippy will flag `3.14` in unit tests — this is a known project quirk, ignore it.
 - After all tasks: collect any notes needing to be added to AGENTS.md.
