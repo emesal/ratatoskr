@@ -48,6 +48,7 @@ pub struct RatatoskrBuilder {
     discovery_disabled: bool,
     registry_config: Option<RemoteRegistryConfig>,
     registry_refresh_disabled: bool,
+    request_inspector: Option<crate::RequestInspector>,
     #[cfg(feature = "huggingface")]
     huggingface_key: Option<String>,
     #[cfg(feature = "local-inference")]
@@ -84,6 +85,7 @@ impl RatatoskrBuilder {
             discovery_disabled: false,
             registry_config: None,
             registry_refresh_disabled: false,
+            request_inspector: None,
             #[cfg(feature = "huggingface")]
             huggingface_key: None,
             #[cfg(feature = "local-inference")]
@@ -324,6 +326,26 @@ impl RatatoskrBuilder {
     /// - [`ParameterValidationPolicy::Ignore`] — silently proceed
     pub fn validation_policy(mut self, policy: ParameterValidationPolicy) -> Self {
         self.validation_policy = policy;
+        self
+    }
+
+    /// Sets a callback that receives the serialized request JSON before it's
+    /// sent to the LLM provider. Useful for debugging wire format.
+    ///
+    /// Zero overhead when not set — no serialization occurs.
+    ///
+    /// ```rust,no_run
+    /// use std::sync::Arc;
+    /// use ratatoskr::Ratatoskr;
+    ///
+    /// let gateway = Ratatoskr::builder()
+    ///     .openrouter(Some("sk-or-key"))
+    ///     .request_inspector(Arc::new(|body| eprintln!("wire: {body}")))
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn request_inspector(mut self, inspector: crate::RequestInspector) -> Self {
+        self.request_inspector = Some(inspector);
         self
     }
 
