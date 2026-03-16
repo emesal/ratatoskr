@@ -472,30 +472,34 @@ impl RatatoskrBuilder {
 
         let inspector = self.request_inspector.clone();
 
+        // Apply inspector to a provider if one is configured.
+        let with_inspector = |p: LlmChatProvider| -> LlmChatProvider {
+            if let Some(ref cb) = inspector {
+                p.request_inspector(cb.clone())
+            } else {
+                p
+            }
+        };
+
         // Helper: build an LlmChatProvider with the shared http client
         let make_provider = |backend, key: String, name: &str| -> Arc<LlmChatProvider> {
-            let mut provider =
+            let provider =
                 LlmChatProvider::with_http_client(backend, Some(key), name, http_client.clone())
                     .timeout_secs(timeout_secs);
-            if let Some(ref cb) = inspector {
-                provider = provider.request_inspector(cb.clone());
-            }
-            Arc::new(provider)
+            Arc::new(with_inspector(provider))
         };
 
         // OpenRouter (routes to many models, good default)
         if self.openrouter_enabled {
-            let mut provider = LlmChatProvider::with_http_client(
-                LLMBackend::OpenRouter,
-                self.openrouter_key.clone(),
-                "openrouter",
-                http_client.clone(),
-            )
-            .timeout_secs(timeout_secs);
-            if let Some(ref cb) = inspector {
-                provider = provider.request_inspector(cb.clone());
-            }
-            let provider = Arc::new(provider);
+            let provider = Arc::new(with_inspector(
+                LlmChatProvider::with_http_client(
+                    LLMBackend::OpenRouter,
+                    self.openrouter_key.clone(),
+                    "openrouter",
+                    http_client.clone(),
+                )
+                .timeout_secs(timeout_secs),
+            ));
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
@@ -523,18 +527,16 @@ impl RatatoskrBuilder {
 
         // Ollama
         if let Some(ref url) = self.ollama_url {
-            let mut provider = LlmChatProvider::with_http_client(
-                LLMBackend::Ollama,
-                Some("ollama"),
-                "ollama",
-                http_client.clone(),
-            )
-            .timeout_secs(timeout_secs)
-            .ollama_url(url.clone());
-            if let Some(ref cb) = inspector {
-                provider = provider.request_inspector(cb.clone());
-            }
-            let provider = Arc::new(provider);
+            let provider = Arc::new(with_inspector(
+                LlmChatProvider::with_http_client(
+                    LLMBackend::Ollama,
+                    Some("ollama"),
+                    "ollama",
+                    http_client.clone(),
+                )
+                .timeout_secs(timeout_secs)
+                .ollama_url(url.clone()),
+            ));
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
@@ -543,18 +545,16 @@ impl RatatoskrBuilder {
         // Use OpenRouter backend: it speaks the standard chat/completions protocol
         // rather than the OpenAI Responses API, making it suitable for simple stubs.
         if let Some(ref url) = self.stub_url {
-            let mut provider = LlmChatProvider::with_http_client(
-                LLMBackend::OpenRouter,
-                Some("stub-key"),
-                "stub",
-                http_client.clone(),
-            )
-            .timeout_secs(timeout_secs)
-            .base_url(url.clone());
-            if let Some(ref cb) = inspector {
-                provider = provider.request_inspector(cb.clone());
-            }
-            let provider = Arc::new(provider);
+            let provider = Arc::new(with_inspector(
+                LlmChatProvider::with_http_client(
+                    LLMBackend::OpenRouter,
+                    Some("stub-key"),
+                    "stub",
+                    http_client.clone(),
+                )
+                .timeout_secs(timeout_secs)
+                .base_url(url.clone()),
+            ));
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
