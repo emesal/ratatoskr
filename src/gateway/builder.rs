@@ -470,25 +470,32 @@ impl RatatoskrBuilder {
 
         let http_client = reqwest::Client::new();
 
+        let inspector = self.request_inspector.clone();
+
         // Helper: build an LlmChatProvider with the shared http client
         let make_provider = |backend, key: String, name: &str| -> Arc<LlmChatProvider> {
-            Arc::new(
+            let mut provider =
                 LlmChatProvider::with_http_client(backend, Some(key), name, http_client.clone())
-                    .timeout_secs(timeout_secs),
-            )
+                    .timeout_secs(timeout_secs);
+            if let Some(ref cb) = inspector {
+                provider = provider.request_inspector(cb.clone());
+            }
+            Arc::new(provider)
         };
 
         // OpenRouter (routes to many models, good default)
         if self.openrouter_enabled {
-            let provider = Arc::new(
-                LlmChatProvider::with_http_client(
-                    LLMBackend::OpenRouter,
-                    self.openrouter_key.clone(),
-                    "openrouter",
-                    http_client.clone(),
-                )
-                .timeout_secs(timeout_secs),
-            );
+            let mut provider = LlmChatProvider::with_http_client(
+                LLMBackend::OpenRouter,
+                self.openrouter_key.clone(),
+                "openrouter",
+                http_client.clone(),
+            )
+            .timeout_secs(timeout_secs);
+            if let Some(ref cb) = inspector {
+                provider = provider.request_inspector(cb.clone());
+            }
+            let provider = Arc::new(provider);
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
@@ -516,16 +523,18 @@ impl RatatoskrBuilder {
 
         // Ollama
         if let Some(ref url) = self.ollama_url {
-            let provider = Arc::new(
-                LlmChatProvider::with_http_client(
-                    LLMBackend::Ollama,
-                    Some("ollama"),
-                    "ollama",
-                    http_client.clone(),
-                )
-                .timeout_secs(timeout_secs)
-                .ollama_url(url.clone()),
-            );
+            let mut provider = LlmChatProvider::with_http_client(
+                LLMBackend::Ollama,
+                Some("ollama"),
+                "ollama",
+                http_client.clone(),
+            )
+            .timeout_secs(timeout_secs)
+            .ollama_url(url.clone());
+            if let Some(ref cb) = inspector {
+                provider = provider.request_inspector(cb.clone());
+            }
+            let provider = Arc::new(provider);
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }
@@ -534,16 +543,18 @@ impl RatatoskrBuilder {
         // Use OpenRouter backend: it speaks the standard chat/completions protocol
         // rather than the OpenAI Responses API, making it suitable for simple stubs.
         if let Some(ref url) = self.stub_url {
-            let provider = Arc::new(
-                LlmChatProvider::with_http_client(
-                    LLMBackend::OpenRouter,
-                    Some("stub-key"),
-                    "stub",
-                    http_client.clone(),
-                )
-                .timeout_secs(timeout_secs)
-                .base_url(url.clone()),
-            );
+            let mut provider = LlmChatProvider::with_http_client(
+                LLMBackend::OpenRouter,
+                Some("stub-key"),
+                "stub",
+                http_client.clone(),
+            )
+            .timeout_secs(timeout_secs)
+            .base_url(url.clone());
+            if let Some(ref cb) = inspector {
+                provider = provider.request_inspector(cb.clone());
+            }
+            let provider = Arc::new(provider);
             registry.add_chat(provider.clone());
             registry.add_generate(provider);
         }

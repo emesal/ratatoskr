@@ -53,6 +53,8 @@ pub struct LlmChatProvider {
     http_client: reqwest::Client,
     /// Override base URL for model metadata endpoint (testing).
     models_base_url: Option<String>,
+    /// Optional callback receiving serialized request JSON before send.
+    request_inspector: Option<crate::RequestInspector>,
 }
 
 /// Build a `ParameterProperty` from a JSON schema value.
@@ -116,6 +118,7 @@ impl LlmChatProvider {
             timeout_secs: 120,
             http_client,
             models_base_url: None,
+            request_inspector: None,
         }
     }
 
@@ -146,6 +149,14 @@ impl LlmChatProvider {
     /// Used for testing with wiremock. The full URL is `{base}/api/v1/models`.
     pub fn models_base_url(mut self, url: impl Into<String>) -> Self {
         self.models_base_url = Some(url.into());
+        self
+    }
+
+    /// Set the request inspector callback.
+    ///
+    /// Receives the serialized request JSON before it is sent to the provider.
+    pub fn request_inspector(mut self, inspector: crate::RequestInspector) -> Self {
+        self.request_inspector = Some(inspector);
         self
     }
 
@@ -229,6 +240,11 @@ impl LlmChatProvider {
         }
         if let Some(ptc) = adjustments.native_parallel_tool_calls {
             builder = builder.enable_parallel_tool_use(ptc);
+        }
+
+        // Thread request inspector to the llm crate
+        if let Some(ref inspector) = self.request_inspector {
+            builder = builder.request_inspector(inspector.clone());
         }
 
         // Apply base URL override (stub/test servers take precedence, then Ollama)
