@@ -178,3 +178,16 @@ fn test_preset_uri_unknown_tier_returns_error() {
         "unknown preset tier should return None from model_metadata"
     );
 }
+
+#[test]
+fn test_builder_with_request_inspector() {
+    use std::sync::Arc;
+
+    let inspector = Arc::new(|_body: &str| {});
+    let gateway = Ratatoskr::builder()
+        .openrouter(Some("test-key"))
+        .request_inspector(inspector)
+        .build();
+
+    assert!(gateway.is_ok());
+}
