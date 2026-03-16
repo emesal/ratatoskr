@@ -44,7 +44,7 @@ async fn inspector_fires_on_chat() {
     });
 
     let gateway = Ratatoskr::builder()
-        .stub(&server.uri())
+        .stub(server.uri())
         .request_inspector(inspector)
         .build()
         .unwrap();
@@ -78,10 +78,7 @@ async fn inspector_not_set_no_overhead() {
         .await;
 
     // No inspector set — should work fine
-    let gateway = Ratatoskr::builder()
-        .stub(&server.uri())
-        .build()
-        .unwrap();
+    let gateway = Ratatoskr::builder().stub(server.uri()).build().unwrap();
 
     let response = gateway
         .chat(
@@ -123,7 +120,7 @@ data: [DONE]\n\n";
     });
 
     let gateway = Ratatoskr::builder()
-        .stub(&server.uri())
+        .stub(server.uri())
         .request_inspector(inspector)
         .build()
         .unwrap();
