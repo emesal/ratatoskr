@@ -25,3 +25,21 @@ pub use stance::{StanceLabel, StanceResult};
 pub use token::Token;
 pub use tool::{ToolCall, ToolChoice, ToolDefinition};
 pub use validation::ParameterValidationPolicy;
+
+/// Optional callback that receives serialized request JSON before it's sent
+/// to the LLM provider. Set via [`crate::Ratatoskr::builder`] and
+/// [`crate::gateway::RatatoskrBuilder::request_inspector()`].
+///
+/// Zero overhead when not configured — no serialization occurs.
+///
+/// # Example
+///
+/// ```rust
+/// use std::sync::Arc;
+/// use ratatoskr::RequestInspector;
+///
+/// let inspector: RequestInspector = Arc::new(|body: &str| {
+///     eprintln!("wire: {body}");
+/// });
+/// ```
+pub type RequestInspector = std::sync::Arc<dyn Fn(&str) + Send + Sync>;

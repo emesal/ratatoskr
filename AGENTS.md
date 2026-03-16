@@ -139,6 +139,7 @@ contrib/
 - `DiscoveryConfig` — configuration for runtime parameter discovery cache (max entries, TTL)
 - `ParameterDiscoveryCache` — moka-backed cache recording parameter rejections at runtime; consulted during validation to prevent repeated failures
 - `DiscoveryRecord` — a single parameter rejection (parameter, provider, model, timestamp, reason); forward-compatible with #14 aggregation
+- `RequestInspector` — `Arc<dyn Fn(&str) + Send + Sync>`; optional builder-level callback receiving serialized request JSON before send. Set via `RatatoskrBuilder::request_inspector()`.
 - `ResolvedModel` — `pub(crate)` result of parsing a model string: `{ provider: Option<String>, model: String }`. Lives in `gateway/embedded.rs`
 
 ### Builder Pattern

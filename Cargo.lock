@@ -891,7 +891,7 @@ version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d314cc62af2b6b0c65780555abb4d02a03dd3b799cd42419044f0c38d99738c0"
 dependencies = [
- "darling 0.23.0",
+ "darling 0.20.11",
  "ident_case",
  "prettyplease",
  "proc-macro2",
@@ -2765,7 +2765,7 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 [[package]]
 name = "llm"
 version = "1.3.7"
-source = "git+https://github.com/emesal/llm.git?branch=emesal%2Fratatoskr#ae011ccae2a417dc93f153399693683cfddb985c"
+source = "git+https://github.com/emesal/llm.git?branch=emesal%2Fratatoskr#df06346599830f87290be5291ab5fd4f1b81be42"
 dependencies = [
  "anyhow",
  "arboard",
@@ -6191,7 +6191,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
